@@ -106,6 +106,10 @@ function toRow(rule) {
   return `| ${en} | ${rule.bad} | ${rule.good} | ${shortenWhy(rule.why)} |`;
 }
 
+function sectionHeading(title) {
+  return `\n### ${title}\n\n| 원어 | 쓰지 말 것 | 쓸 것 | 이유 |\n|---|---|---|---|\n`;
+}
+
 /**
  * 규칙 목록으로 본문을 만든다. 상한을 넘으면 낮은 순위부터 잘라낸다.
  *
@@ -116,27 +120,29 @@ function toRow(rule) {
 export function buildBody(rules, maxChars = MAX_CHARS) {
   const ordered = byPriority(rules);
 
-  let body = PREAMBLE;
+  // 두 단계로 나눈다. 먼저 순위 순서로 무엇을 담을지 고르고, 그다음 분류별로 묶어 출력한다.
+  // 한 번에 하면 분류가 교차해 같은 소제목이 여러 번 나온다.
+  const sections = new Map();
+  let length = PREAMBLE.length;
   let included = 0;
 
-  // 소제목별로 모으되 순위 순서를 지킨다. 같은 파일의 규칙이 여러 순위에 걸쳐
-  // 있으면 소제목이 두 번 나올 수 있는데, 순위 순서를 지키는 편이 더 중요하다.
-  let lastSection = "";
-
   for (const rule of ordered) {
-    const section = SECTION_TITLES[rule.source] || rule.source;
-    let addition = "";
+    const title = SECTION_TITLES[rule.source] || rule.source;
+    const rowCost = `${toRow(rule)}\n`.length;
+    const headingCost = sections.has(title) ? 0 : sectionHeading(title).length;
 
-    if (section !== lastSection) {
-      addition += `\n### ${section}\n\n| 원어 | 쓰지 말 것 | 쓸 것 | 이유 |\n|---|---|---|---|\n`;
-    }
-    addition += `${toRow(rule)}\n`;
+    if (length + rowCost + headingCost > maxChars) break;
 
-    if (body.length + addition.length > maxChars) break;
-
-    body += addition;
-    if (section !== lastSection) lastSection = section;
+    if (!sections.has(title)) sections.set(title, []);
+    sections.get(title).push(rule);
+    length += rowCost + headingCost;
     included += 1;
+  }
+
+  let body = PREAMBLE;
+  for (const [title, picked] of sections) {
+    body += sectionHeading(title);
+    for (const rule of picked) body += `${toRow(rule)}\n`;
   }
 
   return { body, included, dropped: ordered.length - included };

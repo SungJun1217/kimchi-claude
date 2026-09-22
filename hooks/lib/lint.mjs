@@ -188,7 +188,9 @@ export function applyFixes(text, rules) {
 
     const nextChar = result[end] ?? "";
     if (!isParticleSafe(finding.matched, replacement, nextChar)) {
-      skipped.push({ ...finding, reason: `뒤따르는 조사 "${nextChar}"가 깨집니다` });
+      // 이 메시지의 조사도 받침에 맞춰 고른다. 조사를 지켜 주는 코드가 조사를 틀리면 우습다.
+      const subject = hasFinalConsonant(nextChar) ? "이" : "가";
+      skipped.push({ ...finding, reason: `뒤따르는 조사 "${nextChar}"${subject} 깨집니다` });
       continue;
     }
 
@@ -223,8 +225,9 @@ export function formatFindings(findings, label = "") {
     if (seen.has(key)) continue;
     seen.add(key);
     const reason = finding.why ? ` (${finding.why})` : "";
-    // 물결표는 규칙 표기용 기호이므로 사람에게 보여 줄 때는 뺀다.
-    lines.push(`- "${finding.matched}" → "${stripWildcardEdges(finding.good)}"${reason}`);
+    // 쓸 것을 적힌 그대로 보여 준다. "~될", "~습니다"처럼 어미를 적는 물결표는
+    // 한국어에서 자연스러운 표기이므로 지우면 오히려 읽기 어려워진다.
+    lines.push(`- "${finding.matched}" → "${finding.good}"${reason}`);
   }
 
   return lines.join("\n");

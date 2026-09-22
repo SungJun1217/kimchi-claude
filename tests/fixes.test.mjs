@@ -136,3 +136,14 @@ test("잘못된 입력에 안전하다", () => {
   assert.deepEqual(applyFixes(null, [rule()]), { text: "", applied: [], skipped: [] });
   assert.equal(applyFixes("리팩토링", null).text, "리팩토링");
 });
+
+test("건너뛴 이유의 조사도 받침에 맞춘다", () => {
+  // 조사를 지켜 주는 코드가 자기 메시지의 조사를 틀리면 우습다.
+  const thin = rule({ bad: "얇은 계약", good: "낮은 결합도" });
+  const withEul = applyFixes("얇은 계약을 유지하세요.", [thin]);
+  assert.match(withEul.skipped[0].reason, /"을"이 깨집니다/);
+
+  const dep = rule({ bad: "디펜던시", good: "의존성" });
+  const withGa = applyFixes("디펜던시가 꼬였습니다.", [dep]);
+  assert.match(withGa.skipped[0].reason, /"가"가 깨집니다/);
+});

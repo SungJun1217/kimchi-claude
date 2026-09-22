@@ -131,8 +131,15 @@ export function loadRules(rulesDir) {
   return { rules, skipped, files };
 }
 
+// 스타일 본문에 담을 때의 둘째 기준.
+//
+// 프롬프트 규칙은 문자열로 잡을 수 없어 예방밖에 방법이 없다. 린터가 대신 잡아 주는
+// 치환·정규식 규칙보다 먼저 담아야 분량 대비 효과가 크다.
+const CHECK_WEIGHT = { [CHECK_PROMPT]: 0, [CHECK_REGEX]: 1, [CHECK_SUBSTITUTE]: 2 };
+
 /**
- * 순위 순으로 정렬한다. 같은 순위 안에서는 원래 순서를 지킨다.
+ * 순위 순으로 정렬한다. 같은 순위 안에서는 예방밖에 방법이 없는 규칙을 앞에 두고,
+ * 그마저 같으면 원래 순서를 지킨다.
  * @param {object[]} rules
  * @returns {object[]}
  */
@@ -140,9 +147,11 @@ export function byPriority(rules) {
   return rules
     .map((rule, index) => ({ rule, index }))
     .sort((a, b) => {
-      const diff =
+      const byRank =
         PRIORITIES.indexOf(a.rule.priority) - PRIORITIES.indexOf(b.rule.priority);
-      return diff !== 0 ? diff : a.index - b.index;
+      if (byRank !== 0) return byRank;
+      const byCheck = (CHECK_WEIGHT[a.rule.check] ?? 1) - (CHECK_WEIGHT[b.rule.check] ?? 1);
+      return byCheck !== 0 ? byCheck : a.index - b.index;
     })
     .map(({ rule }) => rule);
 }

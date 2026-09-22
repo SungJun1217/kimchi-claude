@@ -99,6 +99,17 @@ const TABLE_HEADER = ["| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | �
 // 대체 표현이 드롭인이 아니라는 신호들. 이런 값은 자동 치환 대상에서 뺀다.
 const NOT_DROP_IN = /[\/|]|생략|또는|참조|문맥|\.{3}|…/;
 
+// 금칙어 길이로 세 구간을 가른다.
+//
+// 종결어미로 끝나는지는 기준이 못 된다. 한국어에서는 구절 단위 패턴도 자연스럽게
+// 종결어미로 끝난다. "픽스했습니다"는 예시 문장이 아니라 쓸 만한 패턴이다.
+const SUBSTITUTE_MAX = 24; // 이 길이까지는 자동 교정을 검토한다
+const PATTERN_MAX = 40; // 이 길이를 넘으면 그 문장 하나에서만 걸리므로 린터에 쓸모가 없다
+
+function patternCore(bad) {
+  return bad.replace(/^~+|~+$/g, "").trim();
+}
+
 function escapeCell(value) {
   return String(value ?? "")
     .replace(/\|/g, "\\|")
@@ -112,6 +123,12 @@ function escapeCell(value) {
 function decideCheck(rule) {
   if (!rule.lintable) return "프롬프트";
   if (toPattern(rule.bad) === null) return "프롬프트";
+
+  const length = patternCore(rule.bad).length;
+  // 너무 긴 금칙어는 그 문장 하나에서만 걸린다. 스타일 본문의 대조 예시로만 쓴다.
+  if (length > PATTERN_MAX) return "프롬프트";
+  // 문장 하나를 통째로 갈아 끼우는 것은 위험하다. 잡기만 하고 고치지는 않는다.
+  if (length > SUBSTITUTE_MAX) return "정규식";
 
   const candidate = { ...rule, check: "치환" };
 

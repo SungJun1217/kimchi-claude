@@ -110,7 +110,8 @@ test("망가진 입력에도 종료 코드 0으로 조용히 끝난다", () => {
   }
 });
 
-test("물결표 기호를 사람에게 보여 주지 않는다", () => {
+test("쓸 것을 적힌 그대로 보여 준다", () => {
+  // "~될", "~습니다"처럼 어미를 적는 물결표는 한국어에서 자연스러운 표기다.
   const output = runHook(commit("이 값은 곧 수정되어질 예정입니다"));
-  assert.doesNotMatch(output.hookSpecificOutput.additionalContext, /~/);
+  assert.match(output.hookSpecificOutput.additionalContext, /"되어질" → "~될"/);
 });
