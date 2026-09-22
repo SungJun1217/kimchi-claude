@@ -23,7 +23,24 @@ const PROTECTED_PATTERNS = [
   /\b[A-Za-z0-9_-]+\.(?:mjs|cjs|js|ts|tsx|jsx|json|md|py|go|rs|java|kt|rb|sh|bash|zsh|yml|yaml|toml|lock|txt|csv|css|scss|html|sql|env|ini|conf)\b/g,
   /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/g, // 환경변수
   /(?:^|\s)--?[A-Za-z][A-Za-z0-9-]*/g, // 명령행 옵션
+
+  // 사람이 지정한 예외 구간.
+  // 문체 가이드나 규칙 문서는 나쁜 예를 일부러 인용한다. 그것까지 지적하면 쓸 수 없다.
+  /<!--\s*kimchi-ignore-start\s*-->[\s\S]*?<!--\s*kimchi-ignore-end\s*-->/g,
+  /^.*<!--\s*kimchi-ignore\s*-->.*$/gm, // 표시가 붙은 한 줄
 ];
+
+// 문서 전체를 검사에서 빼는 표시.
+const IGNORE_FILE = /<!--\s*kimchi-ignore-file\s*-->/;
+
+/**
+ * 문서 전체가 검사 예외로 표시되었는지 알려준다.
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function isIgnoredFile(text) {
+  return typeof text === "string" && IGNORE_FILE.test(text);
+}
 
 /**
  * 제외 구간을 센티넬로 덮은 문자열을 돌려준다. 길이는 원문과 같다.

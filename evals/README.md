@@ -1,3 +1,4 @@
+<!-- kimchi-ignore-file -->
 # 평가 세트
 
 두 가지를 함께 잰다.

@@ -1,3 +1,4 @@
+<!-- kimchi-ignore-file -->
 ---
 max_turns: 1
 allowed_tools: []

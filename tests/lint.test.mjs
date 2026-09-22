@@ -106,3 +106,8 @@ test("같은 지적을 반복해 싣지 않는다", () => {
 test("위반이 없으면 빈 메시지를 돌려준다", () => {
   assert.equal(formatFindings([]), "");
 });
+
+test("문서 전체 예외 표시가 있으면 검사하지 않는다", () => {
+  const text = "<!-- kimchi-ignore-file -->\n얇은 계약을 인용합니다.";
+  assert.deepEqual(lint(text, [rule()]), []);
+});

@@ -190,6 +190,8 @@ function main() {
       (a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority)
     );
     const lines = [
+      // 이 파일은 나쁜 예를 일부러 인용한다. 린터가 자기 자료를 지적하면 쓸 수 없다.
+      "<!-- kimchi-ignore-file -->",
       meta.heading,
       "",
       ...meta.intro,

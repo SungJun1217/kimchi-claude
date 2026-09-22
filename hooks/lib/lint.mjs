@@ -3,7 +3,7 @@
 // 검사 대상은 maskProtected가 덮은 문자열이다. 제외 구간이 센티넬로 바뀌어 있으므로
 // 코드나 경로 안에서는 애초에 매치가 일어나지 않는다. 위치 비교를 따로 할 필요가 없다.
 
-import { maskProtected } from "./segment.mjs";
+import { maskProtected, isIgnoredFile } from "./segment.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
 
 // 규칙의 "쓰지 말 것" 칸에서 ~ 는 "앞뒤에 무엇이 붙든"을 뜻한다.
@@ -109,6 +109,7 @@ export function isParticleSafe(bad, good, nextChar) {
 export function lint(text, rules) {
   if (typeof text !== "string" || text.length === 0) return [];
   if (!Array.isArray(rules)) return [];
+  if (isIgnoredFile(text)) return [];
 
   const masked = maskProtected(text);
   const findings = [];

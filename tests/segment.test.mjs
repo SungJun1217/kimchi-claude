@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { maskProtected, isMasked, MASK } from "../hooks/lib/segment.mjs";
+import { maskProtected, isMasked, isIgnoredFile, MASK } from "../hooks/lib/segment.mjs";
 
 // 이 파일의 시험은 이 플러그인의 가장 큰 위험을 막는다.
 // contract 라는 변수명을 "계약"으로 고치라고 하는 오탐이다.
@@ -85,4 +85,33 @@ test("센티넬이 원문에 이미 있어도 깨지지 않는다", () => {
   const text = `앞${MASK}뒤 \`x\``;
   const masked = maskProtected(text);
   assert.equal(masked.length, text.length);
+});
+
+test("문서 전체 예외 표시를 알아본다", () => {
+  assert.ok(isIgnoredFile("앞말\n<!-- kimchi-ignore-file -->\n뒷말"));
+  assert.ok(isIgnoredFile("<!--kimchi-ignore-file-->"));
+  assert.ok(!isIgnoredFile("보통 문서입니다."));
+  assert.ok(!isIgnoredFile(null));
+});
+
+test("구간 예외 표시 안쪽을 덮는다", () => {
+  const text = [
+    "여기는 검사합니다.",
+    "<!-- kimchi-ignore-start -->",
+    "얇은 계약을 인용합니다.",
+    "<!-- kimchi-ignore-end -->",
+    "여기도 검사합니다.",
+  ].join("\n");
+  const masked = maskProtected(text);
+  assert.ok(!masked.includes("얇은 계약"), "예외 구간이 덮이지 않았다");
+  assert.ok(masked.includes("여기는 검사합니다."));
+  assert.ok(masked.includes("여기도 검사합니다."));
+});
+
+test("한 줄 예외 표시는 그 줄만 덮는다", () => {
+  const text = ["얇은 계약 하나", "얇은 계약 둘 <!-- kimchi-ignore -->", "얇은 계약 셋"].join("\n");
+  const masked = maskProtected(text);
+  assert.equal(masked.split("\n")[0], "얇은 계약 하나");
+  assert.ok(!masked.split("\n")[1].includes("얇은 계약"));
+  assert.equal(masked.split("\n")[2], "얇은 계약 셋");
 });

@@ -1,3 +1,4 @@
+<!-- kimchi-ignore-file -->
 ---
 type: regex
 match: contains
