@@ -1,5 +1,6 @@
 {
   "name": "kimchi-claude-marketplace",
+  "description": "클로드 코드의 한국어 말투를 다듬는 플러그인을 제공합니다.",
   "owner": {
     "name": "SungJun1217"
   },
