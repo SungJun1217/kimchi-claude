@@ -1,0 +1,29 @@
+{
+  "description": "커밋 메시지와 한국어 문서 파일의 어색한 표현을 검사한다. 기본은 경고만 하고 작업을 막지 않는다.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-artifact.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-artifact.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

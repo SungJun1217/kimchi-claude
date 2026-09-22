@@ -1,0 +1,4 @@
+node_modules/
+
+# remember 플러그인의 세션 기록. 프로젝트 코드가 아니다.
+.remember/
