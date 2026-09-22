@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.278",
+  "startedAt": "2026-09-22T15:00:40.522Z",
+  "durationSeconds": 100,
+  "costUsd": 0,
+  "partial": true,
+  "partialReason": "interrupted",
+  "suite": {
+    "root": "/home/ec2-user/capstone/kimchi-claude",
+    "ablation": "with-without",
+    "threshold": 1,
+    "concurrency": 1,
+    "plugins": [
+      {
+        "name": "kimchi-claude",
+        "version": "0.1.0",
+        "path": "/home/ec2-user/capstone/kimchi-claude"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "english-passthrough",
+      "dir": "evals/english-passthrough",
+      "source": "prose",
+      "promptMarkdown": "Explain why this function is slow and how to fix it.\n\n```js\nfunction findUsers(ids, allUsers) {\n  const result = [];\n  for (const id of ids) {\n    result.push(allUsers.find((user) => user.id === id));\n  }\n  return result;\n}\n```",
+      "runsPerCase": 3,
+      "timeoutSeconds": 300,
+      "maxTurns": 1,
+      "graders": [
+        {
+          "name": "answers-in-english",
+          "type": "regex",
+          "weight": 2,
+          "config": {
+            "target": "last_message",
+            "pattern": "[가-힣]",
+            "flags": "",
+            "match": "not_contains"
+          }
+        },
+        {
+          "name": "still-substantive",
+          "type": "llm",
+          "weight": 2,
+          "graderMarkdown": "영어로 물었으므로 영어로 답해야 하고, 답의 기술적 내용이 온전해야 한다.\n\n통과: 영어로 답하고, 중첩 반복 때문에 O(n*m)이 되는 문제를 짚고, Map이나 집합으로 조회를 O(1)로 바꾸는 방법을 제시했다.\n실패: 한국어로 답했다.\n실패: 영어로 답했지만 원인이나 해법이 빠졌다.\n\n이 사례는 플러그인이 영어 세션에 개입하지 않는지 확인하는 용도다.",
+          "config": {
+            "criteria": "영어로 물었으므로 영어로 답해야 하고, 답의 기술적 내용이 온전해야 한다.\n\n통과: 영어로 답하고, 중첩 반복 때문에 O(n*m)이 되는 문제를 짚고, Map이나 집합으로 조회를 O(1)로 바꾸는 방법을 제시했다.\n실패: 한국어로 답했다.\n실패: 영어로 답했지만 원인이나 해법이 빠졌다.\n\n이 사례는 플러그인이 영어 세션에 개입하지 않는지 확인하는 용도다.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 0.5,
+            "passed": false,
+            "turns": 0,
+            "costUsd": 0,
+            "judgeCostUsd": 0,
+            "durationSeconds": 100,
+            "startedAt": "2026-09-22T15:00:40.564Z",
+            "error": "interrupted",
+            "tracePath": "/tmp/claude-eval-rNoFfj/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "answers-in-english",
+                "passed": true,
+                "weight": 2,
+                "explanation": "pattern absent as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "still-substantive",
+                "passed": false,
+                "weight": 2,
+                "explanation": "grader threw: Request was aborted.",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 0.5,
+        "passRate": 0
+      }
+    }
+  ],
+  "aggregates": {
+    "casesTotal": 1,
+    "casesPassed": 0,
+    "overallScore": 0.5,
+    "overallPassRate": 0
+  }
+}

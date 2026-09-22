@@ -6,6 +6,8 @@
   "description": "한국어로 물으면 한국 개발자가 실제로 쓰는 말투로 답하는 클로드 코드 플러그인",
   "scripts": {
     "build": "node scripts/build-style.mjs",
-    "test": "node scripts/build-style.mjs --check && node --test tests/"
+    "test": "node scripts/build-style.mjs --check && node --test tests/",
+    "score": "node scripts/score-response.mjs",
+    "eval": "claude plugin eval . --runs 2 -j 4"
   }
 }
