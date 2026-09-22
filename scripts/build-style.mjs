@@ -28,6 +28,7 @@ const SECTION_TITLES = {
   "metaphors.md": "은유 — 벗기고 개념의 이름을 쓸 것",
   "terms.md": "직역과 음차",
   "patterns.md": "문장 구조",
+  "pangyo.md": "판교어와 한영 혼용",
   "register.md": "어투와 표기",
 };
 

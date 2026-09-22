@@ -1,0 +1,13 @@
+{
+  "name": "kimchi-claude-marketplace",
+  "owner": {
+    "name": "SungJun1217"
+  },
+  "plugins": [
+    {
+      "name": "kimchi-claude",
+      "source": "./",
+      "description": "한국어로 물으면 한국 개발자가 실제로 쓰는 말투로 답합니다. 코드 품질과 분석 깊이는 그대로 유지합니다."
+    }
+  ]
+}
