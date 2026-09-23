@@ -39,6 +39,7 @@ import {
   maskEmail,
   maskAccount,
   maskAddress,
+  maskRecord,
 } from "../skills/korean-identifiers/examples/masking.mjs";
 import {
   parsePhone,
@@ -482,4 +483,43 @@ test("구간 끝은 포함하지 않는다", () => {
   assert.ok(lastMoment >= new Date(startUtc), "3월 마지막 순간이 구간에 들어야 한다");
   assert.ok(lastMoment < new Date(endUtc), "3월 마지막 순간이 끝 미만이어야 한다");
   assert.ok(new Date("2026-04-01T00:00:00+09:00") >= new Date(endUtc), "4월 1일 0시는 빠져야 한다");
+});
+
+// ── 행 단위 마스킹 ──────────────────────────────────────────
+
+test("필드 이름으로 마스커를 고른다", () => {
+  // 관리자 화면에서 손으로 고르면 하나를 빠뜨린다. 이름을 알면 마스커도 정해진다.
+  const { masked } = maskRecord({
+    name: "홍길동",
+    phone: "010-1234-5678",
+    email: "hong@example.com",
+    residentNumber: "900101-1234567",
+  });
+  assert.equal(masked.name, "홍*동");
+  assert.equal(masked.phone, "010-****-5678");
+  assert.equal(masked.email, "ho**@example.com");
+  assert.equal(masked.residentNumber, "900101-*******");
+});
+
+test("모르는 필드는 그대로 둔다", () => {
+  const { masked } = maskRecord({ memo: "VIP", id: 42 });
+  assert.equal(masked.memo, "VIP");
+  assert.equal(masked.id, 42);
+});
+
+test("조합 위험을 알려 준다", () => {
+  // 각각은 안전해 보여도 한 줄에 모이면 특정된다.
+  const risky = maskRecord({ birthDate: "1990-01-01", zipCode: "06236" });
+  assert.equal(risky.warnings.length, 1);
+  assert.match(risky.warnings[0], /모이면 특정된다/);
+
+  const safe = maskRecord({ birthDate: "1990-01-01", memo: "VIP" });
+  assert.deepEqual(safe.warnings, [], "하나만 있으면 경고하지 않는다");
+});
+
+test("빈 값과 잘못된 입력에 안전하다", () => {
+  assert.deepEqual(maskRecord(null), { masked: {}, warnings: [] });
+  const { masked } = maskRecord({ name: null, phone: undefined });
+  assert.equal(masked.name, null);
+  assert.equal(masked.phone, undefined);
 });

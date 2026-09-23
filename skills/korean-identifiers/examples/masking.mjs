@@ -1,5 +1,11 @@
 // 개인정보 마스킹.
 //
+// **서버에서 마스킹한다.** 원본을 내려보내고 화면에서 가리면 개발자 도구와 네트워크 기록,
+// 브라우저 캐시에 원본이 그대로 남는다. 마스킹은 응답을 만드는 자리에서 해야 한다.
+//
+// **판단 단위는 필드가 아니라 조합이다.** 각각은 안전해 보여도 한 줄에 모이면 특정된다.
+// 이름 첫 글자 + 생년월일 + 지역이면 사실상 한 사람이다.
+//
 // 화면, 로그, 오류 보고, 통계에 나가는 값은 마스킹한다. 개인정보 보호법과 그 시행령이
 // 안전성 확보 조치를 요구하고, 실무에서는 아래 정도가 관행이다.
 //
@@ -84,6 +90,58 @@ export function maskAccount(value) {
   const digits = String(value).replace(/\D/g, "");
   if (digits.length <= 4) return "*".repeat(digits.length);
   return `${"*".repeat(digits.length - 4)}${digits.slice(-4)}`;
+}
+
+// 필드 이름으로 마스커를 고른다. 관리자 화면은 대개 데이터베이스 행을 그대로 내보낸다.
+const MASKERS = {
+  name: maskName,
+  userName: maskName,
+  memberName: maskName,
+  residentNumber: maskResidentNumber,
+  rrn: maskResidentNumber,
+  phone: maskPhone,
+  phoneNumber: maskPhone,
+  mobile: maskPhone,
+  email: maskEmail,
+  account: maskAccount,
+  accountNumber: maskAccount,
+  cardNumber: maskAccount,
+  address: maskAddress,
+};
+
+// 혼자서는 안전해 보이지만 모이면 특정되는 필드들.
+const IDENTIFYING_TOGETHER = ["name", "userName", "memberName", "birthDate", "birthday", "address", "zipCode"];
+
+/**
+ * 행 하나를 통째로 마스킹한다.
+ *
+ * 필드마다 다른 마스커를 써야 하는데, 관리자 화면에서 손으로 고르면 하나를 빠뜨린다.
+ * 이름을 알면 마스커도 정해진다.
+ *
+ * @param {object} record
+ * @returns {{masked: object, warnings: string[]}}
+ */
+export function maskRecord(record) {
+  const masked = {};
+  const shown = [];
+
+  for (const [key, value] of Object.entries(record ?? {})) {
+    const masker = MASKERS[key];
+    if (masker === undefined) {
+      masked[key] = value;
+      if (IDENTIFYING_TOGETHER.includes(key)) shown.push(key);
+      continue;
+    }
+    masked[key] = value === null || value === undefined ? value : masker(value);
+  }
+
+  // 조합 위험을 알려 준다. 필드마다 따로 보면 안전해 보인다.
+  const warnings =
+    shown.length >= 2
+      ? [`마스킹하지 않은 식별 가능 필드가 ${shown.length}개다: ${shown.join(", ")}. 모이면 특정된다`]
+      : [];
+
+  return { masked, warnings };
 }
 
 /**
