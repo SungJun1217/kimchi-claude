@@ -20,7 +20,12 @@ import {
   escapeForSpreadsheet,
   toExcelCsv,
 } from "../skills/korean-encoding/examples/tabular.mjs";
-import { withSubstitutes, addBusinessDays } from "../skills/korean-datetime/examples/substitute-holiday.mjs";
+import {
+  withSubstitutes,
+  addBusinessDays,
+  bankClosedDays,
+  kstRange,
+} from "../skills/korean-datetime/examples/substitute-holiday.mjs";
 import {
   isValidBusinessNumber,
   formatBusinessNumber,
@@ -435,4 +440,46 @@ test("쉼표와 따옴표가 든 값을 감싼다", () => {
   const csv = toExcelCsv([['아무개, 상사', '따옴표 "있음"']]);
   assert.ok(csv.includes('"아무개, 상사"'));
   assert.ok(csv.includes('"따옴표 ""있음"""'));
+});
+
+// ── 은행 영업일과 날짜 구간 ─────────────────────────────────
+
+test("근로자의 날은 공휴일이 아니지만 은행이 쉰다", () => {
+  // 관공서의 공휴일에 관한 규정에 없어서 공공데이터포털 목록에도 나오지 않는다.
+  // 공휴일 목록만 써서 이체 날짜를 잡으면 정산이 실패한다.
+  const closed = bankClosedDays(["2026-05-05"], [2026]);
+  assert.ok(closed.has("2026-05-01"), "근로자의 날이 빠졌다");
+  assert.ok(closed.has("2026-05-05"), "받은 공휴일이 빠졌다");
+});
+
+test("은행 휴무일을 쓰면 근로자의 날을 건너뛴다", () => {
+  // 2026-04-30 은 목요일, 5-01 은 금요일이다.
+  const bank = bankClosedDays([], [2026]);
+  assert.equal(addBusinessDays("2026-04-30", 1, bank), "2026-05-04", "5/1 과 주말을 건너뛴다");
+  // 공휴일 목록만 쓰면 근로자의 날에 이체를 잡는다.
+  assert.equal(addBusinessDays("2026-04-30", 1, new Set()), "2026-05-01");
+});
+
+test("여러 해를 한 번에 담는다", () => {
+  const closed = bankClosedDays([], [2026, 2027]);
+  assert.ok(closed.has("2026-05-01"));
+  assert.ok(closed.has("2027-05-01"));
+});
+
+test("날짜 구간을 반쯤 열린 형태로 만든다", () => {
+  // BETWEEN ... 23:59:59 로 자르면 마지막 1초를 흘린다.
+  const { startUtc, endUtc } = kstRange("2026-03-01", "2026-04-01");
+  assert.equal(startUtc, "2026-03-01T00:00:00+09:00");
+  assert.equal(endUtc, "2026-04-01T00:00:00+09:00");
+
+  // 경계가 실제로 한국 시간 0시여야 한다. UTC 로 잡으면 9시간 어긋난다.
+  assert.equal(new Date(startUtc).toISOString(), "2026-02-28T15:00:00.000Z");
+});
+
+test("구간 끝은 포함하지 않는다", () => {
+  const { startUtc, endUtc } = kstRange("2026-03-01", "2026-04-01");
+  const lastMoment = new Date("2026-03-31T23:59:59.999+09:00");
+  assert.ok(lastMoment >= new Date(startUtc), "3월 마지막 순간이 구간에 들어야 한다");
+  assert.ok(lastMoment < new Date(endUtc), "3월 마지막 순간이 끝 미만이어야 한다");
+  assert.ok(new Date("2026-04-01T00:00:00+09:00") >= new Date(endUtc), "4월 1일 0시는 빠져야 한다");
 });

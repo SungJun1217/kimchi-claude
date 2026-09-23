@@ -98,8 +98,59 @@ export function withSubstitutes(holidays) {
   return [...holidays, ...added].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// 공휴일은 아니지만 은행이 쉬는 날.
+//
+// **근로자의 날(5월 1일)이 그렇다.** 관공서의 공휴일에 관한 규정에 없어서 공공데이터포털
+// 공휴일 목록에도 나오지 않는다. 관공서는 정상 근무하고 은행은 휴무다.
+// 공휴일 목록만 써서 이체 날짜를 잡으면 정산이 실패한다.
+const BANK_ONLY_HOLIDAYS = [{ month: 5, day: 1, name: "근로자의 날" }];
+
+/**
+ * 은행 영업일 판정에 쓸 휴무일 집합을 만든다.
+ *
+ * 공휴일 집합과 다르다. 돈이 움직이는 날짜(정산 이체, 환불, 출금)는 이 집합으로 잡는다.
+ * 증권시장 휴장일은 또 다르므로 필요하면 따로 더해야 한다.
+ *
+ * @param {Iterable<string>} holidayKeys 대체공휴일을 포함한 공휴일 `YYYY-MM-DD`
+ * @param {number[]} years 대상 연도
+ * @returns {Set<string>}
+ */
+export function bankClosedDays(holidayKeys, years) {
+  const closed = new Set(holidayKeys);
+  for (const year of years) {
+    for (const { month, day } of BANK_ONLY_HOLIDAYS) {
+      closed.add(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+    }
+  }
+  return closed;
+}
+
+/**
+ * 한국 시간 기준 날짜 구간을 반쯤 열린 형태로 만든다.
+ *
+ * `BETWEEN ... 23:59:59` 로 자르면 마지막 1초를 흘린다. 밀리초를 쓰면 더 크게 흘린다.
+ * 시작 이상, 끝 미만으로 잡아야 구멍이 없다.
+ *
+ * 그리고 경계를 UTC 로 잡으면 안 된다. 한국 시간 0시는 UTC 전날 15시다.
+ * UTC 날짜로 묶으면 오전 9시 이전 자료가 전날로 들어간다.
+ *
+ * @param {string} fromDate 포함하는 첫날 `YYYY-MM-DD` (KST)
+ * @param {string} toDate 포함하지 않는 끝날 `YYYY-MM-DD` (KST)
+ * @returns {{startUtc: string, endUtc: string}} 저장된 UTC 값과 비교할 경계
+ */
+export function kstRange(fromDate, toDate) {
+  // KST 는 UTC+9 고정이다. 서머타임이 없어 오프셋을 그대로 뺀다.
+  return {
+    startUtc: `${fromDate}T00:00:00+09:00`,
+    endUtc: `${toDate}T00:00:00+09:00`,
+  };
+}
+
 /**
  * 영업일을 더한다. 주말과 공휴일을 건너뛴다.
+ *
+ * 돈이 움직이는 날짜라면 holidayKeys 에 bankClosedDays() 의 결과를 넣어야 한다.
+ * 공휴일 집합만 쓰면 근로자의 날에 이체를 잡는다.
  *
  * @param {string} from `YYYY-MM-DD`
  * @param {number} businessDays

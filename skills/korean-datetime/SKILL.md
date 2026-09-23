@@ -44,6 +44,38 @@ const calendar = withSubstitutes(holidaysFromApi);
 addBusinessDays("2026-03-05", 3, new Set(calendar.map((day) => day.date)));
 ```
 
+## 은행 영업일은 공휴일과 다릅니다
+
+**근로자의 날(5월 1일)은 공휴일이 아니지만 은행이 쉽니다.** 관공서의 공휴일에 관한 규정에
+없어서 공공데이터포털 공휴일 목록에도 나오지 않습니다. 관공서는 정상 근무하고 은행은 휴무입니다.
+
+공휴일 목록만 써서 이체 날짜를 잡으면 **정산이 실패합니다.** 돈이 움직이는 날짜는 별도
+집합으로 잡으십시오. 증권시장 휴장일은 또 다릅니다.
+
+```js
+import { bankClosedDays, addBusinessDays } from "./examples/substitute-holiday.mjs";
+
+const closed = bankClosedDays(calendar.map((day) => day.date), [2026]);
+addBusinessDays("2026-04-29", 1, closed); // 근로자의 날을 건너뛴다
+```
+
+계산일과 지급일을 분리하십시오. 정산은 1일에 계산하고 이체는 영업일에 합니다.
+설·추석 연휴에는 며칠 밀립니다.
+
+## 날짜 구간은 반쯤 열린 형태로
+
+`BETWEEN ... 23:59:59` 로 자르면 마지막 1초를 흘립니다. 밀리초를 쓰면 더 크게 흘립니다.
+**시작 이상, 끝 미만**으로 잡아야 구멍이 없습니다.
+
+그리고 경계를 UTC 로 잡으면 안 됩니다. 한국 시간 0시는 UTC 전날 15시입니다.
+
+```js
+import { kstRange } from "./examples/substitute-holiday.mjs";
+
+const { startUtc, endUtc } = kstRange("2026-03-01", "2026-04-01"); // 3월분
+// WHERE created_at >= startUtc AND created_at < endUtc
+```
+
 ## 시간대
 
 **한국 표준시는 UTC+9 고정입니다.** 서머타임이 없습니다. 이것이 오히려 함정을 만듭니다 —
@@ -53,6 +85,8 @@ addBusinessDays("2026-03-05", 3, new Set(calendar.map((day) => day.date)));
 원칙은 다른 나라와 같습니다.
 
 - 저장은 UTC 로, 표시할 때 `Asia/Seoul` 로 변환합니다
+- **배치 시각도 시간대를 명시하십시오.** UTC 자정에 걸면 한국 시간 오전 9시에 돌아갑니다.
+  월 정산이라면 그 사이 9시간 거래가 어느 달에 들어갈지 애매해집니다
 - 오프셋을 직접 더하지 말고 시간대 이름을 쓰십시오
 - 서버 시간대에 의존하지 마십시오. 컨테이너는 대개 UTC 입니다
 
@@ -79,5 +113,8 @@ new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "long" }).
 - 설·추석을 다른 공휴일과 같은 대체 규칙으로 처리하기
 - `new Date()` 에 9시간을 더해 한국 시간을 만들기
 - UTC 날짜로 한국 기준 일별 집계를 하기
+- 은행 이체 날짜를 공휴일 목록으로만 잡기 — 근로자의 날에 이체를 잡습니다
+- 날짜 구간을 `BETWEEN ... 23:59:59` 로 자르기 — 마지막 1초를 흘립니다
+- 배치를 UTC 자정에 걸기 — 한국 시간 오전 9시에 돌아갑니다
 - 나이를 저장하기 — 생년월일을 저장해야 합니다
 - 연도 차이로 만 나이를 계산하기 — 생일 경과를 봐야 합니다
