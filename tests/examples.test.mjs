@@ -391,12 +391,27 @@ test("우편번호는 다섯 자리다", () => {
   assert.ok(isValidPostalCode("06236"));
   assert.ok(!isValidPostalCode("135-080"), "옛 여섯 자리 형식");
   assert.ok(!isValidPostalCode("1234"));
+  assert.ok(isValidPostalCode("０６２３４"), "관공서 자료의 전각 숫자");
 });
 
 test("도로명주소와 지번주소를 가른다", () => {
   assert.equal(addressKind("서울 강남구 테헤란로 123"), "도로명");
   assert.equal(addressKind("서울 강남구 역삼동 123-4"), "지번");
   assert.equal(addressKind("어딘가"), "알 수 없음");
+});
+
+test("공식 표기에 섞여 오는 것도 판정한다", () => {
+  assert.equal(addressKind("서울 강남구 테헤란로 123, 101동 1203호"), "도로명", "쉼표 뒤 상세주소");
+  assert.equal(addressKind("서울 중구 을지로 지하 12"), "도로명", "지하 건물");
+  assert.equal(addressKind("서울 관악구 봉천동 산 101"), "지번", "임야 지번");
+  assert.equal(addressKind("서울 중구 명동2가 54"), "지번", "가로 끝나는 법정동");
+});
+
+test("시도 이름이 달라도 같은 주소로 본다", () => {
+  assert.ok(sameAddress("서울특별시 강남구 테헤란로 123", "서울 강남구 테헤란로 123"), "출처마다 다르게 온다");
+  assert.ok(sameAddress("강원도 춘천시 중앙로 1", "강원특별자치도 춘천시 중앙로 1"), "2023년 명칭 변경");
+  assert.ok(sameAddress("전라북도 전주시 완산구 효자로 225", "전북 전주시 완산구 효자로 225"), "2024년 명칭 변경");
+  assert.ok(!sameAddress("광주 북구 용봉로 77", "경기 광주시 용봉로 77"), "광주광역시와 경기 광주시는 다르다");
 });
 
 test("참고항목을 떼어 낸다", () => {

@@ -20,7 +20,8 @@ export const POSTAL_CODE_PATTERN = /^\d{5}$/;
  * @returns {boolean}
  */
 export function isValidPostalCode(value) {
-  return POSTAL_CODE_PATTERN.test(String(value).trim());
+  // 관공서 자료에는 전각 숫자(０６２３４)가 섞여 온다. NFKC 가 반각으로 되돌린다.
+  return POSTAL_CODE_PATTERN.test(String(value).normalize("NFKC").trim());
 }
 
 /**
@@ -34,8 +35,12 @@ export function isValidPostalCode(value) {
  */
 export function addressKind(address) {
   const text = String(address).trim();
-  if (/[로길]\s*\d+(-\d+)?(\s|$)/.test(text)) return "도로명";
-  if (/[동리]\s*\d+(-\d+)?(\s|$)/.test(text)) return "지번";
+  // 번호 뒤에는 공백, 끝, 쉼표가 온다. 공식 표기는 "테헤란로 123, 101동 1203호" 처럼
+  // 쉼표 뒤에 상세주소를 붙인다. 공백만 받으면 공식 표기를 판정하지 못한다.
+  //
+  // 지하 건물은 "을지로 지하 12", 임야 지번은 "봉천동 산 101" 처럼 번호 앞에 한 낱말이 끼어든다.
+  if (/[로길]\s*(지하\s*)?\d+(-\d+)?(?![\d-])/.test(text)) return "도로명";
+  if (/[동리가]\s*(산\s*)?\d+(-\d+)?(?![\d-])/.test(text)) return "지번";
   return "알 수 없음";
 }
 
@@ -61,15 +66,60 @@ export function splitReference(address) {
 /**
  * 두 주소가 같은 곳인지 견준다.
  *
- * 공백과 참고항목을 무시하고, 한글 정규화를 맞춘다.
+ * 공백과 참고항목을 무시하고, 한글 정규화와 시도 이름을 맞춘다.
  * macOS 에서 입력한 주소와 서버에 저장된 주소가 자모 분리 때문에 다를 수 있다.
+ *
+ * **문자열 비교는 차선이다.** 시군구와 도로명도 바뀐다(인천 남구 → 미추홀구, 군위군의
+ * 대구 편입, 도로명 변경). 주소 검색 API 가 돌려주는 건물관리번호를 함께 저장하고,
+ * 같은 곳인지는 그 번호로 가리는 것이 맞다. 이 함수는 번호가 없는 옛 자료용이다.
  *
  * @param {string} a
  * @param {string} b
  * @returns {boolean}
  */
 export function sameAddress(a, b) {
-  const normalize = (value) =>
-    splitReference(value).base.normalize("NFC").replace(/\s+/g, "");
+  const normalize = (value) => {
+    const [first, ...rest] = splitReference(value).base.normalize("NFC").trim().split(/\s+/);
+    return [canonicalRegion(first), ...rest].join("");
+  };
   return normalize(a) === normalize(b);
+}
+
+// 시도 이름은 출처마다 다르게 온다. 도로명주소 안내시스템은 "서울특별시", 카카오는 "서울".
+// 그리고 이름이 바뀌었다. 옛 자료에는 옛 이름이 그대로 남아 있다.
+//   2023-06-11  강원도   → 강원특별자치도
+//   2024-01-18  전라북도 → 전북특별자치도
+const REGION_ALIASES = {
+  서울: ["서울특별시", "서울시"],
+  부산: ["부산광역시", "부산시"],
+  대구: ["대구광역시", "대구시"],
+  인천: ["인천광역시", "인천시"],
+  광주: ["광주광역시"],
+  대전: ["대전광역시", "대전시"],
+  울산: ["울산광역시", "울산시"],
+  세종: ["세종특별자치시", "세종시"],
+  경기: ["경기도"],
+  강원: ["강원특별자치도", "강원도"],
+  충북: ["충청북도"],
+  충남: ["충청남도"],
+  전북: ["전북특별자치도", "전라북도"],
+  전남: ["전라남도"],
+  경북: ["경상북도"],
+  경남: ["경상남도"],
+  제주: ["제주특별자치도", "제주도"],
+};
+const REGION_CANONICAL = new Map(
+  Object.entries(REGION_ALIASES).flatMap(([short, names]) => [[short, short], ...names.map((name) => [name, short])])
+);
+
+/**
+ * 시도 이름을 짧은 이름 하나로 모은다. 시도가 아니면 그대로 돌려준다.
+ *
+ * "광주" 는 광주광역시다. 경기도 광주시는 "경기 광주시" 로 시도가 앞에 온다.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function canonicalRegion(name) {
+  return REGION_CANONICAL.get(name) ?? name;
 }
