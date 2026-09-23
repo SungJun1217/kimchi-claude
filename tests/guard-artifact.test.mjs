@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractCommitMessages, extractTargets } from "../hooks/guard-artifact.mjs";
@@ -116,13 +118,38 @@ test("쓸 것을 적힌 그대로 보여 준다", () => {
   assert.match(output.hookSpecificOutput.additionalContext, /"되어질" → "~될"/);
 });
 
-test("생성물과 규칙 자료는 검사하지 않는다", () => {
-  // 출력 스타일 본문은 금칙 표현을 대조 예시로 싣고 있어 자기 규칙에 걸린다.
-  // 자동 교정이 켜져 있으면 자기 "쓰지 말 것" 칸을 고쳐 써 버린다.
+test("스스로를 예외로 선언한 문서는 Write든 Edit든 검사하지 않는다", () => {
+  // 경로 이름이 아니라 문서에 실린 선언으로 판단해야 한다. 경로로 판단하면 사용자의
+  // docs/rules/*.md 까지 조용히 빠지고, 우리 파일을 옮기면 보호가 사라진다.
   const content = "리팩토링과 컨텐츠를 고쳐야 합니다.";
-  assert.equal(extractTargets("Write", { file_path: "output-styles/natural-korean.md", content }).length, 0);
-  assert.equal(extractTargets("Write", { file_path: "rules/terms.md", content }).length, 0);
-  assert.equal(extractTargets("Edit", { file_path: "/abs/path/rules/hanja.md", new_string: content }).length, 0);
-  // 보통 문서는 그대로 검사한다
-  assert.equal(extractTargets("Write", { file_path: "docs/guide.md", content }).length, 1);
+  const dir = mkdtempSync(join(tmpdir(), "kimchi-"));
+  const declared = join(dir, "guide.md");
+  const plain = join(dir, "plain.md");
+  writeFileSync(declared, `<!-- kimchi-ignore-file 대조 예시를 싣는다 -->
+${content}`, "utf8");
+  writeFileSync(plain, content, "utf8");
+
+  try {
+    // Write: 넘어온 글 안에 선언이 있으면 lint 가 알아서 걸러 낸다
+    assert.equal(runHook({
+      hook_event_name: "PostToolUse", tool_name: "Write",
+      tool_input: { file_path: declared, content: `<!-- kimchi-ignore-file -->
+${content}` },
+    }), null);
+
+    // Edit: 조각에는 선언이 없다. 파일을 읽어 확인해야 한다
+    assert.equal(extractTargets("Edit", { file_path: declared, new_string: content }).length, 0);
+
+    // 선언이 없는 문서는 그대로 검사한다
+    assert.equal(extractTargets("Edit", { file_path: plain, new_string: content }).length, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("이 저장소의 생성물과 규칙 자료는 선언으로 걸러진다", () => {
+  const content = "리팩토링과 컨텐츠를 고쳐야 합니다.";
+  for (const file of ["output-styles/natural-korean.md", "rules/terms.md", "rules/observed.md"]) {
+    assert.equal(extractTargets("Edit", { file_path: join(ROOT, file), new_string: content }).length, 0, file);
+  }
 });

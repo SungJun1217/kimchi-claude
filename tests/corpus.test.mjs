@@ -13,8 +13,7 @@ import {
   lint,
   toPattern,
   applyFixes,
-  startsWithParticle,
-  hasFinalConsonant,
+  autoFixReplacement,
 } from "../hooks/lib/lint.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -140,39 +139,31 @@ test("규칙이 겨냥한 나쁜 문장은 실제로 걸린다", () => {
   assert.deepEqual(silent, []);
 });
 
-// 아래 세 시험은 실제로 배포됐던 결함을 막는다.
-// 치환 규칙의 대체 표현이 조사로 시작하거나 괄호·쉼표를 담고 있으면 본문이 망가진다.
-// "요청에 대한 처리를 진행합니다" → "요청를 처리합니다",
+// 아래 시험이 실제로 배포됐던 결함을 막는다.
 // "커플링을 낮췄습니다" → "결합도, 느슨한 결합을 낮췄습니다" 가 실제로 나왔다.
+//
+// 판정은 생산 코드와 같은 함수(autoFixReplacement)로 한다. 예전에는 이 시험이 금칙 신호
+// 목록을 손으로 베껴 써서 생산 코드보다 느슨했다.
 
-test("치환 규칙의 대체 표현이 조사로 시작하지 않는다", () => {
-  const bad = rules
-    .filter((rule) => rule.check === CHECK_SUBSTITUTE && startsWithParticle(rule.good.replace(/^~+/, "")))
+test("치환 규칙은 그대로 꽂을 수 있는 대체 표현을 갖는다", () => {
+  const unusable = rules
+    .filter((rule) => rule.check === CHECK_SUBSTITUTE && autoFixReplacement(rule) === null)
     .map((rule) => `"${rule.bad}" → "${rule.good}"`);
-  assert.deepEqual(bad, [], "조사로 시작하면 앞말의 받침을 봐야 하므로 자동 교정할 수 없다");
+  assert.deepEqual(unusable, [], "치환으로 표시됐는데 꽂을 표현을 뽑을 수 없다");
 });
 
-test("치환 규칙의 대체 표현에 괄호나 쉼표가 없다", () => {
-  const bad = rules
-    .filter((rule) => rule.check === CHECK_SUBSTITUTE && /[(),/|]/.test(rule.good))
-    .map((rule) => `"${rule.bad}" → "${rule.good}"`);
-  assert.deepEqual(bad, [], "대안 나열은 본문에 그대로 꽂으면 문장이 망가진다");
+test("자동 교정은 검사 칸을 믿지 않고 스스로 막는다", () => {
+  // rules/*.md 는 손으로 고치는 파일이다. 칸에 치환이라고 적혀 있어도 꽂을 수 없는 값이면
+  // 문장이 망가지므로, applyFixes 가 자체 판정으로 막아야 한다.
+  const handEdited = {
+    bad: "커플링", good: "결합도, 느슨한 결합", why: "손으로 잘못 적은 규칙",
+    check: CHECK_SUBSTITUTE, priority: "핵심", source: "hand.md",
+  };
+  const { text, applied } = applyFixes("커플링 문제입니다.", [handEdited]);
+  assert.equal(applied[0]?.replacement, "결합도", "대안 나열을 그대로 꽂았다");
+  assert.equal(text, "결합도 문제입니다.");
 });
 
-test("조사가 바로 붙은 자리에서 조사를 깨뜨리지 않는다", () => {
-  // 기존 탐침은 `앞말 ${bad} 뒷말`처럼 양쪽을 띄워 놓아 이 결함을 구조적으로 못 잡았다.
-  const problems = [];
-  for (const rule of rules) {
-    if (rule.check !== CHECK_SUBSTITUTE) continue;
-    for (const particle of ["을", "를", "이", "가"]) {
-      const { applied } = applyFixes(`${rule.bad}${particle} 확인했습니다.`, [rule]);
-      if (applied.length === 0) continue;
-      const after = hasFinalConsonant(applied[0].replacement);
-      const before = hasFinalConsonant(rule.bad);
-      if (after !== before) {
-        problems.push(`"${rule.bad}${particle}" → "${applied[0].replacement}${particle}"`);
-      }
-    }
-  }
-  assert.deepEqual(problems, [], "받침이 바뀌었는데도 교정이 적용됐다");
-});
+// 참고: 치환 규칙 가운데 상당수는 앞뒤 받침이 다르다. 그 규칙들은 뒤에 조사가 없을 때만
+// 교정되도록 실행 시점 안전장치에 의존하는 정상 규칙이므로, 받침 일치를 자료 불변식으로
+// 단정하면 안 된다. applyFixes 가 실제로 조사를 지키는지는 tests/fixes.test.mjs 가 본다.

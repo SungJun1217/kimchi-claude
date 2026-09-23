@@ -11,12 +11,23 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRules, byPriority, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
+import {
+  loadRules,
+  byPriority,
+  CHECK_PROMPT,
+  CHECK_REGEX,
+  CHECK_SUBSTITUTE,
+} from "../hooks/lib/rules.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const RULES_DIR = join(ROOT, "rules");
 const OUT_PATH = join(ROOT, "output-styles", "natural-korean.md");
+const README_PATH = join(ROOT, "README.md");
+
+// README 안에서 숫자를 갈아 끼울 구간. 산문에 숫자를 손으로 적으면 조용히 낡는다.
+const COUNTS_OPEN = "<!-- kimchi:counts -->";
+const COUNTS_CLOSE = "<!-- /kimchi:counts -->";
 
 // 스타일 본문 전체 길이 상한. 시스템 프롬프트는 프롬프트 캐시에 올라가므로 비용 부담은
 // 낮지만 모델의 주의 예산은 유한하다. 자료가 300개로 자라도 본문은 여기까지만 담는다.
@@ -43,6 +54,7 @@ description: 한국어로 물으면 한국 개발자가 실제로 쓰는 말투�
 keep-coding-instructions: true
 force-for-plugin: true
 ---
+<!-- kimchi-ignore-file 이 문서는 금칙 표현을 대조 예시로 싣는다. 린터가 자기 본문을 지적하면 안 된다 -->
 
 사용자가 한국어로 쓰면, 한국 개발자가 실제로 쓰는 말로 답합니다.
 
@@ -132,54 +144,76 @@ export function buildBody(rules, maxChars = MAX_CHARS) {
   // 뒤로 미루면 안 된다. 린터는 커밋 메시지와 문서 파일만 보고 **대화는 못 본다.**
   // 대화가 이 플러그인의 주 무대이므로 용어 규칙도 스타일에 있어야 한다.
   //
-  // 소제목 비용은 어느 쪽에도 물리지 않고 전체 상한에서만 뺀다. 한 소제목 아래에
+  // 소제목 비용은 어느 갈래에도 물리지 않고 전체 상한에서만 뺀다. 한 소제목 아래에
   // 두 갈래가 섞여 들어오기 때문이다.
   const rowBudget = Math.max(0, maxChars - PREAMBLE.length);
-  const lanes = [
-    { isMine: (rule) => rule.check === CHECK_PROMPT, budget: Math.floor(rowBudget * PROMPT_SHARE), spent: 0 },
-    { isMine: (rule) => rule.check !== CHECK_PROMPT, budget: rowBudget, spent: 0 },
-  ];
-  lanes[1].budget = rowBudget - lanes[0].budget;
+  const promptBudget = Math.floor(rowBudget * PROMPT_SHARE);
+  const promptLane = { budget: promptBudget, spent: 0 };
+  const termLane = { budget: rowBudget - promptBudget, spent: 0 };
+  const anyLane = { budget: Infinity, spent: 0 };
 
   const sections = new Map();
-  const picked = new Set();
   let length = PREAMBLE.length;
+  let included = 0;
 
   const admit = (rule, lane) => {
     const title = SECTION_TITLES[rule.source] || rule.source;
-    const rowCost = `${toRow(rule)}\n`.length;
+    const rowCost = `${toRow(rule)}
+`.length;
     const headingCost = sections.has(title) ? 0 : sectionHeading(title).length;
 
     if (length + rowCost + headingCost > maxChars) return false;
-    if (lane && lane.spent + rowCost > lane.budget) return false;
+    if (lane.spent + rowCost > lane.budget) return false;
 
     if (!sections.has(title)) sections.set(title, []);
     sections.get(title).push(rule);
     length += rowCost + headingCost;
-    if (lane) lane.spent += rowCost;
-    picked.add(rule);
+    lane.spent += rowCost;
+    included += 1;
     return true;
   };
 
-  // 한 규칙이 자기 갈래의 예산을 넘겨도 멈추지 않는다. 뒤에 오는 짧은 규칙은 아직 들어갈 수 있다.
+  // 자기 갈래 예산을 넘긴 규칙은 미뤄 둔다. 한 규칙이 안 들어가도 멈추지 않는다.
+  // 뒤에 오는 짧은 규칙은 아직 들어갈 수 있다.
+  const deferred = [];
   for (const rule of ordered) {
-    const lane = lanes.find((candidate) => candidate.isMine(rule));
-    admit(rule, lane);
+    if (!admit(rule, rule.check === CHECK_PROMPT ? promptLane : termLane)) deferred.push(rule);
   }
-
-  // 한쪽이 예산을 덜 썼으면 남은 자리를 다른 쪽에 넘긴다. 상한을 남기고 버리지 않는다.
-  for (const rule of ordered) {
-    if (picked.has(rule)) continue;
-    admit(rule, null);
-  }
+  // 한쪽이 예산을 덜 썼으면 남은 자리를 넘긴다. 상한을 남기고 버리지 않는다.
+  // 지금 자료에서는 프롬프트 규칙이 자기 갈래를 넘치게 채워 이 순회가 아무것도 담지 않는다.
+  // 프롬프트 규칙이 적은 설정에서 자리를 버리지 않기 위한 장치다.
+  for (const rule of deferred) admit(rule, anyLane);
 
   let body = PREAMBLE;
   for (const [title, rows] of sections) {
     body += sectionHeading(title);
-    for (const rule of rows) body += `${toRow(rule)}\n`;
+    for (const rule of rows) body += `${toRow(rule)}
+`;
   }
 
-  return { body, included: picked.size, dropped: ordered.length - picked.size };
+  return { body, included, dropped: ordered.length - included };
+}
+
+/**
+ * README 의 표시 구간에 규칙 수를 써 넣은 문서를 돌려준다.
+ */
+export function renderReadme(readme, rules, included) {
+  const count = (check) => rules.filter((rule) => rule.check === check).length;
+  const block = [
+    COUNTS_OPEN,
+    `| 갈래 | 개수 | 누가 막나 |`,
+    `|---|---|---|`,
+    `| 치환 | ${count(CHECK_SUBSTITUTE)} | 린터가 자동으로 고친다 |`,
+    `| 정규식 | ${count(CHECK_REGEX)} | 린터가 잡아서 알려 준다 |`,
+    `| 프롬프트 | ${count(CHECK_PROMPT)} | 문자열로 못 잡는다. 출력 스타일만이 막는다 |`,
+    `| **합계** | **${rules.length}** | 그중 ${included}개가 출력 스타일 본문에 들어간다 |`,
+    COUNTS_CLOSE,
+  ].join("\n");
+
+  const start = readme.indexOf(COUNTS_OPEN);
+  const end = readme.indexOf(COUNTS_CLOSE);
+  if (start === -1 || end === -1) return readme;
+  return readme.slice(0, start) + block + readme.slice(end + COUNTS_CLOSE.length);
 }
 
 function main() {
@@ -193,14 +227,19 @@ function main() {
 
   const { body, included, dropped } = buildBody(rules);
 
+  const readme = existsSync(README_PATH) ? readFileSync(README_PATH, "utf8") : "";
+  const nextReadme = renderReadme(readme, rules, included);
+
   if (check) {
     if (!existsSync(OUT_PATH)) {
       console.error(`${OUT_PATH} 가 없습니다. node scripts/build-style.mjs 를 실행하십시오.`);
       process.exit(1);
     }
-    const current = readFileSync(OUT_PATH, "utf8");
-    if (current !== body) {
-      console.error("커밋된 출력 스타일이 rules/ 와 어긋납니다. node scripts/build-style.mjs 를 실행하십시오.");
+    const stale = [];
+    if (readFileSync(OUT_PATH, "utf8") !== body) stale.push("출력 스타일");
+    if (readme !== nextReadme) stale.push("README 의 규칙 수");
+    if (stale.length > 0) {
+      console.error(`${stale.join("과 ")}가 rules/ 와 어긋납니다. node scripts/build-style.mjs 를 실행하십시오.`);
       process.exit(1);
     }
     console.log(`최신입니다. 규칙 ${rules.length}개, 본문 ${body.length}자.`);
@@ -208,6 +247,7 @@ function main() {
   }
 
   writeFileSync(OUT_PATH, body, "utf8");
+  if (readme !== nextReadme) writeFileSync(README_PATH, nextReadme, "utf8");
   console.log(
     [
       `파일 ${files.length}개에서 규칙 ${rules.length}개를 읽었습니다.`,

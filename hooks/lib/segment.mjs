@@ -26,12 +26,13 @@ const PROTECTED_PATTERNS = [
 
   // 사람이 지정한 예외 구간.
   // 문체 가이드나 규칙 문서는 나쁜 예를 일부러 인용한다. 그것까지 지적하면 쓸 수 없다.
-  /<!--\s*kimchi-ignore-start\s*-->[\s\S]*?<!--\s*kimchi-ignore-end\s*-->/g,
-  /^.*<!--\s*kimchi-ignore\s*-->.*$/gm, // 표시가 붙은 한 줄
+  /<!--\s*kimchi-ignore-start\b[\s\S]*?-->[\s\S]*?<!--\s*kimchi-ignore-end\b[\s\S]*?-->/g,
+  /^.*<!--\s*kimchi-ignore\b[^>]*-->.*$/gm, // 표시가 붙은 한 줄
 ];
 
 // 문서 전체를 검사에서 빼는 표시.
-const IGNORE_FILE = /<!--\s*kimchi-ignore-file\s*-->/;
+// 표시 뒤에 이유를 덧붙일 수 있게 둔다. 왜 빼는지 적어 두는 것이 자연스러운 쓰임이다.
+const IGNORE_FILE = /<!--\s*kimchi-ignore-file\b[\s\S]*?-->/;
 
 /**
  * 문서 전체가 검사 예외로 표시되었는지 알려준다.
@@ -50,8 +51,7 @@ export function isIgnoredFile(text) {
 export function maskProtected(text) {
   if (typeof text !== "string" || text.length === 0) return "";
 
-  const masked = new Uint8Array(text.length);
-
+  const ranges = [];
   for (const pattern of PROTECTED_PATTERNS) {
     pattern.lastIndex = 0;
     let match;
@@ -60,30 +60,24 @@ export function maskProtected(text) {
         pattern.lastIndex += 1;
         continue;
       }
-      const end = match.index + match[0].length;
-      for (let i = match.index; i < end; i += 1) masked[i] = 1;
+      ranges.push([match.index, match.index + match[0].length]);
     }
   }
+  // 가릴 구간이 없으면 원문을 그대로 돌려준다. 아무것도 할당하지 않는다.
+  if (ranges.length === 0) return text;
 
-  // 코드 유닛 단위로 다시 만든다. 서로게이트 쌍을 묶으면 인덱스가 어긋나
-  // 위치 보존이 깨진다.
-  const out = new Array(text.length);
-  for (let i = 0; i < text.length; i += 1) {
-    out[i] = masked[i] ? MASK : text[i];
+  ranges.sort((a, b) => a[0] - b[0]);
+
+  // 겹치거나 품은 구간은 커서로 정리한다. 센티넬을 구간 길이만큼 채워 위치를 보존한다.
+  let out = "";
+  let cursor = 0;
+  for (const [from, to] of ranges) {
+    if (to <= cursor) continue;
+    const start = Math.max(from, cursor);
+    out += text.slice(cursor, start);
+    out += MASK.repeat(to - start);
+    cursor = to;
   }
-  return out.join("");
+  return out + text.slice(cursor);
 }
 
-/**
- * 해당 위치가 제외 구간인지 알려준다.
- * @param {string} maskedText maskProtected가 돌려준 문자열
- * @param {number} index
- * @param {number} length
- * @returns {boolean}
- */
-export function isMasked(maskedText, index, length = 1) {
-  for (let i = index; i < index + length; i += 1) {
-    if (maskedText[i] === MASK) return true;
-  }
-  return false;
-}

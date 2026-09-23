@@ -26,14 +26,18 @@ export const PRIORITIES = ["핵심", "보통", "참고"];
 const HEADER_FIRST_CELL = "원어";
 const CELL_COUNT = 6;
 const PIPE_PLACEHOLDER = "\u0001";
+const PIPE_PLACEHOLDER_PATTERN = new RegExp(PIPE_PLACEHOLDER, "g");
 const EMPTY_MARKS = new Set(["—", "-", "–", ""]);
 
 function splitCells(line) {
   const escaped = line.replace(/\\\|/g, PIPE_PLACEHOLDER);
   const trimmed = escaped.trim().replace(/^\|/, "").replace(/\|$/, "");
+  // 이스케이프한 파이프는 드물다. 있는 칸만 되돌린다.
   return trimmed
     .split("|")
-    .map((cell) => cell.replace(new RegExp(PIPE_PLACEHOLDER, "g"), "|").trim());
+    .map((cell) =>
+      cell.includes(PIPE_PLACEHOLDER) ? cell.replace(PIPE_PLACEHOLDER_PATTERN, "|").trim() : cell.trim()
+    );
 }
 
 function isSeparatorRow(cells) {
@@ -131,19 +135,12 @@ export function loadRules(rulesDir) {
   return { rules, skipped, files };
 }
 
-// 스타일 본문에 담을 때의 둘째 기준.
-//
-// 프롬프트 규칙만 앞세운다. 문자열로 잡을 수 없어 예방밖에 방법이 없기 때문이다.
-// 치환과 정규식은 똑같이 뒤에 둔다. 둘 다 린터가 잡을 수 있으니 서로 앞설 이유가 없고,
-// 순서를 매기면 규칙 파일에 적은 순서만 뒤섞인다.
-//
-// 주의: 프롬프트를 앞세운다고 치환·정규식이 밀려나서는 안 된다. 린터는 커밋과 문서만 보고
-// 대화는 못 본다. 그래서 build-style.mjs 가 두 갈래에 예산을 따로 배정한다.
-const CHECK_WEIGHT = { [CHECK_PROMPT]: 0, [CHECK_REGEX]: 1, [CHECK_SUBSTITUTE]: 1 };
+// 린터의 적용 범위: 커밋 메시지와 문서 파일. **대화는 보지 못한다.**
+// 그래서 `검사` 값은 "어떻게 강제하는가"이고 "얼마나 중요한가"가 아니다. 후자는 `순위` 칸의 일이다.
+// 스타일 본문에 무엇을 담을지는 build-style.mjs 가 갈래별 예산으로 정한다.
 
 /**
- * 순위 순으로 정렬한다. 같은 순위 안에서는 예방밖에 방법이 없는 규칙을 앞에 두고,
- * 그마저 같으면 원래 순서를 지킨다.
+ * 순위 순으로 정렬한다. 같은 순위 안에서는 규칙 파일에 적은 순서를 지킨다.
  * @param {object[]} rules
  * @returns {object[]}
  */
@@ -153,9 +150,7 @@ export function byPriority(rules) {
     .sort((a, b) => {
       const byRank =
         PRIORITIES.indexOf(a.rule.priority) - PRIORITIES.indexOf(b.rule.priority);
-      if (byRank !== 0) return byRank;
-      const byCheck = (CHECK_WEIGHT[a.rule.check] ?? 1) - (CHECK_WEIGHT[b.rule.check] ?? 1);
-      return byCheck !== 0 ? byCheck : a.index - b.index;
+      return byRank !== 0 ? byRank : a.index - b.index;
     })
     .map(({ rule }) => rule);
 }

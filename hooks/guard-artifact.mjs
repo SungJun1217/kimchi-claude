@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { loadRules } from "./lib/rules.mjs";
 import { lint, applyFixes, formatFindings } from "./lib/lint.mjs";
 import { looksKorean } from "./lib/detect.mjs";
+import { isIgnoredFile } from "./lib/segment.mjs";
 
 const PLUGIN_ROOT =
   process.env.CLAUDE_PLUGIN_ROOT || join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,11 +25,17 @@ const PLUGIN_ROOT =
 // 문서 파일만 본다. 소스 파일을 검사하면 코드 주석까지 건드리게 되고, 그것은 적용 범위 밖이다.
 const DOC_EXTENSIONS = new Set([".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc"]);
 
-// 생성물과 규칙 자료는 검사하지 않는다.
-//
-// 출력 스타일 본문은 금칙 표현을 대조 예시로 싣고 있어 자기 규칙에 걸린다. 자동 교정이
-// 켜져 있으면 자기 "쓰지 말 것" 칸을 고쳐 써 버린다.
-const GENERATED_PATHS = [/(^|[\\/])output-styles[\\/]/, /(^|[\\/])rules[\\/]/];
+/**
+ * 파일이 스스로를 검사 예외로 선언했는지 디스크에서 확인한다.
+ * 읽을 수 없으면(새 파일 등) 선언이 없는 것으로 본다.
+ */
+function declaresIgnore(filePath) {
+  try {
+    return isIgnoredFile(readFileSync(filePath, "utf8"));
+  } catch {
+    return false;
+  }
+}
 
 function readStdin() {
   try {
@@ -45,7 +52,10 @@ function readStdin() {
  */
 function extractCommitMessages(command) {
   if (typeof command !== "string") return [];
-  if (!/\bgit\b[\s\S]*\bcommit\b/.test(command)) return [];
+  // 두 낱말을 따로 찾는다. /\bgit\b[\s\S]*\bcommit\b/ 처럼 사이를 탐욕적으로 잡으면
+  // git 이 나올 때마다 역추적해서 비용이 이차로 커진다. 132KB 명령에서 1965ms 였다.
+  // 순서를 잃지만 뒤의 추출기가 메시지를 못 찾으면 어차피 빈 결과다.
+  if (!/\bgit\b/.test(command) || !/\bcommit\b/.test(command)) return [];
 
   const messages = [];
 
@@ -84,7 +94,12 @@ function extractTargets(toolName, toolInput) {
 
   const filePath = toolInput.file_path || "";
   if (filePath && !DOC_EXTENSIONS.has(extname(filePath).toLowerCase())) return [];
-  if (GENERATED_PATHS.some((pattern) => pattern.test(filePath))) return [];
+  // 파일이 스스로를 예외로 선언했으면 조각만 넘어와도 존중한다.
+  //
+  // lint() 는 넘겨받은 글에서 표시를 찾으므로, Edit 처럼 조각만 오면 파일 수준 선언이
+  // 보이지 않는다. 그래서 여기서 파일을 읽어 확인한다. 이 덕분에 사용자가 자기 문서에
+  // 표시를 붙여 Edit 로 고칠 때도 동작한다.
+  if (filePath && declaresIgnore(filePath)) return [];
 
   if (toolName === "Write" && typeof toolInput.content === "string") {
     return [{ label: filePath || "문서", text: toolInput.content, field: "content" }];
@@ -117,15 +132,11 @@ function describeFixes(applied) {
 }
 
 function handlePreToolUse(toolName, toolInput, targets, rules) {
-  const autofix = process.env.KIMCHI_AUTOFIX === "1";
-  const block = process.env.KIMCHI_BLOCK === "1";
-
-  if (!autofix && !block) return; // 경고는 PostToolUse가 맡는다
-
-  const allFindings = targets.flatMap((target) => lint(target.text, rules));
-  if (allFindings.length === 0) return;
-
-  if (block) {
+  if (blockEnabled()) {
+    // F8: 막을 때만 전체 위반 목록이 필요하다. 자동 교정 경로에서는 applyFixes 가
+    // 안에서 다시 검사하므로 미리 훑으면 같은 일을 두 번 한다.
+    const allFindings = targets.flatMap((target) => lint(target.text, rules));
+    if (allFindings.length === 0) return;
     emit({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
@@ -195,6 +206,9 @@ function handlePostToolUse(targets, rules) {
   });
 }
 
+const autofixEnabled = () => process.env.KIMCHI_AUTOFIX === "1";
+const blockEnabled = () => process.env.KIMCHI_BLOCK === "1";
+
 function main() {
   if (process.env.KIMCHI_DISABLE === "1") return;
 
@@ -211,6 +225,10 @@ function main() {
   const toolName = payload.tool_name;
   const event = payload.hook_event_name;
   if (!toolName || !event) return;
+
+  // 기본값에서 PreToolUse 는 아무 일도 하지 않는다. 경고는 PostToolUse 가 맡는다.
+  // 규칙 575개를 읽기 전에 빠져나가야 한다. 그 적재가 8ms 다.
+  if (event === "PreToolUse" && !autofixEnabled() && !blockEnabled()) return;
 
   const targets = extractTargets(toolName, payload.tool_input).filter((target) =>
     looksKorean(target.text)

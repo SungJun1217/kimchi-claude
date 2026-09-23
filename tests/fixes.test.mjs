@@ -1,17 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { rule as base } from "./helpers.mjs";
 import { applyFixes, hasFinalConsonant, isParticleSafe } from "../hooks/lib/lint.mjs";
 
-const rule = (overrides = {}) => ({
-  en: "",
-  bad: "리팩토링",
-  good: "리팩터링",
-  why: "외래어 표기법",
-  check: "치환",
-  priority: "보통",
-  source: "register.md",
-  ...overrides,
-});
+// 이 시험 묶음의 기본값만 여기서 정하고, 규칙 객체 모양은 helpers 가 갖는다.
+const rule = (overrides = {}) => base({ bad: "리팩토링", good: "리팩터링", why: "외래어 표기법", priority: "보통", source: "register.md", ...overrides });
 
 test("받침 유무를 판정한다", () => {
   assert.equal(hasFinalConsonant("계약"), true);

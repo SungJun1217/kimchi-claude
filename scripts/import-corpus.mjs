@@ -20,8 +20,9 @@
 // 사용법:
 //   node scripts/import-corpus.mjs corpus.json
 //   node scripts/import-corpus.mjs corpus.json --dry-run
+//   node scripts/import-corpus.mjs --recheck     기존 rules/*.md 의 검사 칸만 다시 계산
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -29,9 +30,9 @@ import {
   toPattern,
   lint,
   stripWildcardEdges,
-  startsWithParticle,
+  autoFixReplacement,
 } from "../hooks/lib/lint.mjs";
-import { PRIORITIES } from "../hooks/lib/rules.mjs";
+import { loadRules, parseTable, PRIORITIES, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RULES_DIR = join(ROOT, "rules");
@@ -109,34 +110,12 @@ const CATEGORY_FILES = {
 
 const TABLE_HEADER = ["| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |", "|---|---|---|---|---|---|"];
 
-// 대체 표현이 드롭인이 아니라는 신호들. 이런 값은 자동 치환 대상에서 뺀다.
-// 괄호와 쉼표가 특히 위험하다. "정상 종료 (안전 종료)"나 "결합도, 느슨한 결합"은
-// 규칙 표에서는 대안 나열이지만 본문에 그대로 꽂으면 문장이 망가진다.
-const NOT_DROP_IN = /[\/|(),]|생략|또는|참조|문맥|\.{3}|…/;
-
-/**
- * 대체 표현을 문장에 그대로 꽂을 수 있는지 본다.
- */
-function isDropIn(good) {
-  const core = stripWildcardEdges(good);
-  if (core.length === 0) return false;
-  if (NOT_DROP_IN.test(core)) return false;
-  // 가운데 물결표는 무엇으로 채울지 정할 수 없다.
-  if (core.includes("~")) return false;
-  // 조사로 시작하면 앞말의 받침을 봐야 하는데 규칙 표에는 그 정보가 없다.
-  if (startsWithParticle(core)) return false;
-  return true;
-}
-
 // 금칙어 길이로 세 구간을 가른다.
 //
 // 종결어미로 끝나는지는 기준이 못 된다. 한국어에서는 구절 단위 패턴도 자연스럽게
 // 종결어미로 끝난다. "픽스했습니다"는 예시 문장이 아니라 쓸 만한 패턴이다.
 const SUBSTITUTE_MAX = 24; // 이 길이까지는 자동 교정을 검토한다
 const PATTERN_MAX = 40; // 이 길이를 넘으면 그 문장 하나에서만 걸리므로 린터에 쓸모가 없다
-
-// 린터와 같은 함수를 쓴다. 따로 구현하면 생성기의 길이 판정과 린터의 토큰화가 어긋난다.
-const patternCore = stripWildcardEdges;
 
 function escapeCell(value) {
   return String(value ?? "")
@@ -148,20 +127,20 @@ function escapeCell(value) {
 /**
  * 검사 칸의 값을 계산한다. 사람의 판단 대신 실제 동작으로 정한다.
  */
-function decideCheck(rule) {
+export function decideCheck(rule) {
   if (!rule.lintable) return "프롬프트";
   if (toPattern(rule.bad) === null) return "프롬프트";
 
-  const length = patternCore(rule.bad).length;
+  const length = stripWildcardEdges(rule.bad).length;
   // 너무 긴 금칙어는 그 문장 하나에서만 걸린다. 스타일 본문의 대조 예시로만 쓴다.
   if (length > PATTERN_MAX) return "프롬프트";
   // 문장 하나를 통째로 갈아 끼우는 것은 위험하다. 잡기만 하고 고치지는 않는다.
   if (length > SUBSTITUTE_MAX) return "정규식";
 
-  const candidate = { ...rule, check: "치환" };
+  // 대체 표현을 그대로 꽂을 수 없으면 경고만 한다. 판정은 린터와 같은 함수를 쓴다.
+  if (autoFixReplacement(rule) === null) return "정규식";
 
-  // 대체 표현을 그대로 꽂을 수 없으면 경고만 한다.
-  if (!isDropIn(rule.good)) return "정규식";
+  const candidate = { ...rule, check: "치환" };
   // 고친 결과가 같은 규칙에 또 걸리면 순환한다.
   if (lint(rule.good, [candidate]).length > 0) return "정규식";
 
@@ -173,6 +152,47 @@ function decideCheck(rule) {
   return "치환";
 }
 
+/**
+ * 이미 있는 rules/*.md 의 `검사` 칸만 다시 계산한다.
+ *
+ * 규칙 자료는 손으로 고치는 파일이라 통째로 다시 생성할 수 없다. 판정 규칙이 바뀌었을 때
+ * 칸 하나만 갈아 끼우는 길이 필요하다. `프롬프트`로 적힌 규칙은 그대로 둔다 — 문자열로
+ * 잡을 수 없다는 판단은 사람이 한 것이다.
+ */
+function recheckColumn({ dryRun }) {
+  const changes = [];
+
+  for (const name of readdirSync(RULES_DIR).filter((file) => file.endsWith(".md"))) {
+    const target = join(RULES_DIR, name);
+    const before = readFileSync(target, "utf8");
+    const lines = before.split("\n");
+
+    const after = lines.map((line) => {
+      if (!line.trimStart().startsWith("|")) return line;
+      const { rules } = parseTable(line, name);
+      if (rules.length !== 1) return line;
+
+      const rule = rules[0];
+      if (rule.check === CHECK_PROMPT) return line;
+
+      const next = decideCheck({ ...rule, lintable: true });
+      if (next === rule.check || next === CHECK_PROMPT) return line;
+
+      changes.push(`${name}: "${rule.bad}" ${rule.check} → ${next}`);
+      return `| ${rule.en || "—"} | ${rule.bad} | ${rule.good} | ${rule.why || "—"} | ${next} | ${rule.priority} |`;
+    });
+
+    const text = after.join("\n");
+    if (!dryRun && text !== before) writeFileSync(target, text, "utf8");
+  }
+
+  console.log(dryRun ? "시험 실행입니다. 파일을 쓰지 않았습니다." : "검사 칸을 다시 계산했습니다.");
+  console.log(`바뀐 규칙 ${changes.length}개.`);
+  for (const change of changes.slice(0, 8)) console.log(`  ${change}`);
+  if (changes.length > 8) console.log(`  ... 그 밖에 ${changes.length - 8}개`);
+  if (changes.length > 0) console.log("\n다음: node scripts/build-style.mjs && npm test");
+}
+
 function normalizePriority(value) {
   return PRIORITIES.includes(value) ? value : "보통";
 }
@@ -181,6 +201,11 @@ function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const path = args.find((arg) => !arg.startsWith("--"));
+
+  if (args.includes("--recheck")) {
+    recheckColumn({ dryRun });
+    return;
+  }
 
   if (!path) {
     console.error("사용법: node scripts/import-corpus.mjs <corpus.json> [--dry-run]");
@@ -271,4 +296,5 @@ function main() {
   console.log("\n다음: node scripts/build-style.mjs && npm test");
 }
 
-main();
+// 직접 실행될 때만 돈다. 시험과 다른 스크립트가 decideCheck 를 불러 쓸 수 있어야 한다.
+if (import.meta.url === `file://${process.argv[1]}`) main();

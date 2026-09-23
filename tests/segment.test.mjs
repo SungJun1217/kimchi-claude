@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { maskProtected, isMasked, isIgnoredFile, MASK } from "../hooks/lib/segment.mjs";
+import { maskProtected, isIgnoredFile, MASK } from "../hooks/lib/segment.mjs";
 
 // 이 파일의 시험은 이 플러그인의 가장 큰 위험을 막는다.
 // contract 라는 변수명을 "계약"으로 고치라고 하는 오탐이다.
@@ -73,13 +73,6 @@ test("빈 문자열과 잘못된 입력에 안전하다", () => {
   assert.equal(maskProtected(42), "");
 });
 
-test("isMasked가 덮인 구간을 알려준다", () => {
-  const text = "앞 `x` 뒤";
-  const masked = maskProtected(text);
-  const backtick = text.indexOf("`");
-  assert.ok(isMasked(masked, backtick, 3));
-  assert.ok(!isMasked(masked, 0, 1));
-});
 
 test("센티넬이 원문에 이미 있어도 깨지지 않는다", () => {
   const text = `앞${MASK}뒤 \`x\``;

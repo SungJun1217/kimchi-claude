@@ -26,6 +26,16 @@ const PARTICLE_HEADS = new Set([
   "을", "를", "이", "가", "은", "는", "과", "와", "으", "로", "나", "라", "며", "야", "아",
 ]);
 
+/** 앞말의 받침에 따라 목적격 조사를 고른다. */
+function objectParticle(word) {
+  return hasFinalConsonant(word) ? "을" : "를";
+}
+
+/** 앞말의 받침에 따라 주격 조사를 고른다. */
+function subjectParticle(word) {
+  return hasFinalConsonant(word) ? "이" : "가";
+}
+
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -41,9 +51,20 @@ export function stripWildcardEdges(text) {
  * @param {string} bad
  * @returns {RegExp|null}
  */
+// 금칙어별 정규식을 기억한다. lint() 는 규칙 575개를 매번 훑으므로 기억하지 않으면
+// 호출마다 정규식 575개를 새로 컴파일한다. 그것이 lint() 시간의 70퍼센트였다.
+// 열쇠는 규칙 객체가 아니라 금칙어 문자열이다. 객체는 loadRules 마다 새로 만들어진다.
+const patternCache = new Map();
+
 export function toPattern(bad) {
   if (typeof bad !== "string") return null;
+  if (patternCache.has(bad)) return patternCache.get(bad);
+  const pattern = compilePattern(bad);
+  patternCache.set(bad, pattern);
+  return pattern;
+}
 
+function compilePattern(bad) {
   const core = stripWildcardEdges(bad);
   if (core.length === 0) return null;
 
@@ -95,6 +116,62 @@ export function startsWithParticle(replacement) {
 }
 
 /**
+ * 쓸 것 칸이 앞말이 붙는다고 선언했는지 본다. 선두 물결표가 그 선언이다.
+ *
+ * 이 선언이 있을 때만 첫 글자를 조사로 본다. 없으면 "가변", "라이브락", "이벤트"처럼
+ * 조사와 같은 음절로 시작하는 보통 낱말이다. 조사 여부는 글자가 아니라 위치의 성질이다.
+ */
+function declaresLeadingContext(good) {
+  return typeof good === "string" && good.trimStart().startsWith(WILDCARD);
+}
+
+// 자동 교정에 쓸 수 없다는 신호. 파싱할 수 없는 메타 주석들이다.
+const NOT_A_REPLACEMENT = /생략|또는|참조|문맥|\.{3}|…/;
+
+/**
+ * 쓸 것 칸에서 실제로 문장에 꽂을 표현 하나를 뽑는다.
+ *
+ * 칸의 문법은 `주 표현 [ (보충) ] [ / 대안 ] [ , 대안 ]` 이다. 사람에게는 칸 전체를
+ * 보여 주는 편이 낫지만, 치환에는 표현 하나만 필요하다.
+ *
+ * @param {string} good
+ * @returns {string}
+ */
+export function primaryGood(good) {
+  if (typeof good !== "string") return "";
+  const firstAlternative = stripWildcardEdges(good).split(/\s*[\/|,]\s*/)[0];
+  return firstAlternative
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * 규칙을 자동 교정에 쓸 수 있으면 꽂을 표현을, 쓸 수 없으면 null 을 돌려준다.
+ *
+ * **이 판정을 applyFixes 안에서 강제한다. 규칙 표의 `검사` 칸을 믿지 않는다.**
+ * rules/*.md 는 손으로 고치는 파일이라, 칸에 `치환`이라고 적혀 있어도 꽂을 수 없는
+ * 값이면 문장이 망가진다. 안전 속성이 자료의 정확성에 실려 있으면 안 된다.
+ *
+ * @param {{bad?: string, good?: string}} rule
+ * @returns {string|null}
+ */
+export function autoFixReplacement(rule) {
+  const good = rule?.good;
+  if (typeof good !== "string") return null;
+  if (NOT_A_REPLACEMENT.test(good)) return null;
+  // 금칙어 가운데에 물결표가 있으면 무엇을 남기고 무엇을 바꿀지 정할 수 없다.
+  if (stripWildcardEdges(rule.bad ?? "").includes(WILDCARD)) return null;
+
+  const replacement = primaryGood(good);
+  if (replacement.length === 0) return null;
+  if (replacement.includes(WILDCARD)) return null;
+  // 앞말이 붙는다고 선언했는데 조사로 시작하면 앞말의 받침을 알아야 한다. 규칙 표에는 없다.
+  if (declaresLeadingContext(good) && startsWithParticle(replacement)) return null;
+  return replacement;
+}
+
+/**
  * 치환해도 앞뒤 조사가 깨지지 않는지 확인한다.
  *
  * 조사는 양쪽에서 온다. 뒤에 붙는 경우와 대체 표현이 조사로 시작하는 경우를 모두 막아야 한다.
@@ -102,22 +179,41 @@ export function startsWithParticle(replacement) {
  * - 뒤: "얇은 계약을"의 "얇은 계약"을 "낮은 결합도"로 바꾸면 "낮은 결합도을"이 된다.
  * - 앞: "파일에 대한 처리를 진행"을 "를 처리"로 바꾸면 "파일를 처리"가 된다.
  *
+ * **판정과 설명을 한 함수에서 한다.** 따로 두면 두 곳이 어긋나고, 실제로 어긋났다.
+ * 원인을 틀리게 알려 주면 고치는 사람이 엉뚱한 곳을 뒤진다.
+ *
  * @param {string} bad
  * @param {string} good
  * @param {string} nextChar 매치 바로 뒤 글자
  * @param {string} [prevChar] 매치 바로 앞 글자
+ * @returns {string|null} 위험하면 이유, 안전하면 null
+ */
+export function particleRisk(bad, good, nextChar, prevChar = "") {
+  // 대체 표현이 조사로 시작하면 앞말의 받침에 맞아야 한다. 규칙 표에는 그 정보가 없으므로
+  // 자동 교정을 포기한다. 앞이 한글이 아니면 조사가 걸릴 일이 없어 그대로 둔다.
+  if (startsWithParticle(good) && hasFinalConsonant(prevChar) !== null) {
+    return `바꿀 표현이 조사 "${good[0]}"로 시작해 앞말의 받침을 봐야 합니다`;
+  }
+
+  if (!nextChar || !PARTICLE_HEADS.has(nextChar)) return null;
+
+  const before = hasFinalConsonant(bad);
+  const after = hasFinalConsonant(good);
+  if (before === null || after === null) {
+    return `받침을 판정할 수 없어 뒤따르는 조사 "${nextChar}"${objectParticle(nextChar)} 지킬 수 없습니다`;
+  }
+  if (before !== after) {
+    return `뒤따르는 조사 "${nextChar}"${subjectParticle(nextChar)} 깨집니다`;
+  }
+  return null;
+}
+
+/**
+ * particleRisk 의 참/거짓 판.
  * @returns {boolean}
  */
 export function isParticleSafe(bad, good, nextChar, prevChar = "") {
-  // 대체 표현이 조사로 시작하면 앞말의 받침에 맞아야 한다. 규칙 표에는 그 정보가 없으므로
-  // 자동 교정을 포기한다. 앞이 한글이 아니면 조사가 걸릴 일이 없어 그대로 둔다.
-  if (startsWithParticle(good) && hasFinalConsonant(prevChar) !== null) return false;
-
-  if (!nextChar || !PARTICLE_HEADS.has(nextChar)) return true;
-  const before = hasFinalConsonant(bad);
-  const after = hasFinalConsonant(good);
-  if (before === null || after === null) return false;
-  return before === after;
+  return particleRisk(bad, good, nextChar, prevChar) === null;
 }
 
 /**
@@ -168,22 +264,6 @@ export function lint(text, rules) {
 }
 
 /**
- * 왜 건너뛰었는지 정확히 알려준다. 원인을 뭉개면 고치는 사람이 엉뚱한 곳을 뒤진다.
- *
- * 메시지의 조사도 받침에 맞춰 고른다. 조사를 지켜 주는 코드가 자기 조사를 틀리면 우습다.
- */
-function skipReason(matched, replacement, nextChar) {
-  if (startsWithParticle(replacement)) {
-    return `바꿀 표현이 조사 "${replacement[0]}"로 시작해 앞말의 받침을 봐야 합니다`;
-  }
-  if (hasFinalConsonant(replacement) === null) {
-    return `바꿀 표현이 한글로 끝나지 않아 받침을 판정할 수 없습니다`;
-  }
-  const subject = hasFinalConsonant(nextChar) ? "이" : "가";
-  return `뒤따르는 조사 "${nextChar}"${subject} 깨집니다`;
-}
-
-/**
  * 치환 규칙만 실제로 고쳐 쓴다. 자동 교정은 기본으로 꺼져 있고 호출하는 쪽이 켠다.
  *
  * @param {string} text
@@ -198,11 +278,9 @@ export function applyFixes(text, rules) {
     return { text: typeof text === "string" ? text : "", applied, skipped };
   }
 
-  const candidates = lint(text, rules).filter((finding) => {
-    if (finding.check !== CHECK_SUBSTITUTE) return false;
-    // 가운데 물결표가 있는 규칙은 무엇으로 바꿀지 정할 수 없다.
-    return !stripWildcardEdges(finding.bad).includes(WILDCARD);
-  });
+  // `검사` 칸이 치환인 것은 규칙을 쓴 사람의 의사 표시이고, 실제로 꽂을 수 있는지는
+  // autoFixReplacement 가 따로 판정한다. 둘을 모두 만족해야 고친다.
+  const candidates = lint(text, rules).filter((finding) => finding.check === CHECK_SUBSTITUTE);
 
   // 뒤에서부터 고친다. 앞쪽을 먼저 고치면 뒤쪽 위치가 어긋난다.
   const ordered = [...candidates].sort((a, b) => b.index - a.index);
@@ -217,16 +295,17 @@ export function applyFixes(text, rules) {
       continue;
     }
 
-    const replacement = stripWildcardEdges(finding.good);
-    if (replacement.length === 0) {
-      skipped.push({ ...finding, reason: "바꿀 표현이 비어 있습니다" });
+    const replacement = autoFixReplacement(finding);
+    if (replacement === null) {
+      skipped.push({ ...finding, reason: "그대로 꽂을 수 있는 대체 표현이 아닙니다" });
       continue;
     }
 
     const nextChar = result[end] ?? "";
-    const prevChar = finding.index > 0 ? result[finding.index - 1] : "";
-    if (!isParticleSafe(finding.matched, replacement, nextChar, prevChar)) {
-      skipped.push({ ...finding, reason: skipReason(finding.matched, replacement, nextChar) });
+    const prevChar = result[finding.index - 1] ?? "";
+    const risk = particleRisk(finding.matched, replacement, nextChar, prevChar);
+    if (risk !== null) {
+      skipped.push({ ...finding, reason: risk });
       continue;
     }
 

@@ -13,7 +13,9 @@ import { lint } from "../hooks/lib/lint.mjs";
 import { looksKorean } from "../hooks/lib/detect.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SKIP_DIRS = new Set(["node_modules", ".git", ".remember", "results", "output-styles"]);
+// output-styles 를 빼지 않는다. 생성된 스타일 본문이 스스로 붙인 예외 표시로
+// 걸러지는지 여기서 함께 확인된다.
+const SKIP_DIRS = new Set(["node_modules", ".git", ".remember", "results"]);
 
 function collectMarkdown(dir) {
   const found = [];
@@ -50,12 +52,6 @@ test("저장소의 한국어 문서가 규칙을 어기지 않는다", () => {
   );
 });
 
-test("README가 말하는 규칙 수가 실제와 맞는다", () => {
-  // 문서의 숫자는 조용히 낡는다. 낡으면 읽는 사람을 속인다.
-  const readme = readFileSync(join(ROOT, "README.md"), "utf8");
-  const stated = readme.match(/규칙 (\d+)개/g)?.map((hit) => Number(hit.match(/\d+/)[0])) ?? [];
-  assert.ok(stated.length > 0, "README에 규칙 수가 적혀 있지 않다");
-  for (const count of stated) {
-    assert.equal(count, rules.length, `README는 ${count}개라고 적었는데 실제는 ${rules.length}개다`);
-  }
-});
+// README 의 규칙 수는 build-style.mjs 가 써 넣고 --check 가 검증한다.
+// 산문을 정규식으로 긁는 시험은 표현을 고칠 때마다 깨지고, 다음 사람은 시험 대신
+// 문장을 고칠 유인을 갖는다.

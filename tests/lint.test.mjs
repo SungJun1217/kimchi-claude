@@ -1,17 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { rule as base } from "./helpers.mjs";
 import { lint, toPattern, formatFindings } from "../hooks/lib/lint.mjs";
 
-const rule = (overrides = {}) => ({
-  en: "",
-  bad: "얇은 계약",
-  good: "결합도",
-  why: "은유 직역",
-  check: "정규식",
-  priority: "핵심",
-  source: "test.md",
-  ...overrides,
-});
+// 이 시험 묶음의 기본값만 여기서 정하고, 규칙 객체 모양은 helpers 가 갖는다.
+const rule = (overrides = {}) => base({ check: "정규식", good: "결합도", source: "test.md", ...overrides });
 
 test("정규식 규칙이 위반을 찾는다", () => {
   const findings = lint("여기서 얇은 계약을 유지하세요.", [rule()]);
