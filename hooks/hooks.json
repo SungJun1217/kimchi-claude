@@ -1,6 +1,18 @@
 {
-  "description": "커밋 메시지와 한국어 문서의 어색한 표현을 검사하고(경고), 주민등록번호가 저장소에 남는 것을 막는다(차단).",
+  "description": "저장소의 산출물 언어를 알려 주고, 어색한 한국어 표현을 검사하고(경고), 주민등록번호가 저장소에 남는 것을 막는다(차단).",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-language.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|Write|Edit|MultiEdit",
