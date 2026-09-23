@@ -163,6 +163,74 @@ const LEXICON = {
   proxy: NO_FINAL, // 프록시
   port: NO_FINAL, // 포트
   host: NO_FINAL, // 호스트
+
+  // 언어와 런타임
+  python: OTHER_FINAL, // 파이썬 — ㄴ
+  kotlin: OTHER_FINAL, // 코틀린 — ㄴ
+  bun: OTHER_FINAL, // 번 — ㄴ
+  java: NO_FINAL, // 자바
+  rust: NO_FINAL, // 러스트
+  go: NO_FINAL, // 고
+  swift: NO_FINAL, // 스위프트
+  ruby: NO_FINAL, // 루비
+  deno: NO_FINAL, // 디노
+  typescript: NO_FINAL, // 타입스크립트
+  javascript: NO_FINAL, // 자바스크립트
+
+  // 프레임워크와 도구
+  graphql: RIEUL, // 그래프큐엘
+  ansible: RIEUL, // 앤서블
+  gradle: RIEUL, // 그레이들
+  babel: RIEUL, // 바벨
+  vercel: RIEUL, // 버셀
+  laravel: RIEUL, // 라라벨
+  terraform: OTHER_FINAL, // 테라폼 — ㅁ
+  spring: OTHER_FINAL, // 스프링 — ㅇ
+  tomcat: OTHER_FINAL, // 톰캣 — ㅅ
+  maven: OTHER_FINAL, // 메이븐 — ㄴ
+  storybook: OTHER_FINAL, // 스토리북 — ㄱ
+  yarn: OTHER_FINAL, // 얀 — ㄴ
+  pnpm: OTHER_FINAL, // 피엔피엠 — ㅁ
+  react: NO_FINAL, // 리액트
+  vue: NO_FINAL, // 뷰
+  angular: NO_FINAL, // 앵귤러
+  svelte: NO_FINAL, // 스벨트
+  nuxt: NO_FINAL, // 넉스트
+  django: NO_FINAL, // 장고
+  flask: NO_FINAL, // 플라스크
+  rails: NO_FINAL, // 레일즈
+  eslint: NO_FINAL, // 이에스린트
+  prettier: NO_FINAL, // 프리티어
+  jest: NO_FINAL, // 제스트
+  cypress: NO_FINAL, // 사이프러스
+  playwright: NO_FINAL, // 플레이라이트
+  jenkins: NO_FINAL, // 젠킨스
+  kubernetes: NO_FINAL, // 쿠버네티스
+  nginx: NO_FINAL, // 엔진엑스
+  apache: NO_FINAL, // 아파치
+  kafka: NO_FINAL, // 카프카
+  grafana: NO_FINAL, // 그라파나
+  prometheus: NO_FINAL, // 프로메테우스
+  kibana: NO_FINAL, // 키바나
+  elasticsearch: NO_FINAL, // 엘라스틱서치
+
+  // 규약과 클라우드
+  iam: OTHER_FINAL, // 아이엠 — ㅁ
+  cdn: OTHER_FINAL, // 씨디엔 — ㄴ
+  saml: RIEUL, // 사믈
+  xml: RIEUL, // 엑스엠엘
+  html: RIEUL, // 에이치티엠엘
+  https: NO_FINAL, // 에이치티티피에스
+  grpc: NO_FINAL, // 지알피씨
+  oauth: NO_FINAL, // 오어스
+  dns: NO_FINAL, // 디엔에스
+  tcp: NO_FINAL, // 티씨피
+  lambda: NO_FINAL, // 람다
+  athena: NO_FINAL, // 아테나
+  dynamodb: NO_FINAL, // 다이나모디비
+  rds: NO_FINAL, // 알디에스
+  sqs: NO_FINAL, // 에스큐에스
+  vpc: NO_FINAL, // 브이피씨
 };
 
 /**
@@ -185,9 +253,14 @@ export function finalSoundOf(word) {
   // 숫자로 끝나는 경우. 앞에 글자가 붙었는지로 읽는 법이 갈린다.
   const digitMatch = /^(.*?)(\d+)$/.exec(token);
   if (digitMatch !== null) {
-    const lastDigit = Number(digitMatch[2].at(-1));
-    const readInEnglish = /[A-Za-z]/.test(digitMatch[1]);
-    return readInEnglish ? DIGIT_ENGLISH[lastDigit] : DIGIT_KOREAN[lastDigit];
+    const digits = digitMatch[2];
+    const lastDigit = Number(digits.at(-1));
+    if (!/[A-Za-z]/.test(digitMatch[1])) return DIGIT_KOREAN[lastDigit];
+
+    // 글자 뒤 숫자는 영어로 읽는다. S3 에스쓰리, v1 브이원, EC2 이씨투.
+    // 다만 한 자리일 때만 그렇다. p99 는 "피 나인티나인" 이 아니라 "피 구십구" 로 읽고,
+    // 어느 쪽인지 갈리는 자리다. 갈리면 판정하지 않는다.
+    return digits.length === 1 ? DIGIT_ENGLISH[lastDigit] : null;
   }
 
   // 대문자만으로 된 짧은 두음자어는 글자로 읽는다.

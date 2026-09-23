@@ -61,12 +61,21 @@ test("글자가 붙은 숫자는 영어로 읽는다", () => {
 });
 
 test("모르는 낱말은 판정하지 않는다", () => {
-  // 철자로 끝소리를 유도할 수 없다. hook 은 훅(ㄱ)인데 book 은 북(ㄱ), look 은 룩(ㄱ).
-  // 규칙처럼 보이지만 cache 는 캐시, niche 는 니시. 추측하면 안 된다.
-  assert.equal(hasFinalSound("kubernetes"), null);
-  assert.equal(hasFinalSound("terraform"), null);
+  // 철자로 끝소리를 유도할 수 없다. hook 은 훅(ㄱ)인데 cache 는 캐시(받침 없음)다.
+  // 규칙처럼 보이지만 갈린다. 추측하면 안 된다.
   assert.equal(hasFinalSound("foo"), null);
+  assert.equal(hasFinalSound("mycompanyservice"), null);
   assert.equal(hasFinalSound("MIDDLEWARE"), null, "네 글자를 넘는 대문자는 낱말로 읽힐 수 있다");
+});
+
+test("글자 뒤 여러 자리 숫자는 판정하지 않는다", () => {
+  // S3 는 에스쓰리로 읽지만 p99 는 "피 나인티나인" 이 아니라 "피 구십구" 로 읽는다.
+  // 어느 쪽인지 갈리는 자리라 손대지 않는다. p99를 을 p99을 로 고치려 했던 오탐이다.
+  assert.equal(hasFinalSound("S3"), false, "한 자리는 영어로 읽는다");
+  assert.equal(hasFinalSound("p99"), null);
+  assert.equal(hasFinalSound("v10"), null);
+  assert.equal(hasFinalSound("99"), false, "순수 숫자는 한국어 수사다. 구십구 — 끝 음절 구는 받침이 없다");
+  assert.equal(hasFinalSound("91"), true, "구십일 — ㄹ");
 });
 
 test("한글로 끝나면 이 함수가 다루지 않는다", () => {
@@ -210,7 +219,20 @@ test("받침의 종류를 알려준다", () => {
   assert.equal(finalSoundOf("URL"), "ㄹ");
   assert.equal(finalSoundOf("commit"), "other");
   assert.equal(finalSoundOf("cache"), "");
-  assert.equal(finalSoundOf("kubernetes"), null);
+  assert.equal(finalSoundOf("mycompanyservice"), null);
+});
+
+test("흔한 기술 낱말을 판정한다", () => {
+  // 목록이 작으면 기능이 없는 것과 같다. 실제로 쓰는 낱말이 들어 있어야 한다.
+  const cases = [
+    ["Python", "other"], ["Kotlin", "other"], ["Terraform", "other"], ["Spring", "other"],
+    ["GraphQL", "ㄹ"], ["Ansible", "ㄹ"], ["Gradle", "ㄹ"], ["XML", "ㄹ"], ["HTML", "ㄹ"],
+    ["Kafka", ""], ["Kubernetes", ""], ["React", ""], ["Vue", ""], ["Java", ""],
+    ["HTTPS", ""], ["gRPC", ""], ["Lambda", ""], ["DynamoDB", ""],
+  ];
+  for (const [word, expected] of cases) {
+    assert.equal(finalSoundOf(word), expected, word);
+  }
 });
 
 test("문서가 스스로를 예외로 선언하면 아무것도 보고하지 않는다", () => {
