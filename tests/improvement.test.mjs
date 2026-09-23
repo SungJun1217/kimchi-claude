@@ -71,3 +71,43 @@ test("개선폭을 수치로 남긴다", () => {
   const after = score(WITH);
   assert.ok(after < before, `개선이 없다: 끈 상태 ${before}건, 켠 상태 ${after}건`);
 });
+
+// ── 글 검토 스킬 ────────────────────────────────────────────
+//
+// natural-korean-writing 스킬에 오류를 심은 초안을 주고 받은 실제 결과다.
+// 스킬은 rules/ 표 일곱 개를 열어 파일과 줄 번호까지 근거로 댔다.
+
+const DRAFT_BEFORE = readAnswer("draft-before.md");
+const DRAFT_AFTER = readAnswer("draft-after.md");
+
+test("심어 둔 오류를 린터가 잡는다", () => {
+  // 자료가 실제로 나쁜 글인지 먼저 확인한다. 이 단정이 깨지면 자료가 바뀐 것이다.
+  const before = score(DRAFT_BEFORE);
+  assert.ok(before >= 6, `심은 오류 가운데 ${before}건만 걸렸다`);
+});
+
+test("스킬이 고친 결과에는 걸리는 표현이 없다", () => {
+  assert.equal(score(DRAFT_AFTER), 0);
+});
+
+test("고친 결과가 다섯 순위를 지킨다", () => {
+  // 1순위: 한국어 기술용어. 은유를 벗기고 개념의 이름을 썼다.
+  assert.match(DRAFT_AFTER, /결합도/);
+  assert.ok(!/얇/.test(DRAFT_AFTER), "은유가 남아 있다");
+
+  // 2순위: 정착된 외래어는 그대로 둔다. 스테이징을 우리말로 바꾸면 안 된다.
+  assert.match(DRAFT_AFTER, /스테이징/);
+
+  // 판교어를 걷어냈다.
+  for (const word of ["디플로이", "컨펌", "체크해야", "리팩토링", "메세지"]) {
+    assert.ok(!DRAFT_AFTER.includes(word), `${word} 가 남아 있다`);
+  }
+
+  // 번역체를 걷어냈다.
+  for (const phrase of ["우리는", "당신의", "되어질", "에 대한 처리를 진행"]) {
+    assert.ok(!DRAFT_AFTER.includes(phrase), `${phrase} 가 남아 있다`);
+  }
+
+  // 사물 존대를 걷어냈다.
+  assert.ok(!DRAFT_AFTER.includes("완료되셨습니다"));
+});
