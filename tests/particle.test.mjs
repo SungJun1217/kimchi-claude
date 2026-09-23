@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   hasFinalSound,
+  finalSoundOf,
   correctParticle,
   findParticleErrors,
   fixParticles,
@@ -174,4 +175,47 @@ test("정상 한국어 문서에서 오탐이 없다", () => {
   for (const sentence of clean) {
     assert.deepEqual(findParticleErrors(sentence), [], sentence);
   }
+});
+
+test("ㄹ 받침 뒤에는 으로 대신 로를 쓴다", () => {
+  // 서울로, 제주로. 다른 조사는 받침 유무만 보지만 으로/로 만 예외다.
+  // 이 예외를 빼먹어 "1로" 를 "1으로" 로, "URL로" 를 "URL으로" 로 고치려 했다.
+  assert.equal(correctParticle("1", "로"), null, "일 — ㄹ 받침");
+  assert.equal(correctParticle("URL", "로"), null, "유알엘 — ㄹ");
+  assert.equal(correctParticle("SQL", "로"), null, "에스큐엘 — ㄹ");
+  assert.equal(correctParticle("module", "로"), null, "모듈 — ㄹ");
+  assert.equal(correctParticle("7", "로"), null, "칠 — ㄹ");
+});
+
+test("ㄹ 이 아닌 받침에는 으로를 쓴다", () => {
+  assert.equal(correctParticle("JSON", "로"), "으로", "제이슨 — ㄴ");
+  assert.equal(correctParticle("commit", "로"), "으로", "커밋 — ㅅ");
+  assert.equal(correctParticle("3", "로"), "으로", "삼 — ㅁ");
+});
+
+test("받침이 없으면 로를 쓴다", () => {
+  assert.equal(correctParticle("cache", "으로"), "로");
+  assert.equal(correctParticle("API", "으로"), "로");
+  assert.equal(correctParticle("2", "으로"), "로", "이");
+});
+
+test("ㄹ 받침도 다른 조사에서는 받침으로 다룬다", () => {
+  // 로 만 예외다. 을/를, 이/가 는 ㄹ 도 받침으로 본다.
+  assert.equal(correctParticle("URL", "를"), "을");
+  assert.equal(correctParticle("module", "가"), "이");
+  assert.equal(correctParticle("1", "를"), "을", "일");
+});
+
+test("받침의 종류를 알려준다", () => {
+  assert.equal(finalSoundOf("URL"), "ㄹ");
+  assert.equal(finalSoundOf("commit"), "other");
+  assert.equal(finalSoundOf("cache"), "");
+  assert.equal(finalSoundOf("kubernetes"), null);
+});
+
+test("문서가 스스로를 예외로 선언하면 아무것도 보고하지 않는다", () => {
+  // lint() 와 같은 기제를 쓴다. 한쪽만 표시를 존중하면 문체 가이드 문서에서 갈린다.
+  const guide = "<!-- kimchi-ignore-file 나쁜 예를 인용한다 -->\ncommit를 라고 쓰면 틀립니다.";
+  assert.deepEqual(findParticleErrors(guide), []);
+  assert.equal(fixParticles(guide).text, guide);
 });

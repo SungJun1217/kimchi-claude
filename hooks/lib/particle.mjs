@@ -7,7 +7,15 @@
 // 그래서 읽는 법을 아는 것만 판정하고 **모르면 판정하지 않는다.**
 // 틀린 자동 교정은 없는 것보다 나쁘다.
 
-import { maskProtected } from "./segment.mjs";
+import { maskProtected, isIgnoredFile } from "./segment.mjs";
+
+// 받침을 세 가지로 나눈다. 있고 없음만으로는 모자라다.
+//
+// `으로/로` 는 예외가 있다. **ㄹ 받침 뒤에는 로를 쓴다.** 서울로, 제주로, 1로(일), URL로(유알엘).
+// 다른 조사는 받침 유무만 보므로 ㄹ 을 따로 알아야 하는 것은 이 짝뿐이다.
+export const NO_FINAL = "";
+export const RIEUL = "ㄹ";
+export const OTHER_FINAL = "other";
 
 /** 받침에 따라 갈리는 조사 짝. 받침 있을 때 쓰는 것을 먼저 적는다. */
 const PAIRS = [
@@ -39,36 +47,36 @@ export function particleHeads() {
 
 // 순수 숫자는 한국어 수사로 읽는다. 3 → 삼(ㅁ).
 const DIGIT_KOREAN = [
-  true, // 0 영·공 — ㅇ
-  true, // 1 일 — ㄹ
-  false, // 2 이
-  true, // 3 삼 — ㅁ
-  false, // 4 사
-  false, // 5 오
-  true, // 6 육 — ㄱ
-  true, // 7 칠 — ㄹ
-  true, // 8 팔 — ㄹ
-  false, // 9 구
+  OTHER_FINAL, // 0 영·공 — ㅇ
+  RIEUL, // 1 일
+  NO_FINAL, // 2 이
+  OTHER_FINAL, // 3 삼 — ㅁ
+  NO_FINAL, // 4 사
+  NO_FINAL, // 5 오
+  OTHER_FINAL, // 6 육 — ㄱ
+  RIEUL, // 7 칠
+  RIEUL, // 8 팔
+  NO_FINAL, // 9 구
 ];
 
 // 글자가 앞에 붙은 숫자는 영어로 읽는다. S3 → 에스쓰리, v1 → 브이원.
 // 같은 3 이 문맥에 따라 삼(받침 있음)과 쓰리(받침 없음)로 갈린다.
 const DIGIT_ENGLISH = [
-  false, // 0 제로
-  true, // 1 원 — ㄴ
-  false, // 2 투
-  false, // 3 쓰리
-  false, // 4 포
-  false, // 5 파이브
-  false, // 6 식스
-  true, // 7 세븐 — ㄴ
-  false, // 8 에이트
-  true, // 9 나인 — ㄴ
+  NO_FINAL, // 0 제로
+  OTHER_FINAL, // 1 원 — ㄴ
+  NO_FINAL, // 2 투
+  NO_FINAL, // 3 쓰리
+  NO_FINAL, // 4 포
+  NO_FINAL, // 5 파이브
+  NO_FINAL, // 6 식스
+  OTHER_FINAL, // 7 세븐 — ㄴ
+  NO_FINAL, // 8 에이트
+  OTHER_FINAL, // 9 나인 — ㄴ
 ];
 
 // 낱자를 읽는 법. 두음자어를 글자로 읽을 때 마지막 글자만 보면 된다.
-// 받침이 있는 것만 적는다. L 엘, M 엠, N 엔, R 알.
-const LETTERS_WITH_FINAL = new Set(["l", "m", "n", "r"]);
+// 받침이 있는 것만 적는다. L 엘(ㄹ), R 알(ㄹ), M 엠(ㅁ), N 엔(ㄴ).
+const LETTER_FINAL = { l: RIEUL, r: RIEUL, m: OTHER_FINAL, n: OTHER_FINAL };
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 
 // 읽는 법을 아는 낱말. **여기가 유일한 원본이다.** 값은 끝소리에 받침이 있는지다.
@@ -78,92 +86,92 @@ const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 // 반면 `hook` 은 훅(ㄱ), `stack` 은 스택(ㄱ). 철자 규칙으로는 갈릴 수 없다.
 const LEXICON = {
   // 글자로 읽으면 틀리는 두음자어
-  json: true, // 제이슨 — ㄴ
-  yaml: true, // 야믈 — ㄹ
-  toml: true, // 토믈 — ㄹ
-  ssl: true, // 에스에스엘 — ㄹ
-  url: true, // 유알엘 — ㄹ
-  npm: true, // 엔피엠 — ㅁ
-  rest: false, // 레스트
-  crud: false, // 크러드
-  ajax: false, // 에이잭스
-  cors: false, // 코스
-  jwt: false, // 제이더블유티
-  saas: false, // 사스
-  tls: false, // 티엘에스
-  ssh: false, // 에스에스에이치
-  uri: false, // 유알아이
+  json: OTHER_FINAL, // 제이슨 — ㄴ
+  yaml: RIEUL, // 야믈 — ㄹ
+  toml: RIEUL, // 토믈 — ㄹ
+  ssl: RIEUL, // 에스에스엘 — ㄹ
+  url: RIEUL, // 유알엘 — ㄹ
+  npm: OTHER_FINAL, // 엔피엠 — ㅁ
+  rest: NO_FINAL, // 레스트
+  crud: NO_FINAL, // 크러드
+  ajax: NO_FINAL, // 에이잭스
+  cors: NO_FINAL, // 코스
+  jwt: NO_FINAL, // 제이더블유티
+  saas: NO_FINAL, // 사스
+  tls: NO_FINAL, // 티엘에스
+  ssh: NO_FINAL, // 에스에스에이치
+  uri: NO_FINAL, // 유알아이
 
   // 형상 관리와 도구
-  git: true, // 깃 — ㅅ
-  commit: true, // 커밋 — ㅅ
-  webpack: true, // 웹팩 — ㄱ
-  pull: true, // 풀 — ㄹ
-  merge: false, // 머지
-  rebase: false, // 리베이스
-  branch: false, // 브랜치
-  tag: false, // 태그
-  push: false, // 푸시
-  fork: false, // 포크
-  docker: false, // 도커
-  node: false, // 노드
-  vite: false, // 비트
+  git: OTHER_FINAL, // 깃 — ㅅ
+  commit: OTHER_FINAL, // 커밋 — ㅅ
+  webpack: OTHER_FINAL, // 웹팩 — ㄱ
+  pull: RIEUL, // 풀 — ㄹ
+  merge: NO_FINAL, // 머지
+  rebase: NO_FINAL, // 리베이스
+  branch: NO_FINAL, // 브랜치
+  tag: NO_FINAL, // 태그
+  push: NO_FINAL, // 푸시
+  fork: NO_FINAL, // 포크
+  docker: NO_FINAL, // 도커
+  node: NO_FINAL, // 노드
+  vite: NO_FINAL, // 비트
 
   // 자료와 저장소
-  stack: true, // 스택 — ㄱ
-  heap: true, // 힙 — ㅂ
-  table: true, // 테이블 — ㄹ
-  column: true, // 칼럼 — ㅁ
-  mysql: true, // 마이에스큐엘 — ㄹ
-  cache: false, // 캐시
-  buffer: false, // 버퍼
-  queue: false, // 큐
-  index: false, // 인덱스
-  schema: false, // 스키마
-  redis: false, // 레디스
-  postgres: false, // 포스트그레스
-  mongodb: false, // 몽고디비
+  stack: OTHER_FINAL, // 스택 — ㄱ
+  heap: OTHER_FINAL, // 힙 — ㅂ
+  table: RIEUL, // 테이블 — ㄹ
+  column: OTHER_FINAL, // 칼럼 — ㅁ
+  mysql: RIEUL, // 마이에스큐엘 — ㄹ
+  cache: NO_FINAL, // 캐시
+  buffer: NO_FINAL, // 버퍼
+  queue: NO_FINAL, // 큐
+  index: NO_FINAL, // 인덱스
+  schema: NO_FINAL, // 스키마
+  redis: NO_FINAL, // 레디스
+  postgres: NO_FINAL, // 포스트그레스
+  mongodb: NO_FINAL, // 몽고디비
 
   // 코드 개념
-  module: true, // 모듈 — ㄹ
-  function: true, // 펑션 — ㄴ
-  token: true, // 토큰 — ㄴ
-  session: true, // 세션 — ㄴ
-  stream: true, // 스트림 — ㅁ
-  hook: true, // 훅 — ㄱ
-  timeout: true, // 타임아웃 — ㅅ
-  callback: true, // 콜백 — ㄱ
-  method: false, // 메서드
-  class: false, // 클래스
-  package: false, // 패키지
-  import: false, // 임포트
-  export: false, // 익스포트
-  build: false, // 빌드
-  test: false, // 테스트
-  lint: false, // 린트
-  thread: false, // 스레드
-  cookie: false, // 쿠키
-  request: false, // 리퀘스트
-  response: false, // 리스폰스
-  endpoint: false, // 엔드포인트
-  payload: false, // 페이로드
-  promise: false, // 프로미스
-  log: false, // 로그
-  server: false, // 서버
-  client: false, // 클라이언트
-  browser: false, // 브라우저
-  proxy: false, // 프록시
-  port: false, // 포트
-  host: false, // 호스트
+  module: RIEUL, // 모듈 — ㄹ
+  function: OTHER_FINAL, // 펑션 — ㄴ
+  token: OTHER_FINAL, // 토큰 — ㄴ
+  session: OTHER_FINAL, // 세션 — ㄴ
+  stream: OTHER_FINAL, // 스트림 — ㅁ
+  hook: OTHER_FINAL, // 훅 — ㄱ
+  timeout: OTHER_FINAL, // 타임아웃 — ㅅ
+  callback: OTHER_FINAL, // 콜백 — ㄱ
+  method: NO_FINAL, // 메서드
+  class: NO_FINAL, // 클래스
+  package: NO_FINAL, // 패키지
+  import: NO_FINAL, // 임포트
+  export: NO_FINAL, // 익스포트
+  build: NO_FINAL, // 빌드
+  test: NO_FINAL, // 테스트
+  lint: NO_FINAL, // 린트
+  thread: NO_FINAL, // 스레드
+  cookie: NO_FINAL, // 쿠키
+  request: NO_FINAL, // 리퀘스트
+  response: NO_FINAL, // 리스폰스
+  endpoint: NO_FINAL, // 엔드포인트
+  payload: NO_FINAL, // 페이로드
+  promise: NO_FINAL, // 프로미스
+  log: NO_FINAL, // 로그
+  server: NO_FINAL, // 서버
+  client: NO_FINAL, // 클라이언트
+  browser: NO_FINAL, // 브라우저
+  proxy: NO_FINAL, // 프록시
+  port: NO_FINAL, // 포트
+  host: NO_FINAL, // 호스트
 };
 
 /**
- * 영어 낱말이나 숫자의 한국어 끝소리에 받침이 있는지 판정한다.
+ * 영어 낱말이나 숫자의 한국어 끝소리 받침을 판정한다.
  *
  * @param {string} word
- * @returns {boolean|null} 읽는 법을 모르면 null
+ * @returns {""|"ㄹ"|"other"|null} 읽는 법을 모르면 null
  */
-export function hasFinalSound(word) {
+export function finalSoundOf(word) {
   if (typeof word !== "string") return null;
   const token = word.trim();
   if (token.length === 0) return null;
@@ -187,10 +195,21 @@ export function hasFinalSound(word) {
   if (/^[A-Z]{2,4}$/.test(token)) {
     const last = token.at(-1).toLowerCase();
     if (!LETTERS.includes(last)) return null;
-    return LETTERS_WITH_FINAL.has(last);
+    return LETTER_FINAL[last] ?? NO_FINAL;
   }
 
   return null;
+}
+
+/**
+ * 받침이 있는지만 본다. 받침의 종류가 필요한 자리에서는 finalSoundOf 를 쓴다.
+ *
+ * @param {string} word
+ * @returns {boolean|null}
+ */
+export function hasFinalSound(word) {
+  const final = finalSoundOf(word);
+  return final === null ? null : final !== NO_FINAL;
 }
 
 /**
@@ -204,10 +223,12 @@ export function correctParticle(word, particle) {
   const pair = PAIRS.find(([withFinal, without]) => particle === withFinal || particle === without);
   if (pair === undefined) return null;
 
-  const final = hasFinalSound(word);
+  const final = finalSoundOf(word);
   if (final === null) return null;
 
-  const correct = final ? pair[0] : pair[1];
+  // 으로/로 만 예외다. ㄹ 받침 뒤에는 로를 쓴다. 서울로, 1로(일), URL로(유알엘).
+  const usesShortForm = final === NO_FINAL || (final === RIEUL && pair[1].endsWith("로"));
+  const correct = usesShortForm ? pair[1] : pair[0];
   return correct === particle ? null : correct;
 }
 
@@ -223,13 +244,15 @@ const TOKEN_WITH_PARTICLE = new RegExp(
  * 글에서 조사가 틀린 자리를 찾는다.
  *
  * 코드 블록, 인라인 코드, 경로는 제외한다. `commit를` 이 코드 예시 안에 있으면
- * 그대로 두어야 한다.
+ * 그대로 두어야 한다. 문서가 스스로를 예외로 선언했으면 아무것도 보고하지 않는다.
  *
  * @param {string} text
  * @returns {{matched: string, word: string, particle: string, correct: string, index: number}[]}
  */
 export function findParticleErrors(text) {
   if (typeof text !== "string" || text.length === 0) return [];
+  // lint() 와 같은 기제를 쓴다. 한쪽만 표시를 존중하면 문체 가이드 문서에서 갈린다.
+  if (isIgnoredFile(text)) return [];
 
   // 위치를 보존하며 제외 구간을 덮는다. 찾은 자리가 원문 위치와 그대로 맞는다.
   const masked = maskProtected(text);

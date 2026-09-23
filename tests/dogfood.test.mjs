@@ -10,6 +10,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRules } from "../hooks/lib/rules.mjs";
 import { lint } from "../hooks/lib/lint.mjs";
+import { findParticleErrors } from "../hooks/lib/particle.mjs";
 import { looksKorean } from "../hooks/lib/detect.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -34,6 +35,19 @@ const documents = collectMarkdown(ROOT);
 test("한국어 마크다운 문서를 찾았다", () => {
   const korean = documents.filter((path) => looksKorean(readFileSync(path, "utf8")));
   assert.ok(korean.length >= 5, `한국어 문서를 ${korean.length}개만 찾았다`);
+});
+
+test("저장소의 한국어 문서에 조사 오류가 없다", () => {
+  // 손으로 훑어서 찾은 것은 시험으로 옮긴다. 이 시험이 없어서 "1으로" 를 손으로 찾았다.
+  const problems = [];
+  for (const path of documents) {
+    const text = readFileSync(path, "utf8");
+    if (!looksKorean(text)) continue;
+    for (const hit of findParticleErrors(text)) {
+      problems.push(`${relative(ROOT, path)}: "${hit.matched}" → "${hit.word}${hit.correct}"`);
+    }
+  }
+  assert.deepEqual(problems, [], `\n${problems.join("\n")}`);
 });
 
 test("저장소의 한국어 문서가 규칙을 어기지 않는다", () => {
