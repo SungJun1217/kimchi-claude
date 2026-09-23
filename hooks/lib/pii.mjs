@@ -10,7 +10,11 @@
 //
 // 경계를 직접 본다. \b 는 밑줄을 단어 문자로 보므로 `order_9001011234567` 같은 식별자 안에서
 // 매치가 일어난다. 반대로 숫자만 배제하면 밑줄과 글자가 통과한다. 둘 다 막아야 한다.
-const CANDIDATE = /(?<![0-9A-Za-z_])(\d{6})[-\s]?([1-8]\d{6})(?![0-9A-Za-z_])/g;
+//
+// 전각 숫자와 전각 하이픈도 받는다. 한글 문서나 관공서 자료에서 복사한 번호가 그렇게 온다.
+// `\d` 는 ASCII 숫자만 받아서, 전각이 한 글자만 섞여도 차단을 빠져나갔다.
+const CANDIDATE =
+  /(?<![0-9０-９A-Za-z_])([0-9０-９]{6})[-－\s]?([1-8１-８][0-9０-９]{6})(?![0-9０-９A-Za-z_])/g;
 
 // 이 표시가 있는 줄은 넘어간다. 형식만 맞는 가짜 번호를 자료로 써야 할 때가 있다.
 const ALLOW_LINE = /kimchi-allow-rrn/;
@@ -28,6 +32,7 @@ export const GENERATED_FILES = /(^|[\\/])(package-lock\.json|yarn\.lock|pnpm-loc
  * @returns {boolean}
  */
 function plausibleBirthDate(front) {
+  front = front.normalize("NFKC");
   const month = Number(front.slice(2, 4));
   const day = Number(front.slice(4, 6));
   return month >= 1 && month <= 12 && day >= 1 && day <= 31;
@@ -69,7 +74,7 @@ export function findResidentNumbers(text) {
  * @returns {string}
  */
 export function redact(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
   if (digits.length !== 13) return "*".repeat(String(value).length);
   return `${digits.slice(0, 6)}-*******`;
 }

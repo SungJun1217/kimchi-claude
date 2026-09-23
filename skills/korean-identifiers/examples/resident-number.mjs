@@ -24,8 +24,15 @@
  *
  * \b 를 쓰지 않는다. 밑줄을 단어 문자로 보기 때문에 `order_9001011234567` 같은 식별자
  * 안에서 매치가 일어난다. 앞뒤 경계를 직접 본다.
+ *
+ * 전각 숫자와 전각 하이픈도 받는다. 한글 문서에서 복사한 번호가 그렇게 온다.
+ * `\d` 는 ASCII 숫자만 받아서 전각이 한 글자만 섞여도 탐지를 빠져나간다.
  */
-export const RESIDENT_NUMBER_PATTERN = /(?<![0-9A-Za-z_])\d{6}[-\s]?[1-8]\d{6}(?![0-9A-Za-z_])/g;
+export const RESIDENT_NUMBER_PATTERN =
+  /(?<![0-9０-９A-Za-z_])[0-9０-９]{6}[-－\s]?[1-8１-８][0-9０-９]{6}(?![0-9０-９A-Za-z_])/g;
+
+// 전각 숫자를 반각으로 되돌리고 숫자만 남긴다.
+const digitsOf = (value) => String(value ?? "").normalize("NFKC").replace(/\D/g, "");
 
 /**
  * 형식만 확인한다. 유효한 번호인지는 알 수 없다.
@@ -37,7 +44,7 @@ export const RESIDENT_NUMBER_PATTERN = /(?<![0-9A-Za-z_])\d{6}[-\s]?[1-8]\d{6}(?
  * @returns {boolean}
  */
 export function looksLikeResidentNumber(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length !== 13) return false;
 
   const month = Number(digits.slice(2, 4));
@@ -57,7 +64,7 @@ export function looksLikeResidentNumber(value) {
  * @returns {{birthYear: number, century: number}|null}
  */
 export function birthYearOf(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (!looksLikeResidentNumber(digits)) return null;
 
   const genderDigit = Number(digits[6]);

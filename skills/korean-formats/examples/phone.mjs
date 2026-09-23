@@ -41,7 +41,7 @@ const SAFE_NUMBER_PREFIXES = new Set(["0504", "0503", "0506", "0507"]);
  * @returns {boolean}
  */
 export function isSafeNumber(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
   return [...SAFE_NUMBER_PREFIXES].some((prefix) => digits.startsWith(prefix));
 }
 
@@ -52,7 +52,7 @@ export function isSafeNumber(value) {
  * @returns {{kind: string, parts: string[]}|null} 알 수 없으면 null
  */
 export function parsePhone(value) {
-  let digits = String(value).replace(/\D/g, "");
+  let digits = String(value).normalize("NFKC").replace(/\D/g, "");
 
   // 국제 형식을 국내 형식으로 되돌린다. +82-10-1234-5678 → 01012345678
   if (digits.startsWith("82")) digits = `0${digits.slice(2)}`;

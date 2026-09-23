@@ -30,7 +30,21 @@ const write = (content, filePath = "src/seed.ts") => ({
   tool_input: { file_path: filePath, content },
 });
 
+// 한글 문서에서 복사한 번호는 전각으로 온다. 형식만 맞는 가짜 번호다.
+const FULLWIDTH_SAMPLE = "９００１０１－１２３４５６７"; // kimchi-allow-rrn
+
 // ── 탐지 ────────────────────────────────────────────────────
+
+test("전각 숫자와 전각 하이픈으로 적은 번호도 찾는다", () => {
+  // \d 는 ASCII 숫자만 받는다. 전각이 한 글자만 섞여도 차단을 빠져나갔다.
+  const mixed = ["９００１０１-1234567", "900101－1234567"]; // kimchi-allow-rrn
+  for (const text of [FULLWIDTH_SAMPLE, ...mixed]) {
+    assert.equal(findResidentNumbers(text).length, 1, `${text} 를 놓쳤다`);
+  }
+  assert.equal(redact(FULLWIDTH_SAMPLE), "900101-*******", "가린 값도 읽을 수 있어야 한다");
+  const glued = "x９００１０１１２３４５６７"; // kimchi-allow-rrn
+  assert.equal(findResidentNumbers(glued).length, 0, "글자 뒤 경계는 전각에서도 지킨다");
+});
 
 test("주민등록번호를 찾는다", () => {
   const found = findResidentNumbers("사용자 900101-1234567 를 넣었습니다.");
@@ -213,6 +227,8 @@ test("스킬 예시와 런타임 탐지기가 같은 판정을 내린다", () =>
     "전화 010-1234-5678",
     "사업자 123-45-67891",
     "아무 글도 없음",
+    FULLWIDTH_SAMPLE,
+    "９００１０１-1234567", // kimchi-allow-rrn 형식만 맞는 가짜 번호
   ];
   for (const text of cases) {
     const runtime = findResidentNumbers(text).length > 0;

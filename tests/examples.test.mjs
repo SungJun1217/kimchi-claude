@@ -233,6 +233,7 @@ test("사업자등록번호 체크섬을 검증한다", () => {
   assert.ok(!isValidBusinessNumber("1234567890"));
   assert.ok(!isValidBusinessNumber("123456789"), "9자리는 형식이 아니다");
   assert.ok(!isValidBusinessNumber(""));
+  assert.ok(isValidBusinessNumber("１２３-４５-６７８９１"), "관공서 자료의 전각 숫자");
 });
 
 test("사업자등록번호를 표기 형식으로 바꾼다", () => {

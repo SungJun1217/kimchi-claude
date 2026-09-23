@@ -39,7 +39,7 @@ export function maskName(name) {
  * @returns {string}
  */
 export function maskResidentNumber(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
   if (digits.length !== 13) return "*".repeat(String(value).length);
   return `${digits.slice(0, 6)}-*******`;
 }
@@ -51,7 +51,7 @@ export function maskResidentNumber(value) {
  * @returns {string}
  */
 export function maskPhone(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
   if (digits.length < 9) return "*".repeat(String(value).length);
   // 서울만 지역번호가 두 자리다. 나머지 지역번호와 휴대전화 앞자리는 세 자리다.
   // 자리수를 전체 길이에서 빼서 구하면 9자리 번호에서 머리가 한 자리로 줄어든다.
@@ -87,7 +87,7 @@ export function maskEmail(value) {
  * @returns {string}
  */
 export function maskAccount(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
   if (digits.length <= 4) return "*".repeat(digits.length);
   return `${"*".repeat(digits.length - 4)}${digits.slice(-4)}`;
 }

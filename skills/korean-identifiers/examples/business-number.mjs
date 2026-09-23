@@ -7,6 +7,17 @@
 const BUSINESS_WEIGHTS = [1, 3, 7, 1, 3, 7, 1, 3, 5];
 
 /**
+ * 숫자만 뽑는다.
+ *
+ * 관공서 자료와 한글 문서에서 복사한 번호에는 전각 숫자(１２３-４５-６７８９１)가 섞여 온다.
+ * `\D` 는 전각 숫자를 숫자로 보지 않아서 그대로 지우면 자리 수가 모자라 정상 번호를 거부한다.
+ * NFKC 가 반각으로 되돌린다.
+ */
+function digitsOf(value) {
+  return String(value ?? "").normalize("NFKC").replace(/\D/g, "");
+}
+
+/**
  * 사업자등록번호를 검증한다. 10자리.
  *
  * 체크섬 규칙: 앞 9자리에 가중치 [1,3,7,1,3,7,1,3,5] 를 곱해 더하고,
@@ -16,7 +27,7 @@ const BUSINESS_WEIGHTS = [1, 3, 7, 1, 3, 7, 1, 3, 5];
  * @returns {boolean}
  */
 export function isValidBusinessNumber(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length !== 10) return false;
 
   const numbers = [...digits].map(Number);
@@ -33,7 +44,7 @@ export function isValidBusinessNumber(value) {
  * @returns {string} 10자리가 아니면 입력을 그대로 돌려준다
  */
 export function formatBusinessNumber(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length !== 10) return String(value);
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
 }
@@ -48,7 +59,7 @@ export function formatBusinessNumber(value) {
  * @returns {boolean}
  */
 export function isValidCorporateNumber(value) {
-  const digits = String(value).replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length !== 13) return false;
 
   const numbers = [...digits].map(Number);
