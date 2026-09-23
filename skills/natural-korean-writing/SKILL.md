@@ -1,13 +1,13 @@
 ---
 name: natural-korean-writing
-description: Use when asked to review, rewrite or proofread Korean technical prose — 한국어 문서 다듬기, 말투 검토, 번역체 고치기, 용어 통일, 커밋 메시지·PR 설명·README 교정, 판교어 제거. Opens the full 560-rule table; the always-on output style carries only the most frequent rules.
+description: Use when asked to review, rewrite or proofread Korean technical prose — 한국어 문서 다듬기, 말투 검토, 번역체 고치기, 용어 통일, 커밋 메시지·PR 설명·README 교정, 판교어 제거. Opens the full rule table (about 600 rules); the always-on output style carries only the most frequent rules.
 ---
 <!-- kimchi-ignore-file 나쁜 예를 그대로 인용한다 -->
 
 # 한국어 글 다듬기
 
 출력 스타일이 **매 문장에** 적용하는 규칙은 분량 상한 때문에 50개 남짓입니다.
-전체 규칙은 560개가 넘습니다. 글을 검토하거나 고쳐 달라는 요청을 받으면 그 표를 열어 보십시오.
+전체 규칙은 600개 가까이 됩니다. 글을 검토하거나 고쳐 달라는 요청을 받으면 그 표를 열어 보십시오.
 
 **규칙표는 이 파일 기준 `../../rules/` 에 있습니다.** 플러그인 디렉터리 안이고, 사용자의
 작업 디렉터리가 아닙니다. 경로를 사용자 프로젝트 기준으로 찾으면 없습니다.
