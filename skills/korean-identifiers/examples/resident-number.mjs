@@ -19,8 +19,13 @@
 // 정말로 법령 근거가 있어 보관해야 하면 암호화가 의무이고, 화면·로그·오류 보고에는
 // 마스킹한 값만 나가야 한다. masking.mjs 를 참고할 것.
 
-/** 주민등록번호 형태를 띈 문자열을 찾는 패턴. 검증이 아니라 탐지용이다. */
-export const RESIDENT_NUMBER_PATTERN = /\b\d{6}[-\s]?[1-8]\d{6}\b/g;
+/**
+ * 주민등록번호 형태를 띈 문자열을 찾는 패턴. 검증이 아니라 탐지용이다.
+ *
+ * \b 를 쓰지 않는다. 밑줄을 단어 문자로 보기 때문에 `order_9001011234567` 같은 식별자
+ * 안에서 매치가 일어난다. 앞뒤 경계를 직접 본다.
+ */
+export const RESIDENT_NUMBER_PATTERN = /(?<![0-9A-Za-z_])\d{6}[-\s]?[1-8]\d{6}(?![0-9A-Za-z_])/g;
 
 /**
  * 형식만 확인한다. 유효한 번호인지는 알 수 없다.
@@ -72,5 +77,9 @@ export function birthYearOf(value) {
  */
 export function findResidentNumbers(text) {
   if (typeof text !== "string") return [];
-  return [...text.matchAll(RESIDENT_NUMBER_PATTERN)].map((match) => match[0]);
+  // 형태만 맞는 것을 모두 보고하면 주문번호와 타임스탬프가 섞인다.
+  // 앞 6자리가 말이 되는 생년월일인지까지 보면 오탐이 크게 줄어든다.
+  return [...text.matchAll(RESIDENT_NUMBER_PATTERN)]
+    .map((match) => match[0])
+    .filter((value) => looksLikeResidentNumber(value));
 }
