@@ -1,0 +1,102 @@
+// 개인정보 마스킹.
+//
+// 화면, 로그, 오류 보고, 통계에 나가는 값은 마스킹한다. 개인정보 보호법과 그 시행령이
+// 안전성 확보 조치를 요구하고, 실무에서는 아래 정도가 관행이다.
+//
+// 마스킹은 **되돌릴 수 없어야** 한다. 앞뒤를 조금씩 남기면 다른 정보와 합쳐 복원된다.
+// 특히 생년월일과 이름을 함께 남기면 사실상 식별된다.
+
+/**
+ * 이름을 마스킹한다. 가운데를 가린다.
+ *
+ * 두 글자 이름은 가운데가 없으므로 마지막 글자를 가린다.
+ * 성이 두 글자인 경우(남궁, 황보)를 자동으로 알 수는 없다. 그래서 성을 분리하려 하지 않는다.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function maskName(name) {
+  const chars = [...String(name)];
+  if (chars.length === 0) return "";
+  if (chars.length === 1) return "*";
+  if (chars.length === 2) return `${chars[0]}*`;
+  return `${chars[0]}${"*".repeat(chars.length - 2)}${chars.at(-1)}`;
+}
+
+/**
+ * 주민등록번호를 마스킹한다. 뒷자리를 통째로 가린다.
+ *
+ * 생년월일만 남긴다. 성별 표시 한 자리도 가린다. 성별과 생년월일이 함께 남으면
+ * 다른 정보와 합쳐 식별될 수 있다.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function maskResidentNumber(value) {
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length !== 13) return "*".repeat(String(value).length);
+  return `${digits.slice(0, 6)}-*******`;
+}
+
+/**
+ * 전화번호를 마스킹한다. 가운데 자리를 가린다.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function maskPhone(value) {
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 9) return "*".repeat(String(value).length);
+  // 서울만 지역번호가 두 자리다. 나머지 지역번호와 휴대전화 앞자리는 세 자리다.
+  // 자리수를 전체 길이에서 빼서 구하면 9자리 번호에서 머리가 한 자리로 줄어든다.
+  const headLength = digits.startsWith("02") ? 2 : 3;
+  return `${digits.slice(0, headLength)}-****-${digits.slice(-4)}`;
+}
+
+/**
+ * 전자우편 주소를 마스킹한다. 계정 이름의 앞 두 글자만 남긴다.
+ *
+ * 도메인은 남긴다. 회사 도메인은 개인 식별 정보가 아니고, 남겨 두면 문제를 진단할 수 있다.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function maskEmail(value) {
+  const text = String(value);
+  const at = text.lastIndexOf("@");
+  if (at <= 0) return "*".repeat(text.length);
+
+  const local = text.slice(0, at);
+  const domain = text.slice(at);
+  if (local.length <= 2) return `${"*".repeat(local.length)}${domain}`;
+  return `${local.slice(0, 2)}${"*".repeat(local.length - 2)}${domain}`;
+}
+
+/**
+ * 계좌번호와 카드번호를 마스킹한다. 뒤 네 자리만 남긴다.
+ *
+ * 카드번호는 앞 여섯 자리(BIN)도 남기지 않는다. 카드사와 상품이 드러난다.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function maskAccount(value) {
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length <= 4) return "*".repeat(digits.length);
+  return `${"*".repeat(digits.length - 4)}${digits.slice(-4)}`;
+}
+
+/**
+ * 주소를 마스킹한다. 상세주소를 지운다.
+ *
+ * 도로명과 건물 번호까지는 남기고 동·호수를 가린다. 동·호수가 남으면 특정된다.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function maskAddress(value) {
+  // 도로명 + 건물번호까지 남긴다. 그 뒤는 상세주소로 본다.
+  const match = /^(.*?[로길]\s*\d+(?:-\d+)?)\s*(.*)$/.exec(String(value).trim());
+  if (match === null) return String(value);
+  return match[2].length === 0 ? match[1] : `${match[1]} ****`;
+}
