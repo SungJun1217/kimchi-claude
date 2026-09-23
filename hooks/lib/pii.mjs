@@ -98,3 +98,47 @@ export function formatLeak(found, label = "") {
 
   return lines.join("\n");
 }
+
+// 이 확장자는 검사하지 않는다. 사람이 쓴 것이 아니거나 통째로 생성된 것들이다.
+const SKIP_EXTENSIONS = /\.(png|jpe?g|gif|webp|ico|svg|pdf|zip|gz|tar|woff2?|ttf|eot|mp[34]|mov|wasm|lock)$/i;
+
+function readStdin() {
+  try {
+    return readFileSync(0, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 검사할 글을 뽑는다. 말투 린터와 달리 확장자를 가리지 않는다.
+ *
+ * @returns {{label: string, text: string}[]}
+ */
+export function extractPiiTargets(toolName, toolInput) {
+  if (!toolInput || typeof toolInput !== "object") return [];
+
+  if (toolName === "Bash") {
+    // 명령 전체를 본다. 커밋 메시지뿐 아니라 heredoc 으로 파일을 만드는 경우도 걸린다.
+    const command = toolInput.command;
+    return typeof command === "string" ? [{ label: "명령", text: command }] : [];
+  }
+
+  const filePath = toolInput.file_path || "";
+  if (SKIP_EXTENSIONS.test(filePath) || GENERATED_FILES.test(filePath)) return [];
+  const label = filePath || "파일";
+
+  if (toolName === "Write" && typeof toolInput.content === "string") {
+    return [{ label, text: toolInput.content }];
+  }
+  if (toolName === "Edit" && typeof toolInput.new_string === "string") {
+    return [{ label, text: toolInput.new_string }];
+  }
+  if (toolName === "MultiEdit" && Array.isArray(toolInput.edits)) {
+    return toolInput.edits
+      .filter((edit) => typeof edit?.new_string === "string")
+      .map((edit) => ({ label, text: edit.new_string }));
+  }
+
+  return [];
+}

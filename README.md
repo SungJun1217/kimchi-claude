@@ -38,7 +38,7 @@
   output-styles/natural-korean.md   시스템 프롬프트에 강제 적용. 설치만 하면 켜진다
   rules/*.md                        규칙 자료 원본. 사람이 읽고 기계가 파싱한다
   scripts/build-style.mjs           rules/ → output-styles/ 생성
-  hooks/guard-artifact.mjs          커밋 메시지와 한국어 문서 파일 검사
+  hooks/guard.mjs                   산출물 검사. 말투는 경고, 주민등록번호는 차단
 
 필요할 때 열리는 층 — 한국 개발 현실 지식
   skills/korean-encoding/           CP949, 엑셀 CSV BOM, NFC/NFD, 초성 검색, 조사 선택

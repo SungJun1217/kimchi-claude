@@ -9,11 +9,11 @@ import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findResidentNumbers, redact, formatLeak } from "../hooks/lib/pii.mjs";
-import { extractTargets } from "../hooks/guard-pii.mjs";
+import { extractPiiTargets as extractTargets } from "../hooks/lib/pii.mjs";
 import { findResidentNumbers as skillFind } from "../skills/korean-identifiers/examples/resident-number.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const HOOK = join(ROOT, "hooks", "guard-pii.mjs");
+const HOOK = join(ROOT, "hooks", "guard.mjs");
 
 function runHook(payload, env = {}) {
   const stdout = execFileSync("node", [HOOK], {

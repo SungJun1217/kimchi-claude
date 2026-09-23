@@ -5,10 +5,10 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractCommitMessages, extractTargets } from "../hooks/guard-artifact.mjs";
+import { extractCommitMessages, extractTargets } from "../hooks/lib/artifact.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const HOOK = join(ROOT, "hooks", "guard-artifact.mjs");
+const HOOK = join(ROOT, "hooks", "guard.mjs");
 
 function runHook(payload, env = {}) {
   const stdout = execFileSync("node", [HOOK], {

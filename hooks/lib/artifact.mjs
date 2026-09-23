@@ -1,27 +1,22 @@
-#!/usr/bin/env node
 // 저장소에 남는 산출물의 한국어를 검사한다. 커밋 메시지와 한국어 문서 파일이 대상이다.
+//
+// 진입점은 hooks/guard.mjs 다. 이 파일은 판정만 하고 훅 입출력은 다루지 않는다.
 //
 // 이 훅은 말투를 다듬는 부가 기능이고 작업에 필요한 부품이 아니다.
 // 그래서 어떤 오류가 나도 조용히 아무 일도 하지 않고 종료 코드 0으로 끝낸다.
 // 훅이 깨져서 작업이 막히면 그것이 더 큰 실패다.
 //
-// 동작 (환경변수로 고른다):
-//   기본값            경고만 한다. 클로드가 직접 고치게 맡긴다
-//   KIMCHI_AUTOFIX=1  치환 규칙을 PreToolUse에서 자동 교정한다
-//   KIMCHI_BLOCK=1    위반이 있으면 PreToolUse에서 막는다
-//   KIMCHI_DISABLE=1  아무것도 하지 않는다
-
 import { readFileSync } from "node:fs";
 import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRules } from "./lib/rules.mjs";
-import { lint, applyFixes, formatFindings } from "./lib/lint.mjs";
-import { findParticleErrors, fixParticles, formatParticleErrors } from "./lib/particle.mjs";
-import { looksKorean } from "./lib/detect.mjs";
-import { isIgnoredFile } from "./lib/segment.mjs";
+import { loadRules } from "./rules.mjs";
+import { lint, applyFixes, formatFindings } from "./lint.mjs";
+import { findParticleErrors, fixParticles, formatParticleErrors } from "./particle.mjs";
+import { looksKorean } from "./detect.mjs";
+import { isIgnoredFile } from "./segment.mjs";
 
 const PLUGIN_ROOT =
-  process.env.CLAUDE_PLUGIN_ROOT || join(dirname(fileURLToPath(import.meta.url)), "..");
+  process.env.CLAUDE_PLUGIN_ROOT || join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // 문서 파일만 본다. 소스 파일을 검사하면 코드 주석까지 건드리게 되고, 그것은 적용 범위 밖이다.
 const DOC_EXTENSIONS = new Set([".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc"]);
@@ -35,14 +30,6 @@ function declaresIgnore(filePath) {
     return isIgnoredFile(readFileSync(filePath, "utf8"));
   } catch {
     return false;
-  }
-}
-
-function readStdin() {
-  try {
-    return readFileSync(0, "utf8");
-  } catch {
-    return "";
   }
 }
 
@@ -123,29 +110,24 @@ function extractTargets(toolName, toolInput) {
   return [];
 }
 
-function emit(payload) {
-  process.stdout.write(JSON.stringify(payload));
-}
-
 function describeFixes(applied) {
   const lines = applied.map((item) => `- "${item.matched}" → "${item.replacement}"`);
   return [`한국어 표현 ${applied.length}건을 고쳤습니다.`, ...lines].join("\n");
 }
 
-function handlePreToolUse(toolName, toolInput, targets, rules) {
+export function autofixOrBlock(toolName, toolInput, targets, rules) {
   if (blockEnabled()) {
     // F8: 막을 때만 전체 위반 목록이 필요하다. 자동 교정 경로에서는 applyFixes 가
     // 안에서 다시 검사하므로 미리 훑으면 같은 일을 두 번 한다.
     const allFindings = targets.flatMap((target) => lint(target.text, rules));
-    if (allFindings.length === 0) return;
-    emit({
+    if (allFindings.length === 0) return null;
+    return {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
         permissionDecisionReason: formatFindings(allFindings, targets[0]?.label || ""),
       },
-    });
-    return;
+    };
   }
 
   // 자동 교정. 원본을 그대로 유지한 채 필드별로 바꿔 넣는다.
@@ -184,27 +166,27 @@ function handlePreToolUse(toolName, toolInput, targets, rules) {
     applied.push(...result.applied);
   }
 
-  if (!changed || applied.length === 0) return;
+  if (!changed || applied.length === 0) return null;
 
-  emit({
+  return {
     systemMessage: describeFixes(applied),
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "allow",
       updatedInput,
     },
-  });
+  };
 }
 
-function handlePostToolUse(targets, rules) {
+export function warnAboutTone(targets, rules) {
   const findings = targets.flatMap((target) =>
     lint(target.text, rules).map((finding) => ({ ...finding, label: target.label }))
   );
   const particles = targets.flatMap((target) => findParticleErrors(target.text));
-  if (findings.length === 0 && particles.length === 0) return;
+  if (findings.length === 0 && particles.length === 0) return null;
 
   const label = targets[0]?.label || "";
-  emit({
+  return {
     hookSpecificOutput: {
       hookEventName: "PostToolUse",
       additionalContext: [
@@ -214,53 +196,15 @@ function handlePostToolUse(targets, rules) {
         "저장소에 남는 글이므로 위 표현을 고쳐 주십시오. 코드와 식별자는 그대로 두십시오.",
       ].join("\n"),
     },
-  });
+  };
 }
 
-const autofixEnabled = () => process.env.KIMCHI_AUTOFIX === "1";
-const blockEnabled = () => process.env.KIMCHI_BLOCK === "1";
+export const autofixEnabled = () => process.env.KIMCHI_AUTOFIX === "1";
+export const blockEnabled = () => process.env.KIMCHI_BLOCK === "1";
 
-function main() {
-  if (process.env.KIMCHI_DISABLE === "1") return;
-
-  const raw = readStdin();
-  if (!raw.trim()) return;
-
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    return;
-  }
-
-  const toolName = payload.tool_name;
-  const event = payload.hook_event_name;
-  if (!toolName || !event) return;
-
-  // 기본값에서 PreToolUse 는 아무 일도 하지 않는다. 경고는 PostToolUse 가 맡는다.
-  // 규칙 575개를 읽기 전에 빠져나가야 한다. 그 적재가 8ms 다.
-  if (event === "PreToolUse" && !autofixEnabled() && !blockEnabled()) return;
-
-  const targets = extractTargets(toolName, payload.tool_input).filter((target) =>
-    looksKorean(target.text)
-  );
-  if (targets.length === 0) return;
-
-  const { rules } = loadRules(join(PLUGIN_ROOT, "rules"));
-  if (rules.length === 0) return;
-
-  if (event === "PreToolUse") handlePreToolUse(toolName, payload.tool_input, targets, rules);
-  else if (event === "PostToolUse") handlePostToolUse(targets, rules);
+/** 규칙을 읽는다. 값싼 걸러내기를 통과한 뒤에만 부른다. */
+export function loadToneRules() {
+  return loadRules(join(PLUGIN_ROOT, "rules")).rules;
 }
 
 export { extractCommitMessages, extractTargets };
-
-// 직접 실행될 때만 돈다. 시험에서 불러 쓸 때 프로세스를 끝내 버리면 안 된다.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  try {
-    main();
-  } catch {
-    // 조용히 넘어간다. 이 훅이 작업을 막아서는 안 된다.
-  }
-  process.exit(0);
-}
