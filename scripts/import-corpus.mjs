@@ -3,6 +3,13 @@
 //
 // 개발용 도구다. 플러그인이 돌 때는 쓰이지 않는다.
 //
+// **주의: 한 번 들여온 뒤에는 rules/*.md 가 원본이다.** 이 도구를 다시 돌리면 그 파일들을
+// 통째로 덮어써서 손으로 고친 내용이 사라진다. 규칙 한 줄을 고칠 때는 rules/*.md 를 직접
+// 편집하고 `npm run build` 만 돌린다.
+//
+// 처음 들여온 자료는 corpus/ 에 보존해 두었다. 출처를 추적할 때 참고한다.
+// rules/observed.md 는 손으로 유지하는 파일이라 이 도구가 건드리지 않는다.
+//
 // 기대하는 JSON 모양:
 //   { "rules": [ { "category", "en", "bad", "good", "why"|"reason", "lintable", "priority" }, ... ] }
 //
@@ -17,7 +24,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { applyFixes, toPattern, lint } from "../hooks/lib/lint.mjs";
+import {
+  applyFixes,
+  toPattern,
+  lint,
+  stripWildcardEdges,
+  startsWithParticle,
+} from "../hooks/lib/lint.mjs";
 import { PRIORITIES } from "../hooks/lib/rules.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,7 +110,23 @@ const CATEGORY_FILES = {
 const TABLE_HEADER = ["| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |", "|---|---|---|---|---|---|"];
 
 // 대체 표현이 드롭인이 아니라는 신호들. 이런 값은 자동 치환 대상에서 뺀다.
-const NOT_DROP_IN = /[\/|]|생략|또는|참조|문맥|\.{3}|…/;
+// 괄호와 쉼표가 특히 위험하다. "정상 종료 (안전 종료)"나 "결합도, 느슨한 결합"은
+// 규칙 표에서는 대안 나열이지만 본문에 그대로 꽂으면 문장이 망가진다.
+const NOT_DROP_IN = /[\/|(),]|생략|또는|참조|문맥|\.{3}|…/;
+
+/**
+ * 대체 표현을 문장에 그대로 꽂을 수 있는지 본다.
+ */
+function isDropIn(good) {
+  const core = stripWildcardEdges(good);
+  if (core.length === 0) return false;
+  if (NOT_DROP_IN.test(core)) return false;
+  // 가운데 물결표는 무엇으로 채울지 정할 수 없다.
+  if (core.includes("~")) return false;
+  // 조사로 시작하면 앞말의 받침을 봐야 하는데 규칙 표에는 그 정보가 없다.
+  if (startsWithParticle(core)) return false;
+  return true;
+}
 
 // 금칙어 길이로 세 구간을 가른다.
 //
@@ -106,9 +135,8 @@ const NOT_DROP_IN = /[\/|]|생략|또는|참조|문맥|\.{3}|…/;
 const SUBSTITUTE_MAX = 24; // 이 길이까지는 자동 교정을 검토한다
 const PATTERN_MAX = 40; // 이 길이를 넘으면 그 문장 하나에서만 걸리므로 린터에 쓸모가 없다
 
-function patternCore(bad) {
-  return bad.replace(/^~+|~+$/g, "").trim();
-}
+// 린터와 같은 함수를 쓴다. 따로 구현하면 생성기의 길이 판정과 린터의 토큰화가 어긋난다.
+const patternCore = stripWildcardEdges;
 
 function escapeCell(value) {
   return String(value ?? "")
@@ -132,8 +160,8 @@ function decideCheck(rule) {
 
   const candidate = { ...rule, check: "치환" };
 
-  // 대체 표현이 드롭인으로 보이지 않으면 경고만 한다.
-  if (NOT_DROP_IN.test(rule.good)) return "정규식";
+  // 대체 표현을 그대로 꽂을 수 없으면 경고만 한다.
+  if (!isDropIn(rule.good)) return "정규식";
   // 고친 결과가 같은 규칙에 또 걸리면 순환한다.
   if (lint(rule.good, [candidate]).length > 0) return "정규식";
 

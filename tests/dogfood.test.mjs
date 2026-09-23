@@ -49,3 +49,13 @@ test("저장소의 한국어 문서가 규칙을 어기지 않는다", () => {
     `\n${problems.join("\n")}\n\n나쁜 예를 일부러 인용한 자리라면 kimchi-ignore 표시를 쓰십시오.`
   );
 });
+
+test("README가 말하는 규칙 수가 실제와 맞는다", () => {
+  // 문서의 숫자는 조용히 낡는다. 낡으면 읽는 사람을 속인다.
+  const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+  const stated = readme.match(/규칙 (\d+)개/g)?.map((hit) => Number(hit.match(/\d+/)[0])) ?? [];
+  assert.ok(stated.length > 0, "README에 규칙 수가 적혀 있지 않다");
+  for (const count of stated) {
+    assert.equal(count, rules.length, `README는 ${count}개라고 적었는데 실제는 ${rules.length}개다`);
+  }
+});

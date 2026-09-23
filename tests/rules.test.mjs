@@ -98,3 +98,23 @@ test("byPriority가 순위대로 정렬하고 같은 순위의 순서를 지킨�
     ["b", "d", "c", "a"]
   );
 });
+
+test("같은 순위 안에서는 프롬프트 규칙을 앞에 둔다", () => {
+  // 프롬프트 규칙만 문자열로 못 잡으므로 스타일 본문에 먼저 담아야 한다.
+  const ordered = byPriority([
+    { bad: "치환", priority: "핵심", check: "치환" },
+    { bad: "정규식", priority: "핵심", check: "정규식" },
+    { bad: "프롬프트", priority: "핵심", check: "프롬프트" },
+  ]);
+  assert.equal(ordered[0].bad, "프롬프트");
+});
+
+test("치환과 정규식은 서로 앞서지 않는다", () => {
+  // 둘 다 린터가 잡을 수 있어 순서를 매길 근거가 없다. 규칙 파일에 적은 순서를 지켜야 한다.
+  const input = [
+    { bad: "먼저", priority: "보통", check: "정규식" },
+    { bad: "나중", priority: "보통", check: "치환" },
+  ];
+  assert.deepEqual(byPriority(input).map((rule) => rule.bad), ["먼저", "나중"]);
+  assert.deepEqual(byPriority([...input].reverse()).map((rule) => rule.bad), ["나중", "먼저"]);
+});

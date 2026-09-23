@@ -30,7 +30,7 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function stripWildcardEdges(text) {
+export function stripWildcardEdges(text) {
   return text.trim().replace(/^~+/, "").replace(/~+$/, "");
 }
 
@@ -81,17 +81,38 @@ export function hasFinalConsonant(text) {
 }
 
 /**
- * 치환해도 뒤따르는 조사가 깨지지 않는지 확인한다.
+ * 대체 표현이 조사로 시작하는지 본다.
  *
- * "얇은 계약을"의 "얇은 계약"을 "낮은 결합도"로 바꾸면 "낮은 결합도을"이 된다.
- * 받침이 사라졌기 때문이다. 이런 경우에는 교정하지 않는다.
+ * "~에 대한 처리를 진행" → "~를 처리" 같은 규칙이 그렇다. 이때는 매치 뒤가 아니라
+ * 매치 **앞** 단어의 받침이 조사를 결정한다. "파일에 대한 처리를 진행"을 그대로 바꾸면
+ * "파일를 처리"가 된다.
+ *
+ * @param {string} replacement
+ * @returns {boolean}
+ */
+export function startsWithParticle(replacement) {
+  return typeof replacement === "string" && PARTICLE_HEADS.has(replacement[0]);
+}
+
+/**
+ * 치환해도 앞뒤 조사가 깨지지 않는지 확인한다.
+ *
+ * 조사는 양쪽에서 온다. 뒤에 붙는 경우와 대체 표현이 조사로 시작하는 경우를 모두 막아야 한다.
+ *
+ * - 뒤: "얇은 계약을"의 "얇은 계약"을 "낮은 결합도"로 바꾸면 "낮은 결합도을"이 된다.
+ * - 앞: "파일에 대한 처리를 진행"을 "를 처리"로 바꾸면 "파일를 처리"가 된다.
  *
  * @param {string} bad
  * @param {string} good
  * @param {string} nextChar 매치 바로 뒤 글자
+ * @param {string} [prevChar] 매치 바로 앞 글자
  * @returns {boolean}
  */
-export function isParticleSafe(bad, good, nextChar) {
+export function isParticleSafe(bad, good, nextChar, prevChar = "") {
+  // 대체 표현이 조사로 시작하면 앞말의 받침에 맞아야 한다. 규칙 표에는 그 정보가 없으므로
+  // 자동 교정을 포기한다. 앞이 한글이 아니면 조사가 걸릴 일이 없어 그대로 둔다.
+  if (startsWithParticle(good) && hasFinalConsonant(prevChar) !== null) return false;
+
   if (!nextChar || !PARTICLE_HEADS.has(nextChar)) return true;
   const before = hasFinalConsonant(bad);
   const after = hasFinalConsonant(good);
@@ -147,6 +168,22 @@ export function lint(text, rules) {
 }
 
 /**
+ * 왜 건너뛰었는지 정확히 알려준다. 원인을 뭉개면 고치는 사람이 엉뚱한 곳을 뒤진다.
+ *
+ * 메시지의 조사도 받침에 맞춰 고른다. 조사를 지켜 주는 코드가 자기 조사를 틀리면 우습다.
+ */
+function skipReason(matched, replacement, nextChar) {
+  if (startsWithParticle(replacement)) {
+    return `바꿀 표현이 조사 "${replacement[0]}"로 시작해 앞말의 받침을 봐야 합니다`;
+  }
+  if (hasFinalConsonant(replacement) === null) {
+    return `바꿀 표현이 한글로 끝나지 않아 받침을 판정할 수 없습니다`;
+  }
+  const subject = hasFinalConsonant(nextChar) ? "이" : "가";
+  return `뒤따르는 조사 "${nextChar}"${subject} 깨집니다`;
+}
+
+/**
  * 치환 규칙만 실제로 고쳐 쓴다. 자동 교정은 기본으로 꺼져 있고 호출하는 쪽이 켠다.
  *
  * @param {string} text
@@ -187,10 +224,9 @@ export function applyFixes(text, rules) {
     }
 
     const nextChar = result[end] ?? "";
-    if (!isParticleSafe(finding.matched, replacement, nextChar)) {
-      // 이 메시지의 조사도 받침에 맞춰 고른다. 조사를 지켜 주는 코드가 조사를 틀리면 우습다.
-      const subject = hasFinalConsonant(nextChar) ? "이" : "가";
-      skipped.push({ ...finding, reason: `뒤따르는 조사 "${nextChar}"${subject} 깨집니다` });
+    const prevChar = finding.index > 0 ? result[finding.index - 1] : "";
+    if (!isParticleSafe(finding.matched, replacement, nextChar, prevChar)) {
+      skipped.push({ ...finding, reason: skipReason(finding.matched, replacement, nextChar) });
       continue;
     }
 

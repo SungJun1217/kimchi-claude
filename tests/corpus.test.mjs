@@ -9,7 +9,13 @@ import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRules, CHECKS, PRIORITIES, CHECK_SUBSTITUTE } from "../hooks/lib/rules.mjs";
-import { lint, toPattern, applyFixes } from "../hooks/lib/lint.mjs";
+import {
+  lint,
+  toPattern,
+  applyFixes,
+  startsWithParticle,
+  hasFinalConsonant,
+} from "../hooks/lib/lint.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { rules, skipped, files } = loadRules(join(ROOT, "rules"));
@@ -132,4 +138,41 @@ test("규칙이 겨냥한 나쁜 문장은 실제로 걸린다", () => {
     if (lint(`앞말 ${rule.bad} 뒷말`, [rule]).length === 0) silent.push(rule.bad);
   }
   assert.deepEqual(silent, []);
+});
+
+// 아래 세 시험은 실제로 배포됐던 결함을 막는다.
+// 치환 규칙의 대체 표현이 조사로 시작하거나 괄호·쉼표를 담고 있으면 본문이 망가진다.
+// "요청에 대한 처리를 진행합니다" → "요청를 처리합니다",
+// "커플링을 낮췄습니다" → "결합도, 느슨한 결합을 낮췄습니다" 가 실제로 나왔다.
+
+test("치환 규칙의 대체 표현이 조사로 시작하지 않는다", () => {
+  const bad = rules
+    .filter((rule) => rule.check === CHECK_SUBSTITUTE && startsWithParticle(rule.good.replace(/^~+/, "")))
+    .map((rule) => `"${rule.bad}" → "${rule.good}"`);
+  assert.deepEqual(bad, [], "조사로 시작하면 앞말의 받침을 봐야 하므로 자동 교정할 수 없다");
+});
+
+test("치환 규칙의 대체 표현에 괄호나 쉼표가 없다", () => {
+  const bad = rules
+    .filter((rule) => rule.check === CHECK_SUBSTITUTE && /[(),/|]/.test(rule.good))
+    .map((rule) => `"${rule.bad}" → "${rule.good}"`);
+  assert.deepEqual(bad, [], "대안 나열은 본문에 그대로 꽂으면 문장이 망가진다");
+});
+
+test("조사가 바로 붙은 자리에서 조사를 깨뜨리지 않는다", () => {
+  // 기존 탐침은 `앞말 ${bad} 뒷말`처럼 양쪽을 띄워 놓아 이 결함을 구조적으로 못 잡았다.
+  const problems = [];
+  for (const rule of rules) {
+    if (rule.check !== CHECK_SUBSTITUTE) continue;
+    for (const particle of ["을", "를", "이", "가"]) {
+      const { applied } = applyFixes(`${rule.bad}${particle} 확인했습니다.`, [rule]);
+      if (applied.length === 0) continue;
+      const after = hasFinalConsonant(applied[0].replacement);
+      const before = hasFinalConsonant(rule.bad);
+      if (after !== before) {
+        problems.push(`"${rule.bad}${particle}" → "${applied[0].replacement}${particle}"`);
+      }
+    }
+  }
+  assert.deepEqual(problems, [], "받침이 바뀌었는데도 교정이 적용됐다");
 });

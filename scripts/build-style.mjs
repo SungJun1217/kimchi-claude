@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRules, byPriority } from "../hooks/lib/rules.mjs";
+import { loadRules, byPriority, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -21,6 +21,10 @@ const OUT_PATH = join(ROOT, "output-styles", "natural-korean.md");
 // 스타일 본문 전체 길이 상한. 시스템 프롬프트는 프롬프트 캐시에 올라가므로 비용 부담은
 // 낮지만 모델의 주의 예산은 유한하다. 자료가 300개로 자라도 본문은 여기까지만 담는다.
 export const MAX_CHARS = 6000;
+
+// 행 예산 가운데 프롬프트 규칙에 배정하는 비율. 나머지는 치환·정규식 규칙이 쓴다.
+// 프롬프트 규칙은 예시 문장이라 한 줄이 길고, 용어 규칙은 짧아 같은 예산으로 여러 개가 들어간다.
+export const PROMPT_SHARE = 0.5;
 
 // 규칙 파일별 소제목. 없는 파일은 파일명을 그대로 쓴다.
 const SECTION_TITLES = {
@@ -68,7 +72,7 @@ force-for-plugin: true
 2. **정착된 외래어가 있으면 그것을 씁니다.** 캐시, 커밋, 머지, 브랜치, 배포, 인터페이스, 리팩터링, 스레드. 이런 말을 우리말로 바꾸지 마십시오. "캐시"를 "임시 저장소"로 바꾸는 것은 개선이 아니라 훼손입니다.
 3. **1번과 2번이 모두 없으면 원어를 그대로 씁니다.** 억지로 옮기지 않습니다.
 4. **순우리말로 풀어쓰는 것은 최후 수단입니다.** 서술문으로 늘이면 대개 더 어색해집니다. 답이 길어지고 있으면 틀렸다고 의심하고 1번이나 2번을 다시 찾아보십시오.
-5. **은유는 번역 대상이 아닙니다.** 얇다, 두껍다, 깊다, 평평하다는 한국어에서 그 뜻으로 쓰이지 않습니다. 은유를 벗기고 개념의 이름을 쓰십시오. 단, 이미 정착한 은유(무겁다, 가볍다, 코드 냄새, 일급)는 그대로 씁니다.
+5. **은유는 번역 대상이 아닙니다.** 얇다, 두껍다, 깊다, 평평하다는 한국어에서 그 뜻으로 쓰이지 않습니다. 은유를 벗기고 개념의 이름을 쓰십시오. 단, 이미 정착한 은유는 그대로 씁니다. 무겁다, 가볍다, 코드 냄새, 일급, 그리고 **깊은 복사·얕은 복사**와 **중첩 깊이**처럼 짝으로 굳은 표현이 그렇습니다.
    **활용형에도 똑같이 적용됩니다.** "얇은 계약"만 피하는 것이 아니라 "계약이 얇으면", "계약을 얇게", "계약이 두꺼워지는", "얇게 만드는"도 모두 쓰지 않습니다. 한국어는 활용이 풍부해서 같은 은유가 여러 꼴로 되살아납니다.
 
 4번이 가장 자주 어긋납니다. **"자연스러운 한국어"는 순우리말을 뜻하지 않습니다.** 한국어 기술 문서의 실제 어휘는 한자어 밀도가 높고, 그것이 더 짧고 정확하며 이미 통용됩니다.
@@ -122,32 +126,60 @@ function sectionHeading(title) {
 export function buildBody(rules, maxChars = MAX_CHARS) {
   const ordered = byPriority(rules);
 
-  // 두 단계로 나눈다. 먼저 순위 순서로 무엇을 담을지 고르고, 그다음 분류별로 묶어 출력한다.
-  // 한 번에 하면 분류가 교차해 같은 소제목이 여러 번 나온다.
-  const sections = new Map();
-  let length = PREAMBLE.length;
-  let included = 0;
+  // 예산을 두 갈래로 나눈다.
+  //
+  // 프롬프트 규칙은 문자열로 잡을 수 없어 예방밖에 방법이 없다. 그렇다고 치환·정규식 규칙을
+  // 뒤로 미루면 안 된다. 린터는 커밋 메시지와 문서 파일만 보고 **대화는 못 본다.**
+  // 대화가 이 플러그인의 주 무대이므로 용어 규칙도 스타일에 있어야 한다.
+  //
+  // 소제목 비용은 어느 쪽에도 물리지 않고 전체 상한에서만 뺀다. 한 소제목 아래에
+  // 두 갈래가 섞여 들어오기 때문이다.
+  const rowBudget = Math.max(0, maxChars - PREAMBLE.length);
+  const lanes = [
+    { isMine: (rule) => rule.check === CHECK_PROMPT, budget: Math.floor(rowBudget * PROMPT_SHARE), spent: 0 },
+    { isMine: (rule) => rule.check !== CHECK_PROMPT, budget: rowBudget, spent: 0 },
+  ];
+  lanes[1].budget = rowBudget - lanes[0].budget;
 
-  for (const rule of ordered) {
+  const sections = new Map();
+  const picked = new Set();
+  let length = PREAMBLE.length;
+
+  const admit = (rule, lane) => {
     const title = SECTION_TITLES[rule.source] || rule.source;
     const rowCost = `${toRow(rule)}\n`.length;
     const headingCost = sections.has(title) ? 0 : sectionHeading(title).length;
 
-    if (length + rowCost + headingCost > maxChars) break;
+    if (length + rowCost + headingCost > maxChars) return false;
+    if (lane && lane.spent + rowCost > lane.budget) return false;
 
     if (!sections.has(title)) sections.set(title, []);
     sections.get(title).push(rule);
     length += rowCost + headingCost;
-    included += 1;
+    if (lane) lane.spent += rowCost;
+    picked.add(rule);
+    return true;
+  };
+
+  // 한 규칙이 자기 갈래의 예산을 넘겨도 멈추지 않는다. 뒤에 오는 짧은 규칙은 아직 들어갈 수 있다.
+  for (const rule of ordered) {
+    const lane = lanes.find((candidate) => candidate.isMine(rule));
+    admit(rule, lane);
+  }
+
+  // 한쪽이 예산을 덜 썼으면 남은 자리를 다른 쪽에 넘긴다. 상한을 남기고 버리지 않는다.
+  for (const rule of ordered) {
+    if (picked.has(rule)) continue;
+    admit(rule, null);
   }
 
   let body = PREAMBLE;
-  for (const [title, picked] of sections) {
+  for (const [title, rows] of sections) {
     body += sectionHeading(title);
-    for (const rule of picked) body += `${toRow(rule)}\n`;
+    for (const rule of rows) body += `${toRow(rule)}\n`;
   }
 
-  return { body, included, dropped: ordered.length - included };
+  return { body, included: picked.size, dropped: ordered.length - picked.size };
 }
 
 function main() {

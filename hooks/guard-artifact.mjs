@@ -24,6 +24,12 @@ const PLUGIN_ROOT =
 // 문서 파일만 본다. 소스 파일을 검사하면 코드 주석까지 건드리게 되고, 그것은 적용 범위 밖이다.
 const DOC_EXTENSIONS = new Set([".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc"]);
 
+// 생성물과 규칙 자료는 검사하지 않는다.
+//
+// 출력 스타일 본문은 금칙 표현을 대조 예시로 싣고 있어 자기 규칙에 걸린다. 자동 교정이
+// 켜져 있으면 자기 "쓰지 말 것" 칸을 고쳐 써 버린다.
+const GENERATED_PATHS = [/(^|[\\/])output-styles[\\/]/, /(^|[\\/])rules[\\/]/];
+
 function readStdin() {
   try {
     return readFileSync(0, "utf8");
@@ -78,6 +84,7 @@ function extractTargets(toolName, toolInput) {
 
   const filePath = toolInput.file_path || "";
   if (filePath && !DOC_EXTENSIONS.has(extname(filePath).toLowerCase())) return [];
+  if (GENERATED_PATHS.some((pattern) => pattern.test(filePath))) return [];
 
   if (toolName === "Write" && typeof toolInput.content === "string") {
     return [{ label: filePath || "문서", text: toolInput.content, field: "content" }];

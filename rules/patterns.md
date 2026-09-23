@@ -13,23 +13,23 @@
 | your | 당신의 | 이 / 생략 | 영어 your를 직역했다. 한국어에서는 대개 생략한다 | 정규식 | 핵심 |
 | we | 우리는 ~합니다 | 주어를 빼고 대상을 주어로 놓습니다 | 영어의 인칭 주어를 직역했다. "우리는 캐시를 재생성한다"가 아니라 "캐시가 매번 새로 만들어집니다" | 프롬프트 | 핵심 |
 | — | ~를 수행합니다 | ~합니다 | 기능동사 남용. "검사를 수행합니다"는 "검사합니다" | 치환 | 핵심 |
-| — | ~에 대한 처리를 진행 | ~를 처리 | 영어 명사구를 직역한 뒤 기능동사를 붙였다 | 치환 | 핵심 |
+| — | ~에 대한 처리를 진행 | ~를 처리 | 영어 명사구를 직역한 뒤 기능동사를 붙였다 | 정규식 | 핵심 |
 | We regenerate the cache on every call. | 우리는 호출마다 캐시를 재생성합니다. | 호출마다 캐시가 새로 만들어집니다. | 영어 we 직역. 한국어 기술 설명문은 주어를 비웁니다. | 치환 | 핵심 |
 | You can run the tests with npm test. | 당신은 npm test로 테스트를 실행할 수 있습니다. | npm test로 테스트를 돌릴 수 있습니다. | you를 '당신'으로 옮기면 번역서 문체가 됩니다. | 정규식 | 핵심 |
-| Your code has a race condition. | 당신의 코드에 경쟁 조건이 있습니다. | 이 코드에 경쟁 조건이 있습니다. | 소유격 your는 '이'로 바꾸거나 빼는 쪽이 자연스럽습니다. | 치환 | 핵심 |
+| Your code has a race condition. | 당신의 코드에 경쟁 조건이 있습니다. | 이 코드에 경쟁 조건이 있습니다. | 소유격 your는 '이'로 바꾸거나 빼는 쪽이 자연스럽습니다. | 정규식 | 핵심 |
 | handle the request | 요청에 대한 처리를 진행합니다. | 요청을 처리합니다. | 명사구+기능동사 직역. 동사 하나로 끝납니다. | 치환 | 핵심 |
 | perform validation on the input | 입력값에 대한 검증을 수행합니다. | 입력값을 검증합니다. | '수행하다'는 대개 지울 수 있는 군더더기입니다. | 치환 | 핵심 |
 | This value will be removed in the next release. | 이 값은 다음 배포에서 제거되어질 예정입니다. | 이 값은 다음 배포에서 제거됩니다. | '되어질'은 이중 피동입니다. 한국어에 없는 형태입니다. | 정규식 | 핵심 |
 | This looks like a caching problem. | 캐시 문제로 보여집니다. | 캐시 문제로 보입니다. | '보여지다'는 이중 피동입니다. | 치환 | 핵심 |
-| This helper is only used in tests. | 이 헬퍼는 테스트에서만 사용되어집니다. | 이 헬퍼는 테스트에서만 사용됩니다. | 피동은 한 겹으로 충분합니다. | 치환 | 핵심 |
-| The value is stored by the cache. | 이 값은 캐시에 의해 저장됩니다. | 이 값은 캐시에 저장됩니다. | 영어 by를 '에 의해'로 옮기면 어색합니다. 조사로 해결됩니다. | 치환 | 핵심 |
+| This helper is only used in tests. | 이 헬퍼는 테스트에서만 사용되어집니다. | 이 헬퍼는 테스트에서만 사용됩니다. | 피동은 한 겹으로 충분합니다. | 정규식 | 핵심 |
+| The value is stored by the cache. | 이 값은 캐시에 의해 저장됩니다. | 이 값은 캐시에 저장됩니다. | 영어 by를 '에 의해'로 옮기면 어색합니다. 조사로 해결됩니다. | 정규식 | 핵심 |
 | We modified several files. | 여러 파일들을 수정했습니다. | 여러 파일을 수정했습니다. | '여러'가 이미 복수입니다. '들'이 겹칩니다. | 치환 | 핵심 |
 | This error tells you that the config is missing. | 이 오류는 당신에게 설정이 빠졌다고 알려줍니다. | 이 오류는 설정이 빠졌다는 뜻입니다. | 무생물이 사람에게 말하는 구조는 영어 문법입니다. | 정규식 | 핵심 |
 | This test shows us that the cache is empty. | 이 테스트는 우리에게 캐시가 비어 있음을 보여줍니다. | 이 테스트를 보면 캐시가 비어 있습니다. | '~는 우리에게 ~을 보여준다'는 통째로 영어 구문입니다. | 정규식 | 핵심 |
 | This change brings a performance improvement. | 이 변경은 성능 향상을 가져옵니다. | 이렇게 바꾸면 빨라집니다. | 무생물 주어가 무엇을 '가져오는' 구조는 영어식입니다. | 프롬프트 | 핵심 |
 | That is because the cache is cleared on every request. | 그것은 캐시가 요청마다 비워지기 때문입니다. | 캐시가 요청마다 비워지기 때문입니다. | That is because의 that은 옮기지 않습니다. | 치환 | 핵심 |
 | It is important to release the lock. | 락을 해제하는 것은 중요합니다. | 락은 반드시 해제해야 합니다. | It is important to 직역. 한국어는 당위 표현으로 바로 씁니다. | 치환 | 핵심 |
-| It's worth noting that this function is idempotent. | 주목할 점은 이 함수가 멱등이라는 것입니다. | 이 함수는 멱등입니다. | 영어 강조 구문을 옮기면 빈 절이 하나 늘어납니다. | 치환 | 핵심 |
+| It's worth noting that this function is idempotent. | 주목할 점은 이 함수가 멱등이라는 것입니다. | 이 함수는 멱등입니다. | 영어 강조 구문을 옮기면 빈 절이 하나 늘어납니다. | 정규식 | 핵심 |
 | This means the request is sent twice. | 이것은 요청이 두 번 전송된다는 것을 의미합니다. | 그래서 요청이 두 번 전송됩니다. | This means 직역. 접속사 하나로 끝납니다. | 정규식 | 핵심 |
 | If the test fails, then check the log. | 만약 테스트가 실패한다면, 그러면 로그를 확인하세요. | 테스트가 실패하면 로그를 보세요. | if~then의 then은 한국어 어미에 이미 들어 있습니다. | 정규식 | 핵심 |
 | I fixed the function that was causing slow responses because it rebuilt the cache on every call. | 호출마다 캐시를 새로 만들어서 응답을 느리게 만들고 있던 이 함수를 수정했습니다. | 이 함수가 호출마다 캐시를 새로 만들고 있었습니다. 그래서 응답이 느렸고, 지금은 고쳤습니다. | 영어 관계절을 명사 앞에 쌓지 말고 문장을 끊습니다. | 프롬프트 | 핵심 |
@@ -43,7 +43,7 @@
 | — | 그것은 ~하기 때문입니다 | ~때문입니다 | 영어 대명사 주어를 직역했다 | 정규식 | 보통 |
 | — | 한 문장을 원문 길이 그대로 옮기기 | 두세 문장으로 끊어 쓰기 | 영어 한 문장을 한국어 한 문장으로 고집하면 늘어진다 | 프롬프트 | 보통 |
 | Let's check the logs first. | 우리가 먼저 로그를 확인해 봐야 합니다. | 먼저 로그를 보겠습니다. | we를 주어로 살리면 내 일이 아닌 것처럼 들립니다. | 치환 | 보통 |
-| I have fixed the bug. | 저는 이 버그를 수정했습니다. | 이 버그를 수정했습니다. | 1인칭 주어는 한국어에서 기본적으로 생략합니다. | 치환 | 보통 |
+| I have fixed the bug. | 저는 이 버그를 수정했습니다. | 이 버그를 수정했습니다. | 1인칭 주어는 한국어에서 기본적으로 생략합니다. | 정규식 | 보통 |
 | your project's configuration file | 당신의 프로젝트의 설정 파일을 수정했습니다. | 프로젝트 설정 파일을 수정했습니다. | '의'가 겹치면 읽기 어려워집니다. 관형격은 한 번만 씁니다. | 프롬프트 | 보통 |
 | To answer your question, ... | 당신의 질문에 답하자면, 이 값은 요청마다 새로 계산됩니다. | 이 값은 요청마다 새로 계산됩니다. | 영어식 답변 서두는 한국어에서 통째로 뺍니다. | 정규식 | 보통 |
 | It is recommended that you call init() first. | init()을 먼저 호출하는 것이 권장됩니다. | init()을 먼저 호출해야 합니다. | It is recommended 직역. 한국어는 당위 표현으로 바로 말합니다. | 정규식 | 보통 |
@@ -51,7 +51,7 @@
 | Performance needs to be improved. | 성능 개선을 위한 작업이 필요한 상황입니다. | 성능을 개선해야 합니다. | 동사를 명사로 만든 뒤 '작업', '상황'을 붙이면 뜻이 흐려집니다. | 프롬프트 | 보통 |
 | We verified that it is reproducible. | 재현이 가능한지에 대한 확인을 했습니다. | 재현되는지 확인했습니다. | '~에 대한 확인을 하다'는 '확인하다'로 줄어듭니다. | 치환 | 보통 |
 | Tests are run by CI. | 테스트는 CI에 의해 실행됩니다. | 테스트는 CI에서 돌아갑니다. | 행위자 표시는 '에서'로 충분합니다. | 치환 | 보통 |
-| This config is not used anywhere. | 이 설정은 어디에서도 쓰여지지 않습니다. | 이 설정은 어디에서도 쓰이지 않습니다. | '쓰여지다'는 이중 피동입니다. | 치환 | 보통 |
+| This config is not used anywhere. | 이 설정은 어디에서도 쓰여지지 않습니다. | 이 설정은 어디에서도 쓰이지 않습니다. | '쓰여지다'는 이중 피동입니다. | 정규식 | 보통 |
 | Many tests failed. | 많은 테스트들이 실패했습니다. | 테스트 여러 개가 실패했습니다. | 수량 표현 뒤의 '들'은 군더더기입니다. | 치환 | 보통 |
 | We updated all dependencies. | 모든 의존성들을 최신으로 올렸습니다. | 의존성을 전부 최신으로 올렸습니다. | '모든 ~들'은 복수 표시가 두 번 들어갑니다. | 치환 | 보통 |
 | This document explains the setup. | 이 문서는 설치 방법을 설명해 줍니다. | 설치 방법은 이 문서에 있습니다. | 사물이 '설명해 주는' 구조는 한국어에서 겉돕니다. | 프롬프트 | 보통 |
@@ -62,27 +62,27 @@
 | in terms of performance | 성능의 관점에서 보았을 때 이 방식이 더 낫습니다. | 성능만 보면 이 방식이 낫습니다. | in terms of 직역이 수식절을 늘립니다. | 정규식 | 보통 |
 | with respect to memory usage | 메모리 사용량에 있어서는 차이가 없습니다. | 메모리 사용량은 차이가 없습니다. | '~에 있어서'는 조사 '은/는'으로 충분합니다. | 치환 | 보통 |
 | things like retries and timeouts | 재시도나 타임아웃과 같은 것들을 먼저 확인했습니다. | 재시도와 타임아웃부터 확인했습니다. | '~와 같은 것들'은 항목을 그대로 나열하면 사라집니다. | 정규식 | 보통 |
-| This function has been working this way for a long time. | 이 함수는 오랫동안 이렇게 동작해 왔습니다. | 이 함수는 예전부터 이렇게 동작합니다. | 현재완료를 '~해 왔습니다'로 옮기면 늘어집니다. | 치환 | 보통 |
+| This function has been working this way for a long time. | 이 함수는 오랫동안 이렇게 동작해 왔습니다. | 이 함수는 예전부터 이렇게 동작합니다. | 현재완료를 '~해 왔습니다'로 옮기면 늘어집니다. | 정규식 | 보통 |
 | I will clean this up in the next commit. | 다음 커밋에서 이 부분을 정리할 것입니다. | 다음 커밋에서 이 부분을 정리하겠습니다. | will 직역보다 '-겠습니다'가 자연스럽습니다. | 프롬프트 | 보통 |
 | Also, I added logs. Also, I strengthened the tests. | 또한 로그를 추가했습니다. 또한 테스트도 보강했습니다. | 로그를 추가하고 테스트도 보강했습니다. | Also를 문장마다 옮기면 읽는 리듬이 끊깁니다. | 프롬프트 | 보통 |
 | Therefore we disabled the cache. Therefore responses got faster. | 따라서 캐시를 껐습니다. 따라서 응답이 빨라졌습니다. | 캐시를 껐더니 응답이 빨라졌습니다. | 인과는 접속 부사보다 어미로 붙이는 쪽이 짧습니다. | 프롬프트 | 보통 |
-| This structure is extensible and flexible. | 이 구조는 확장적이고 유연적입니다. | 이 구조는 확장성이 좋고 유연합니다. | '-적'을 아무 데나 붙이면 없는 말이 됩니다. | 치환 | 보통 |
-| in terms of readability | 가독성적인 측면에서 개선이 필요합니다. | 가독성을 개선해야 합니다. | '-적인 측면에서'는 빼도 뜻이 그대로 남습니다. | 치환 | 보통 |
+| This structure is extensible and flexible. | 이 구조는 확장적이고 유연적입니다. | 이 구조는 확장성이 좋고 유연합니다. | '-적'을 아무 데나 붙이면 없는 말이 됩니다. | 정규식 | 보통 |
+| in terms of readability | 가독성적인 측면에서 개선이 필요합니다. | 가독성을 개선해야 합니다. | '-적인 측면에서'는 빼도 뜻이 그대로 남습니다. | 정규식 | 보통 |
 | This improves stability, scalability, and maintainability. | 이 방식은 안정성과 확장성과 유지보수성을 모두 향상시킵니다. | 이 방식은 안정성, 확장성, 유지보수성이 모두 좋아집니다. | '-성' 명사를 나열하면 무슨 말인지 흐려집니다. | 프롬프트 | 보통 |
 | We externalized the configuration. | 설정을 외부화하는 작업을 진행했습니다. | 설정을 별도 파일로 분리했습니다. | '-화' 뒤에 '작업을 진행'까지 붙으면 두 겹으로 늘어납니다. | 치환 | 보통 |
 | This is a race condition. | 이것은 하나의 경쟁 조건입니다. | 경쟁 조건입니다. | 영어 부정관사는 옮기지 않습니다. | 치환 | 보통 |
 | This is one of the most common mistakes. | 이것은 가장 흔한 실수들 중의 하나입니다. | 흔한 실수입니다. | one of the 직역은 길기만 합니다. | 치환 | 보통 |
 | You need to adjust the retry count. | 재시도 횟수를 조정할 필요가 있습니다. | 재시도 횟수를 조정해야 합니다. | need to 직역. '-해야 합니다'가 짧습니다. | 치환 | 보통 |
-| This value ends up being computed twice. | 이 값이 두 번 계산되게 됩니다. | 이 값이 두 번 계산됩니다. | '되게 됩니다'는 피동이 겹친 형태입니다. | 치환 | 보통 |
-| This setting disables the cache. | 이 설정이 캐시를 비활성화시켜 줍니다. | 이 설정은 캐시를 비활성화합니다. | '-화시키다'는 '-하다'로 충분합니다. '-해 주다'도 군더더기입니다. | 치환 | 보통 |
+| This value ends up being computed twice. | 이 값이 두 번 계산되게 됩니다. | 이 값이 두 번 계산됩니다. | '되게 됩니다'는 피동이 겹친 형태입니다. | 정규식 | 보통 |
+| This setting disables the cache. | 이 설정이 캐시를 비활성화시켜 줍니다. | 이 설정은 캐시를 비활성화합니다. | '-화시키다'는 '-하다'로 충분합니다. '-해 주다'도 군더더기입니다. | 정규식 | 보통 |
 | Don't forget to run the migration. | 마이그레이션을 실행하는 것을 잊지 마세요. | 마이그레이션도 실행해야 합니다. | Don't forget to 직역보다 할 일을 바로 말합니다. | 치환 | 보통 |
 | If you want, you can turn this check off. | 만약 당신이 원한다면 이 검사를 끌 수 있습니다. | 필요하면 이 검사를 끌 수 있습니다. | if you want는 '필요하면'으로 줄입니다. | 정규식 | 보통 |
 | Let's talk about the caching strategy. | 이제 캐시 전략에 대해 이야기해 봅시다. | 캐시 전략을 보겠습니다. | 영어식 진행 안내문은 한국어에서 대개 뺍니다. | 치환 | 보통 |
-| I think this part is the cause. | 저는 이 부분이 원인이라고 생각합니다. | 이 부분이 원인으로 보입니다. | I think 직역보다 추정 어미로 처리합니다. | 치환 | 보통 |
-| There is a bug in this handler. | 이 핸들러에는 하나의 버그가 존재합니다. | 이 핸들러에 버그가 있습니다. | there is 직역에 '존재'까지 붙으면 무거워집니다. | 치환 | 보통 |
-| This makes the code more readable. | 이것은 코드를 더 읽기 쉽게 만들어 줍니다. | 이렇게 하면 코드가 읽기 쉬워집니다. | make 직역 '만들어 주다'는 대개 '-어집니다'로 바뀝니다. | 치환 | 보통 |
+| I think this part is the cause. | 저는 이 부분이 원인이라고 생각합니다. | 이 부분이 원인으로 보입니다. | I think 직역보다 추정 어미로 처리합니다. | 정규식 | 보통 |
+| There is a bug in this handler. | 이 핸들러에는 하나의 버그가 존재합니다. | 이 핸들러에 버그가 있습니다. | there is 직역에 '존재'까지 붙으면 무거워집니다. | 정규식 | 보통 |
+| This makes the code more readable. | 이것은 코드를 더 읽기 쉽게 만들어 줍니다. | 이렇게 하면 코드가 읽기 쉬워집니다. | make 직역 '만들어 주다'는 대개 '-어집니다'로 바뀝니다. | 정규식 | 보통 |
 | if ... then | 만약 ~라면, 그러면 | ~면 | 조건문을 두 겹으로 직역했다 | 정규식 | 참고 |
-| This function is called twice. | 이 함수가 두 번 불려집니다. | 이 함수가 두 번 호출됩니다. | 이중 피동이고, 기술 문맥에서는 '호출'이 정착어입니다. | 치환 | 참고 |
+| This function is called twice. | 이 함수가 두 번 불려집니다. | 이 함수가 두 번 호출됩니다. | 이중 피동이고, 기술 문맥에서는 '호출'이 정착어입니다. | 정규식 | 참고 |
 | I had already run the tests. | 테스트는 이미 실행했었습니다. | 테스트는 이미 실행했습니다. | 과거완료 직역. 시점은 '이미'가 이미 표시합니다. | 치환 | 참고 |
 | I modified three files. | 3개의 파일을 수정했습니다. | 파일 3개를 수정했습니다. | 영어 수량 표현 순서를 그대로 두면 어색합니다. | 치환 | 참고 |
 | As mentioned above, this path is unused. | 위에서 언급된 바와 같이 이 경로는 사용되지 않습니다. | 앞에서 말했듯이 이 경로는 쓰이지 않습니다. | 영어 수동 인용 구문을 능동으로 바꿉니다. | 정규식 | 참고 |

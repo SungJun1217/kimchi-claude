@@ -115,3 +115,14 @@ test("쓸 것을 적힌 그대로 보여 준다", () => {
   const output = runHook(commit("이 값은 곧 수정되어질 예정입니다"));
   assert.match(output.hookSpecificOutput.additionalContext, /"되어질" → "~될"/);
 });
+
+test("생성물과 규칙 자료는 검사하지 않는다", () => {
+  // 출력 스타일 본문은 금칙 표현을 대조 예시로 싣고 있어 자기 규칙에 걸린다.
+  // 자동 교정이 켜져 있으면 자기 "쓰지 말 것" 칸을 고쳐 써 버린다.
+  const content = "리팩토링과 컨텐츠를 고쳐야 합니다.";
+  assert.equal(extractTargets("Write", { file_path: "output-styles/natural-korean.md", content }).length, 0);
+  assert.equal(extractTargets("Write", { file_path: "rules/terms.md", content }).length, 0);
+  assert.equal(extractTargets("Edit", { file_path: "/abs/path/rules/hanja.md", new_string: content }).length, 0);
+  // 보통 문서는 그대로 검사한다
+  assert.equal(extractTargets("Write", { file_path: "docs/guide.md", content }).length, 1);
+});

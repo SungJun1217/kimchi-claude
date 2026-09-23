@@ -1,0 +1,5080 @@
+{
+ "rules": [
+  {
+   "category": "hanja",
+   "en": "coupling",
+   "bad": "서로 얽힌 정도",
+   "good": "결합도",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "cohesion",
+   "bad": "뭉쳐 있는 정도",
+   "good": "응집도",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "side effect",
+   "bad": "곁가지 효과",
+   "good": "부수 효과",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "race condition",
+   "bad": "경쟁 상황",
+   "good": "경쟁 조건",
+   "why": "정착한 번역어는 경쟁 조건이다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "deadlock",
+   "bad": "꽉 막힌 상태",
+   "good": "교착 상태",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "latency",
+   "bad": "반응이 오는 데 걸리는 시간",
+   "good": "지연 시간",
+   "why": "풀어쓰기보다 짧고 정확하다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "throughput",
+   "bad": "처리할 수 있는 양",
+   "good": "처리량",
+   "why": "풀어쓰기보다 짧고 정확하다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "backward compatible",
+   "bad": "예전 것과도 맞는",
+   "good": "하위 호환",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "tech debt",
+   "bad": "기술적인 빚",
+   "good": "기술 부채",
+   "why": "정착한 번역어다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "responsibility",
+   "bad": "맡은 일",
+   "good": "책임",
+   "why": "설계 문맥에서는 책임이 표준 용어다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "abstraction",
+   "bad": "뭉뚱그리기",
+   "good": "추상화",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "serialization",
+   "bad": "늘어놓기",
+   "good": "직렬화",
+   "why": "한자어 용어가 통용된다",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "thin contract",
+   "bad": "얇은 계약",
+   "good": "낮은 결합도",
+   "why": "thin과 contract를 둘 다 직역해 뜻이 사라졌다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "thin interface",
+   "bad": "얇은 인터페이스",
+   "good": "공개 범위가 좁은 인터페이스",
+   "why": "인터페이스가 얇다는 말은 한국어에 없다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "keep it thin",
+   "bad": "얇게 유지하다",
+   "good": "최소한으로 유지하다",
+   "why": "같은 은유의 서술형",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "fat model",
+   "bad": "두꺼운 모델",
+   "good": "책임이 과한 모델",
+   "why": "fat은 두께가 아니라 책임 과다를 뜻한다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "fat controller",
+   "bad": "뚱뚱한 컨트롤러",
+   "good": "책임이 과한 컨트롤러",
+   "why": "위와 같다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "deep module",
+   "bad": "깊은 모듈",
+   "good": "deep module",
+   "why": "정착한 한국어 이름이 없다. 원어를 그대로 쓴다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "shallow wrapper",
+   "bad": "얕은 래퍼",
+   "good": "단순 위임 래퍼",
+   "why": "감싸기만 하고 하는 일이 없다는 뜻이다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "flat structure",
+   "bad": "평평한 구조",
+   "good": "계층이 없는 구조",
+   "why": "flat은 평면이 아니라 계층 부재를 뜻한다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "~되어질",
+   "good": "~될",
+   "why": "이중 피동",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "보여집니다",
+   "good": "보입니다",
+   "why": "이중 피동",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "사용되어지고",
+   "good": "쓰이고",
+   "why": "이중 피동",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "your",
+   "bad": "당신의",
+   "good": "이 / 생략",
+   "why": "영어 your를 직역했다. 한국어에서는 대개 생략한다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "we",
+   "bad": "우리는 ~합니다",
+   "good": "주어를 빼고 대상을 주어로 놓습니다",
+   "why": "영어의 인칭 주어를 직역했다. \"우리는 캐시를 재생성한다\"가 아니라 \"캐시가 매번 새로 만들어집니다\"",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "~를 수행합니다",
+   "good": "~합니다",
+   "why": "기능동사 남용. \"검사를 수행합니다\"는 \"검사합니다\"",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "~에 대한 처리를 진행",
+   "good": "~를 처리",
+   "why": "영어 명사구를 직역한 뒤 기능동사를 붙였다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "파일들을",
+   "good": "파일을",
+   "why": "복수 접미사 남용. 수량이 이미 드러나면 들을 빼야 자연스럽다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "it is important to",
+   "bad": "~하는 것은 중요합니다",
+   "good": "~해야 합니다",
+   "why": "영어 가주어 구문을 직역했다",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "note that",
+   "bad": "주목할 점은 ~라는 것입니다",
+   "good": "~입니다",
+   "why": "영어 강조 구문을 직역했다",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "그것은 ~하기 때문입니다",
+   "good": "~때문입니다",
+   "why": "영어 대명사 주어를 직역했다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "if ... then",
+   "bad": "만약 ~라면, 그러면",
+   "good": "~면",
+   "why": "조건문을 두 겹으로 직역했다",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "한 문장을 원문 길이 그대로 옮기기",
+   "good": "두세 문장으로 끊어 쓰기",
+   "why": "영어 한 문장을 한국어 한 문장으로 고집하면 늘어진다",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "훌륭한 질문입니다",
+   "good": "생략",
+   "why": "내용이 없는 서두",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "좋은 지적입니다",
+   "good": "생략",
+   "why": "내용이 없는 서두",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "완벽합니다!",
+   "good": "생략",
+   "why": "과장",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "~해 보도록 하겠습니다",
+   "good": "~하겠습니다",
+   "why": "군더더기",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "~하는 것을 도와드리겠습니다",
+   "good": "~해 드리겠습니다",
+   "why": "과공손",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "~할 수 있도록 도와드릴 수 있습니다",
+   "good": "~해 드리겠습니다",
+   "why": "가능 표현 중첩",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "commit",
+   "bad": "commit를",
+   "good": "commit을",
+   "why": "t 발음으로 끝나 받침이 있다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "cache",
+   "bad": "cache을",
+   "good": "cache를",
+   "why": "슈 발음으로 끝나 받침이 없다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "API",
+   "bad": "API을",
+   "good": "API를",
+   "why": "이 발음으로 끝나 받침이 없다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "refactoring",
+   "bad": "리팩토링",
+   "good": "리팩터링",
+   "why": "외래어 표기법",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "contents",
+   "bad": "컨텐츠",
+   "good": "콘텐츠",
+   "why": "외래어 표기법",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "message",
+   "bad": "메세지",
+   "good": "메시지",
+   "why": "외래어 표기법",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "thread",
+   "bad": "쓰레드",
+   "good": "스레드",
+   "why": "외래어 표기법",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "application",
+   "bad": "어플리케이션",
+   "good": "애플리케이션",
+   "why": "외래어 표기법",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "navigation",
+   "bad": "네비게이션",
+   "good": "내비게이션",
+   "why": "외래어 표기법",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "할수 있습니다",
+   "good": "할 수 있습니다",
+   "why": "의존명사는 띄어 쓴다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "안됩니다",
+   "good": "안 됩니다",
+   "why": "부정하는 뜻이면 띄어 쓴다. 다만 \"일이 잘 안됩니다\"처럼 안되다가 한 단어인 쓰임도 있어 문맥을 봐야 한다",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "blast radius",
+   "bad": "블라스트 레디우스",
+   "good": "영향 범위",
+   "why": "우리말 용어가 있어 음차할 이유가 없다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "blast radius",
+   "bad": "여파가 미치는 범위",
+   "good": "영향 범위",
+   "why": "풀어쓰기로 늘어졌다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "contract",
+   "bad": "계약",
+   "good": "인터페이스 / 규약",
+   "why": "API 문맥의 contract는 계약이 아니다. 법률 문맥일 때만 계약이다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "cache",
+   "bad": "임시 저장소",
+   "good": "캐시",
+   "why": "정착한 외래어를 되돌리면 오히려 낯설다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "commit",
+   "bad": "제출",
+   "good": "커밋",
+   "why": "정착한 외래어다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "merge",
+   "bad": "합치기",
+   "good": "머지",
+   "why": "정착한 외래어다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "thread",
+   "bad": "실",
+   "good": "스레드",
+   "why": "정착한 외래어다. 한 글자라 문자열 검사는 하지 않는다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "buffer",
+   "bad": "완충 장치",
+   "good": "버퍼",
+   "why": "정착한 외래어다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "source of truth",
+   "bad": "진실의 원천",
+   "good": "원본",
+   "why": "직역하면 뜻이 사라진다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "escape hatch",
+   "bad": "이스케이프 해치",
+   "good": "우회 수단",
+   "why": "음차가 통하지 않는다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "idempotent",
+   "bad": "아이덤포턴트",
+   "good": "멱등",
+   "why": "한자어 용어가 이미 통용된다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "invariant",
+   "bad": "인베리언트",
+   "good": "불변식",
+   "why": "한자어 용어가 이미 통용된다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "ladder",
+   "bad": "레더",
+   "good": "사다리 / 단계",
+   "why": "음차할 이유가 없다. 문맥에 맞는 우리말을 쓴다",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "coupling",
+   "bad": "붙어 있는 정도",
+   "good": "결합도",
+   "why": "국내 설계 문서의 표준 한자어. 풀어쓰면 길어진다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "tight coupling",
+   "bad": "꽉 붙은 구조",
+   "good": "강한 결합 / 결합도가 높다",
+   "why": "결합도의 높낮이로 표현하는 것이 관용이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "cohesion",
+   "bad": "뭉침 정도",
+   "good": "응집도",
+   "why": "결합도와 짝으로 쓰이는 굳은 한자어.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "idempotent",
+   "bad": "여러 번 해도 결과가 같은",
+   "good": "멱등",
+   "why": "멱등이 이미 표준어. 설명문으로 늘이면 문장이 무너진다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "idempotency key",
+   "bad": "중복 막는 열쇠값",
+   "good": "멱등 키",
+   "why": "결제·API 문서에서 멱등 키로 굳었다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "invariant",
+   "bad": "변하면 안 되는 규칙",
+   "good": "불변식 (불변 조건)",
+   "why": "수학·설계 양쪽에서 통용되는 용어가 있다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "race condition",
+   "bad": "순서 뒤바뀜 문제",
+   "good": "경쟁 조건 (경합 조건도 통용)",
+   "why": "OS 교과서 표기가 그대로 실무 용어로 쓰인다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "deadlock",
+   "bad": "서로 막힘",
+   "good": "교착 상태",
+   "why": "교착 상태가 표준. 풀어쓸 이유가 없다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "livelock",
+   "bad": "살아 있는 잠김",
+   "good": "라이브락",
+   "why": "대응 한자어가 정착하지 않아 음차가 낫다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "starvation",
+   "bad": "굶주림",
+   "good": "기아 상태",
+   "why": "교착 상태와 함께 쓰이는 정착 한자어.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "throughput",
+   "bad": "통과량",
+   "good": "처리량",
+   "why": "처리량이 표준. 지연 시간과 짝으로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "latency",
+   "bad": "잠복 시간",
+   "good": "지연 시간",
+   "why": "사전식 직역은 의료 용어가 된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "tail latency",
+   "bad": "꽁지 대기 시간",
+   "good": "테일 레이턴시 (p99 지연 시간)",
+   "why": "실무에서는 백분위 수치로 말하는 편이 더 분명하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "percentile (p95/p99)",
+   "bad": "백분율 순위",
+   "good": "백분위 (p95, p99)",
+   "why": "백분율(%)과 다르다. 백분위가 정확하다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "backward compatible",
+   "bad": "뒤로 호환",
+   "good": "하위 호환",
+   "why": "하위/상위 호환이 국내 표준 짝이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "forward compatible",
+   "bad": "앞으로 호환",
+   "good": "상위 호환",
+   "why": "하위 호환의 반대는 상위 호환이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "breaking change",
+   "bad": "부수는 변경",
+   "good": "하위 호환을 깨는 변경 / 호환성 깨짐",
+   "why": "무엇이 깨지는지 밝혀야 뜻이 산다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "graceful shutdown",
+   "bad": "우아한 종료",
+   "good": "정상 종료 (안전 종료)",
+   "why": "쿠버네티스 한국어 문서도 '종료' 계열로 쓴다. '우아한'은 어색하다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "side effect",
+   "bad": "부작용",
+   "good": "부수 효과",
+   "why": "부작용은 '해로운 결과'로 읽힌다. 함수형 문맥에서는 부수 효과.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "pure function",
+   "bad": "깨끗한 함수",
+   "good": "순수 함수",
+   "why": "React 한국어 문서도 순수 함수로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "referential transparency",
+   "bad": "바꿔 써도 되는 성질",
+   "good": "참조 투명성",
+   "why": "함수형 문헌의 정착 용어다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "immutable",
+   "bad": "변경 못 하는 값",
+   "good": "불변 (불변 객체)",
+   "why": "불변/가변이 짝으로 굳었다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "mutable",
+   "bad": "변할 수 있는",
+   "good": "가변",
+   "why": "불변의 반대말은 가변이다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "mutation (state)",
+   "bad": "돌연변이",
+   "good": "변경 / 상태 변경",
+   "why": "생물학 직역은 대형 오역이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "encapsulation",
+   "bad": "감싸 숨기기",
+   "good": "캡슐화",
+   "why": "캡슐화가 표준. 정보 은닉과 구분해 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "information hiding",
+   "bad": "정보 감추기",
+   "good": "정보 은닉",
+   "why": "은닉이 굳은 한자어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "polymorphism",
+   "bad": "여러 모습 성질",
+   "good": "다형성",
+   "why": "객체지향 기본 용어. 풀어쓸 여지가 없다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "leaky abstraction",
+   "bad": "새는 추상",
+   "good": "추상화 누수",
+   "why": "누수로 옮기면 뜻이 그대로 전달된다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "indirection",
+   "bad": "한 다리 건너기",
+   "good": "간접 참조 / 간접 계층",
+   "why": "간접이라는 한자어로 충분하다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "serialization",
+   "bad": "차례로 늘어놓기",
+   "good": "직렬화",
+   "why": "직렬화/역직렬화가 표준 짝이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "deserialization",
+   "bad": "되돌려 읽기",
+   "good": "역직렬화",
+   "why": "직렬화의 역과정을 가리키는 표준어.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "normalization",
+   "bad": "정상화",
+   "good": "정규화",
+   "why": "정상화는 다른 뜻이다. DB·데이터 문맥 모두 정규화.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "denormalization",
+   "bad": "정규화 해제",
+   "good": "역정규화 (비정규화)",
+   "why": "국내 DB 문서의 관용 표기다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "sharding",
+   "bad": "조각 나눠 저장하기",
+   "good": "샤딩",
+   "why": "외래어가 표준으로 굳은 사례. 억지 한자어를 만들지 않는다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "shard key",
+   "bad": "조각 기준 항목",
+   "good": "샤드 키",
+   "why": "샤딩과 같은 계열로 음차를 유지한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "partition",
+   "bad": "칸 나누기",
+   "good": "파티션 / 분할",
+   "why": "저장소 문맥은 파티션, 일반 문맥은 분할.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "replication",
+   "bad": "베껴 두기",
+   "good": "복제",
+   "why": "복제/복제본이 짧고 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "replica",
+   "bad": "짝퉁 인스턴스",
+   "good": "복제본 (레플리카)",
+   "why": "복제본이 자연스럽다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "consistency",
+   "bad": "한결같음",
+   "good": "일관성",
+   "why": "일관성이 표준. 일치성과 혼용하지 않는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "strong consistency",
+   "bad": "센 일관성",
+   "good": "강한 일관성",
+   "why": "최종 일관성과 대비되는 표준 표기.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "eventual consistency",
+   "bad": "언젠가 같아지는 성질",
+   "good": "최종 일관성 (최종적 일관성)",
+   "why": "클라우드 한국어 문서에서 굳은 표기다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "isolation (ACID)",
+   "bad": "분리성",
+   "good": "격리성 (고립성·독립성도 통용)",
+   "why": "ACID 네 항목은 원자성·일관성·격리성·지속성으로 굳었다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "durability (ACID)",
+   "bad": "튼튼함",
+   "good": "지속성 (스토리지 문맥은 내구성)",
+   "why": "ACID의 D는 지속성. 저장소 가용성 지표는 내구성.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "atomicity",
+   "bad": "쪼갤 수 없음",
+   "good": "원자성",
+   "why": "원자성이 표준 한자어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "atomic operation",
+   "bad": "통째로 하는 연산",
+   "good": "원자적 연산",
+   "why": "원자적이라는 관형형이 이미 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "back-pressure",
+   "bad": "뒤에서 누르는 압력",
+   "good": "백프레셔 (리액티브 문서는 배압)",
+   "why": "국내는 음차가 우세하다. 직역하면 유체역학 용어가 된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "throttling",
+   "bad": "목 조르기",
+   "good": "스로틀링 / 요청 조절",
+   "why": "클라우드 한국어 문서가 스로틀링으로 통일돼 있다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "quota",
+   "bad": "몫",
+   "good": "할당량 (쿼터)",
+   "why": "할당량이 짧고 분명하다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "timeout",
+   "bad": "시간 다 됨",
+   "good": "타임아웃",
+   "why": "외래어가 표준. 억지로 옮기지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "retry with backoff",
+   "bad": "간격을 늘려 가며 다시 시도하기",
+   "good": "백오프 재시도 (지수 백오프)",
+   "why": "실무에서는 백오프라는 음차를 그대로 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "jitter",
+   "bad": "흔들림 값",
+   "good": "지터",
+   "why": "백오프와 함께 음차로 굳었다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "circuit breaker",
+   "bad": "회로 차단기",
+   "good": "서킷 브레이커",
+   "why": "직역하면 전기 부품이 된다. 패턴 이름은 음차.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "bulkhead",
+   "bad": "칸막이벽",
+   "good": "벌크헤드 (격벽)",
+   "why": "패턴 이름으로는 음차가 통용된다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "fan-out",
+   "bad": "부채꼴로 퍼뜨리기",
+   "good": "팬아웃",
+   "why": "메시징·DB 문맥에서 음차가 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "cardinality",
+   "bad": "기수",
+   "good": "카디널리티",
+   "why": "수학 용어 기수로 옮기면 DB 문맥에서 통하지 않는다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "precision",
+   "bad": "정확률",
+   "good": "정밀도",
+   "why": "정밀도/재현율이 굳은 짝이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "recall",
+   "bad": "회수율",
+   "good": "재현율",
+   "why": "회수율은 다른 뜻이다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "cold start",
+   "bad": "차가운 시작",
+   "good": "콜드 스타트",
+   "why": "서버리스 문맥에서 음차가 표준으로 굳었다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "warm-up",
+   "bad": "따뜻하게 하기",
+   "good": "워밍업 (예열)",
+   "why": "워밍업이 자연스럽다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "garbage collection",
+   "bad": "쓰레기 수집",
+   "good": "가비지 컬렉션 (GC)",
+   "why": "직역은 청소 용역처럼 읽힌다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "memory leak",
+   "bad": "메모리 새어 나감",
+   "good": "메모리 누수",
+   "why": "누수라는 한자어가 이미 표준이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "dangling reference/pointer",
+   "bad": "허공에 매달린 포인터",
+   "good": "댕글링 포인터 / 유효하지 않은 참조",
+   "why": "음차 또는 '유효하지 않은 참조'로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "dead code",
+   "bad": "죽어 버린 코드 덩어리",
+   "good": "죽은 코드 (미사용 코드)",
+   "why": "짧게 죽은 코드 또는 미사용 코드로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "unreachable code",
+   "bad": "닿을 수 없는 코드",
+   "good": "도달 불가 코드",
+   "why": "도달이라는 한자어가 정확하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "code coverage",
+   "bad": "코드 포함률",
+   "good": "커버리지 / 테스트 커버리지",
+   "why": "외래어가 도구 이름과 함께 굳었다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "regression",
+   "bad": "퇴행",
+   "good": "회귀 (회귀 버그, 회귀 테스트)",
+   "why": "회귀가 표준. 퇴행은 의학 용어로 읽힌다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "edge case",
+   "bad": "가장자리 사례",
+   "good": "엣지 케이스 (경계 조건)",
+   "why": "음차가 우세하고, 경계 조건도 자연스럽다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "corner case",
+   "bad": "구석 사례",
+   "good": "코너 케이스 (드문 조합)",
+   "why": "음차가 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "off-by-one",
+   "bad": "하나 빗나감 오류",
+   "good": "off-by-one 오류 (오프바이원)",
+   "why": "숫자로 말하는 편이 짧고 분명하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "overflow",
+   "bad": "흘러넘침",
+   "good": "오버플로 (넘침)",
+   "why": "오버플로가 실무 표기다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "underflow",
+   "bad": "아래로 새어 나감",
+   "good": "언더플로",
+   "why": "오버플로와 짝으로 음차를 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "truncation",
+   "bad": "뭉텅 잘라내기",
+   "good": "잘림 (소수점은 절삭)",
+   "why": "짧게 '잘림'으로 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "rounding",
+   "bad": "둥글리기",
+   "good": "반올림 (버림, 올림)",
+   "why": "반올림·버림·올림이 이미 표준 어휘다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "sanitization",
+   "bad": "소독 / 살균",
+   "good": "정제 (입력값 정제, 이스케이프 처리)",
+   "why": "직역하면 위생 용어가 된다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "validation",
+   "bad": "타당성 따지기",
+   "good": "검증 / 유효성 검사",
+   "why": "검증이 표준. 짧게 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "authentication",
+   "bad": "본인 맞는지 확인하기",
+   "good": "인증",
+   "why": "인증 한 단어로 충분하다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "authorization",
+   "bad": "허가 내주기",
+   "good": "인가 / 권한 확인",
+   "why": "인증(AuthN)과 인가(AuthZ)를 구분해야 한다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "privilege escalation",
+   "bad": "등급 올리기",
+   "good": "권한 상승",
+   "why": "보안 문맥의 정착 용어. 장애 대응의 escalation은 '상위 보고'.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "attack surface / surface area",
+   "bad": "공격이 닿는 겉면",
+   "good": "공격 표면",
+   "why": "보안 문맥은 공격 표면, 일반 문맥은 노출 범위.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "public API surface",
+   "bad": "공개된 겉면",
+   "good": "공개 API 범위",
+   "why": "무엇이 공개되는지 범위로 말한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "tech debt",
+   "bad": "기술적 빚",
+   "good": "기술 부채",
+   "why": "부채라는 한자어로 굳었다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "refactoring",
+   "bad": "개작",
+   "good": "리팩터링",
+   "why": "외래어가 표준. 동작을 바꾸는 개작과 구분된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "migration",
+   "bad": "옮겨심기",
+   "good": "마이그레이션 (데이터·조직 문맥은 이관)",
+   "why": "스키마·버전은 마이그레이션, 시스템 이동은 이관.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "rollback",
+   "bad": "뒤로 되감기",
+   "good": "롤백",
+   "why": "배포·트랜잭션 양쪽에서 롤백이 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "rollout",
+   "bad": "점차 펼치기",
+   "good": "배포 (점진 배포, 단계 배포)",
+   "why": "배포라는 정착어로 충분하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "canary release",
+   "bad": "맛보기 배포",
+   "good": "카나리 배포 (카나리아 배포)",
+   "why": "패턴 이름은 음차로 굳었다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "feature flag",
+   "bad": "기능 깃발",
+   "good": "피처 플래그 (기능 플래그)",
+   "why": "깃발로 옮기면 뜻이 사라진다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "observability",
+   "bad": "관찰 가능도",
+   "good": "관측 가능성",
+   "why": "관측 가능성이 정착. 가시성(visibility)과는 다른 개념이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "distributed tracing",
+   "bad": "따라가며 그리기",
+   "good": "분산 추적 (트레이싱)",
+   "why": "추적이라는 한자어가 짧고 정확하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "profiling",
+   "bad": "실행 특성 그리기",
+   "good": "프로파일링",
+   "why": "도구 이름과 함께 음차가 표준이다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "bottleneck",
+   "bad": "목이 좁은 구간",
+   "good": "병목",
+   "why": "병목 두 글자가 표준이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "contention",
+   "bad": "다툼",
+   "good": "경합 (락 경합, 자원 경합)",
+   "why": "경합이 정착 한자어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "lock granularity",
+   "bad": "자물쇠 알갱이 크기",
+   "good": "락 단위 (잠금 범위)",
+   "why": "어디까지 잠그는지를 단위/범위로 말한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "thread safety",
+   "bad": "실 안전성",
+   "good": "스레드 안전 (스레드 안전성)",
+   "why": "스레드는 정착 외래어. 표기는 '쓰레드'가 아니라 '스레드'.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "scope",
+   "bad": "유효 지역",
+   "good": "범위 (변수 문맥은 스코프)",
+   "why": "작업 범위는 '범위', 언어 기능은 '스코프'.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "lifetime",
+   "bad": "살아 있는 시간",
+   "good": "수명 (생존 기간)",
+   "why": "수명이 짧고 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "ownership",
+   "bad": "주인 관계",
+   "good": "소유권",
+   "why": "소유권이 표준 한자어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "borrowing (Rust)",
+   "bad": "잠깐 얻어 쓰기",
+   "good": "빌림 (참조자와 빌림)",
+   "why": "러스트 한국어 번역의 정착 표기를 따른다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "scaffolding",
+   "bad": "비계 세우기",
+   "good": "스캐폴딩 (기본 골격 생성)",
+   "why": "직역하면 건설 용어가 된다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "shim",
+   "bad": "끼움쇠",
+   "good": "심(shim)",
+   "why": "MDN 한국어도 '심'으로 음차한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "polyfill",
+   "bad": "빈틈 메움 코드",
+   "good": "폴리필",
+   "why": "MDN 한국어 표준 표기가 폴리필이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "adapter",
+   "bad": "맞춤 연결자",
+   "good": "어댑터",
+   "why": "패턴 이름은 음차로 굳었다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "facade",
+   "bad": "정면 창구",
+   "good": "파사드",
+   "why": "패턴 이름은 음차가 표준이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "guard clause",
+   "bad": "문지기 구문",
+   "good": "가드 절 (사전 조건 검사)",
+   "why": "가드 절이 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "early return",
+   "bad": "빨리 돌아 나오기",
+   "good": "조기 반환 (얼리 리턴)",
+   "why": "조기 반환이 짧고 분명하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "happy path",
+   "bad": "행복한 길",
+   "good": "정상 경로 (해피 패스)",
+   "why": "직역하면 뜻이 흐려진다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "failure mode",
+   "bad": "고장 나는 방식들",
+   "good": "장애 유형 (실패 양상)",
+   "why": "장애 유형이 실무 표현이다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "fault tolerance",
+   "bad": "장애 버티기",
+   "good": "내결함성",
+   "why": "내결함성이 굳은 한자어다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "high availability",
+   "bad": "잘 안 죽는 구성",
+   "good": "고가용성",
+   "why": "고가용성이 표준이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "dependency",
+   "bad": "딸린 것",
+   "good": "의존성 (패키지 문맥은 의존 패키지)",
+   "why": "의존성이 표준이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "dependency injection",
+   "bad": "의존 객체 넣어 주기",
+   "good": "의존성 주입",
+   "why": "프레임워크 문서의 정착 용어다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "inversion of control",
+   "bad": "통제권 뒤집기",
+   "good": "제어의 역전",
+   "why": "제어의 역전이 표준 번역이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "separation of concerns",
+   "bad": "신경 쓸 것 나누기",
+   "good": "관심사의 분리",
+   "why": "관심사라는 한자어가 이미 통용된다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "least privilege",
+   "bad": "가장 적은 특권",
+   "good": "최소 권한 (최소 권한 원칙)",
+   "why": "보안 문맥의 표준 용어다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "defense in depth",
+   "bad": "깊이 있는 방어",
+   "good": "다층 방어 (심층 방어)",
+   "why": "층을 쌓는다는 뜻이 살아야 한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "memoization",
+   "bad": "기억화",
+   "good": "메모이제이션 (계산 결과 캐싱)",
+   "why": "음차가 표준. 캐싱으로 풀어 써도 자연스럽다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "cache invalidation",
+   "bad": "캐시 무력화",
+   "good": "캐시 무효화",
+   "why": "무효화가 표준 한자어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "stale (data/cache)",
+   "bad": "신선하지 않은 데이터",
+   "good": "오래된 값 / 낡은 캐시",
+   "why": "음식 비유를 벗기고 상태만 말한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "hot path",
+   "bad": "뜨거운 길",
+   "good": "핫 패스 (자주 실행되는 구간)",
+   "why": "직역은 뜻이 사라진다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "flaky test",
+   "bad": "변덕스러운 테스트",
+   "good": "플래키 테스트",
+   "why": "현상을 그대로 말하는 편이 전달된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "hanja",
+   "en": "fail fast",
+   "bad": "빨리 망하기",
+   "good": "조기 실패 (빠른 실패, fail fast)",
+   "why": "조기 실패가 짧고 통한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "quorum",
+   "bad": "과반 모임",
+   "good": "쿼럼 (정족수)",
+   "why": "분산 문맥은 쿼럼, 일반 문맥은 정족수.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "hanja",
+   "en": "deprecated",
+   "bad": "비추천됨",
+   "good": "지원 중단 (사용 중단, 폐기 예정)",
+   "why": "지원이 끊긴다는 뜻을 분명히 한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "thin wrapper",
+   "bad": "얇은 래퍼",
+   "good": "단순 래퍼 / 위임만 하는 래퍼",
+   "why": "두께 대신 하는 일이 적다는 사실을 바로 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "fat model, fat controller",
+   "bad": "두꺼운 모델 / 살찐 컨트롤러",
+   "good": "비대한 모델 / 책임이 몰린 컨트롤러",
+   "why": "한국어에서 이 뜻을 담는 말은 비대하다다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "shallow module",
+   "bad": "얕은 모듈",
+   "good": "shallow module / 전달만 하는 모듈",
+   "why": "얕다는 표현은 한국어에서 가치 판단으로만 읽힌다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "deep copy / shallow copy",
+   "bad": "심층 복사 / 표층 복사",
+   "good": "깊은 복사 / 얕은 복사",
+   "why": "같은 은유라도 복사 맥락에서는 이미 표준 용어다. 절대 바꾸지 마라.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "shallow clone (git)",
+   "bad": "표면만 복제한 저장소",
+   "good": "얕은 클론",
+   "why": "git 한국어 문서에 정착한 표현이다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "deeply nested",
+   "bad": "깊이 파묻힌 구조",
+   "good": "중첩이 깊은 구조 / 중첩 깊이",
+   "why": "중첩 깊이는 정착한 표현이라 그대로 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "flatten (array, config)",
+   "bad": "평평하게 펴다",
+   "good": "평탄화 / 한 단계로 펴다",
+   "why": "평탄화가 이미 표준 번역어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "wide table",
+   "bad": "넓은 테이블",
+   "good": "와이드 테이블",
+   "why": "폭 은유는 미정착이라 실제 특성을 쓴다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "narrow down the scope",
+   "bad": "영역을 협소화합니다",
+   "good": "범위를 좁힙니다",
+   "why": "이 공간 은유는 한국어에도 그대로 있다. 굳이 한자어로 올리지 마라.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "heavy operation / lightweight library",
+   "bad": "부담이 큰 연산 / 몸집이 작은 라이브러리",
+   "good": "무거운 작업 / 가벼운 라이브러리",
+   "why": "무게 은유는 정착했다. 풀어쓰면 오히려 어색하다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "lightweight thread",
+   "bad": "가뿐한 스레드",
+   "good": "경량 스레드",
+   "why": "경량·중량은 굳은 한자어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "hot path",
+   "bad": "뜨거운 경로",
+   "good": "핫 패스",
+   "why": "온도 은유는 한국어로 옮기면 뜻이 사라진다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "hot reload",
+   "bad": "뜨거운 재적용",
+   "good": "핫 리로드",
+   "why": "도구 용어로 정착했다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "warm the cache",
+   "bad": "캐시를 데웁니다 / 캐시를 따뜻하게 만듭니다",
+   "good": "캐시를 미리 채웁니다 (워밍업)",
+   "why": "온도 은유를 벗기고 실제 동작인 선채우기를 쓴다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "warm standby",
+   "bad": "따뜻한 대기 상태",
+   "good": "웜 스탠바이",
+   "why": "인프라 용어로는 웜 스탠바이가 통용된다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "hot data / cold data, cold storage",
+   "bad": "뜨거운 데이터 / 차가운 저장소",
+   "good": "핫 데이터·콜드 데이터 / 콜드 스토리지",
+   "why": "스토리지 등급 용어로 정착한 외래어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "hot spot (partition)",
+   "bad": "뜨거운 지점",
+   "good": "핫스팟 / 부하 집중 구간",
+   "why": "핫스팟은 통용되지만, 뜻을 밝히려면 부하 집중이라 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "dirty read",
+   "bad": "더러운 읽기",
+   "good": "더티 리드",
+   "why": "DB 격리 수준 용어로 정착했다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "dirty flag",
+   "bad": "더러운 플래그",
+   "good": "더티 플래그 / 변경 표시",
+   "why": "더럽다는 위생 은유가 한국어에선 오해를 부른다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "clean architecture",
+   "bad": "깔끔한 아키텍처",
+   "good": "클린 아키텍처",
+   "why": "고유 명칭이라 번역하면 다른 뜻이 된다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "clean build",
+   "bad": "깨끗이 지운 빌드",
+   "good": "클린 빌드",
+   "why": "빌드 도구 용어로 굳었다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "stale data, stale cache",
+   "bad": "신선하지 않은 데이터 / 김빠진 캐시",
+   "good": "오래된 데이터 / 최신이 아닌 캐시",
+   "why": "신선도 은유는 식품에만 쓴다. 최신 여부로 말한다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "fresh data",
+   "bad": "신선한 데이터",
+   "good": "최신 데이터",
+   "why": "데이터에 신선하다는 말을 붙이지 않는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "stale branch",
+   "bad": "상한 브랜치",
+   "good": "오래 방치된 브랜치",
+   "why": "부패 은유는 한국어에서 통하지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "leaky abstraction",
+   "bad": "줄줄 새는 추상화",
+   "good": "추상화 누수 / 구현 세부가 드러난 추상화",
+   "why": "누수라는 한자어로 올리면 자연스러워진다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "memory leak",
+   "bad": "메모리가 줄줄 새는 현상",
+   "good": "메모리 누수",
+   "why": "누수는 정착한 기술용어다. 풀어쓰기 금지.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "brittle test",
+   "bad": "부서지기 쉬운 시험 / 바스러지는 테스트",
+   "good": "깨지기 쉬운 테스트",
+   "why": "테스트 맥락에서는 깨지기 쉽다가 정착했다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "brittle design",
+   "bad": "바스러지는 설계",
+   "good": "변경에 취약한 구조",
+   "why": "설계에는 깨진다는 말이 덜 붙는다. 취약으로 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "flaky test",
+   "bad": "변덕스러운 테스트 / 부스러지는 테스트",
+   "good": "플래키 테스트",
+   "why": "실패가 재현되지 않는다는 뜻을 직접 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "code smell, smelly code",
+   "bad": "코드에서 악취가 납니다",
+   "good": "코드 냄새가 납니다",
+   "why": "코드 냄새는 정착했다. 과장해서 늘이지 마라.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "sticky session",
+   "bad": "끈적한 세션",
+   "good": "스티키 세션 / 세션 고정",
+   "why": "로드밸런서 용어로 정착했고, 뜻은 세션 고정이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "greedy match (regex)",
+   "bad": "욕심 많은 매칭",
+   "good": "탐욕적 매칭 / 그리디 매칭",
+   "why": "정규식 문서에서 탐욕적으로 굳었다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "greedy algorithm",
+   "bad": "욕심쟁이 알고리즘",
+   "good": "탐욕 알고리즘",
+   "why": "교과서 용어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "lazy loading, lazy evaluation",
+   "bad": "게으른 로딩 / 느긋한 계산",
+   "good": "지연 로딩 / 지연 평가",
+   "why": "게으름 은유 대신 지연이라는 한자어가 표준이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "eager loading",
+   "bad": "성급한 로딩 / 열심인 로딩",
+   "good": "즉시 로딩",
+   "why": "lazy의 반대는 즉시로 굳었다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "blind spot",
+   "bad": "눈먼 지점 / 시야가 먼 곳",
+   "good": "사각지대 / 맹점",
+   "why": "한국어에 같은 뜻의 한자어가 이미 있다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "noisy logs, noisy alerts",
+   "bad": "시끄러운 로그 / 소란스러운 알림",
+   "good": "로그 과다 / 알림 과다",
+   "why": "노이즈는 외래어로 정착했지만 시끄럽다는 형용은 안 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "chatty API",
+   "bad": "수다스러운 API",
+   "good": "호출이 잦은 API",
+   "why": "말이 많다는 비유 대신 호출 횟수로 말한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "chunky call",
+   "bad": "덩어리진 호출 / 뭉툭한 호출",
+   "good": "일괄 호출 / 배치 호출",
+   "why": "청크는 정착했지만 chunky는 형용사로 안 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "granularity",
+   "bad": "알갱이 크기 / 입자도",
+   "good": "단위 / 세분화 수준",
+   "why": "곡물 은유는 한국어 기술 글에 없다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "fine-grained permission",
+   "bad": "곱게 간 권한 / 잘게 빻은 권한",
+   "good": "세분화된 권한",
+   "why": "세분화가 표준 표현이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "coarse-grained lock",
+   "bad": "굵은 입자의 락 / 거친 결의 락",
+   "good": "큰 단위 락 / 범위가 넓은 락",
+   "why": "입자 은유를 벗기고 범위로 말한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "tight coupling",
+   "bad": "꽉 조인 결합 / 빽빽한 결합",
+   "good": "강한 결합 / 결합도가 높음",
+   "why": "강결합·결합도가 이미 통용된다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "loose coupling",
+   "bad": "헐렁한 결합 / 느슨하게 풀린 연결",
+   "good": "느슨한 결합 / 낮은 결합도",
+   "why": "느슨한 결합은 정착한 번역어다. 바꾸지 마라.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "tight loop",
+   "bad": "꽉 끼는 루프",
+   "good": "타이트한 루프 / (busy-wait 맥락이면) 바쁜 대기",
+   "why": "coupling의 tight와 뜻이 달라 같은 말로 옮기면 안 된다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "glue code",
+   "bad": "접착제 코드 / 풀칠 코드",
+   "good": "연결 코드 (글루 코드)",
+   "why": "접착제라는 물건 은유는 한국어로 안 통한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "plumbing",
+   "bad": "배관 공사 / 수도관 작업",
+   "good": "기반 연결 작업",
+   "why": "배관은 건축 용어로만 읽힌다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "scaffolding",
+   "bad": "비계 / 발판 세우기",
+   "good": "스캐폴딩 / 기본 골격 생성",
+   "why": "도구 맥락에서는 외래어가 정착했고, 뜻은 골격 생성이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "boilerplate",
+   "bad": "판박이 코드 / 주형 코드",
+   "good": "보일러플레이트 / 상용구 코드",
+   "why": "보일러플레이트가 정착했고 상용구가 대응 한자어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "bikeshedding",
+   "bad": "자전거 보관소 논쟁",
+   "good": "지엽적인 논쟁 / 사소한 데 시간 쓰기",
+   "why": "출처 일화를 모르면 뜻이 전달되지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "yak shaving",
+   "bad": "야크 털 깎기",
+   "good": "곁가지 작업 연쇄",
+   "why": "은유를 남기면 매번 설명이 필요하다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "dogfooding",
+   "bad": "개밥 먹기 / 자기 사료 먹기",
+   "good": "자체 사용 / 내부에서 먼저 써 보기",
+   "why": "직역하면 비속하게 읽힌다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "snowflake server",
+   "bad": "눈송이 서버",
+   "good": "재현 불가 서버",
+   "why": "제각각이라는 함의가 한국어로 전달되지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "pets vs cattle",
+   "bad": "애완동물 대 소떼",
+   "good": "개별 관리 서버 vs 교체 가능한 서버",
+   "why": "축산 은유를 벗기고 관리 방식으로 말한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "foot-gun",
+   "bad": "발에 총 쏘는 기능 / 자기 발등 총",
+   "good": "실수를 유발하는 설계",
+   "why": "총 은유를 빼도 뜻이 온전하다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "sharp edge",
+   "bad": "날카로운 모서리",
+   "good": "함정 (주의 지점)",
+   "why": "함정이 한국어에서 같은 역할을 한다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "happy path",
+   "bad": "행복한 경로 / 행복한 길",
+   "good": "정상 경로 (해피 패스)",
+   "why": "행복은 감정어로만 읽힌다. 정상 경로가 뜻이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "golden path, paved road",
+   "bad": "황금 길 / 포장된 도로",
+   "good": "권장 경로 / 표준 절차",
+   "why": "조직이 밀어 주는 기본 경로라는 뜻을 직접 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "guardrail",
+   "bad": "난간 / 차선 방호벽",
+   "good": "안전장치 (가드레일)",
+   "why": "가드레일은 외래어로 통용되고, 뜻은 안전장치다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "escape hatch",
+   "bad": "탈출 해치 / 비상 탈출구",
+   "good": "우회 수단 / 예외 허용 장치",
+   "why": "선박 은유가 코드 설명에 붙지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "back door",
+   "bad": "뒷문",
+   "good": "백도어",
+   "why": "보안 용어로 외래어가 정착했다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "sidecar",
+   "bad": "곁수레 / 측면 차량",
+   "good": "사이드카",
+   "why": "쿠버네티스 패턴 이름으로 정착했다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "umbrella chart, umbrella project",
+   "bad": "우산 차트 / 우산 프로젝트",
+   "good": "상위 차트 / 포괄 프로젝트",
+   "why": "우산 은유는 한국어로 전달되지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "funnel",
+   "bad": "깔때기",
+   "good": "퍼널 / 전환 단계",
+   "why": "분석 맥락에서 퍼널이 정착했다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "pipeline",
+   "bad": "송유관 / 관로",
+   "good": "파이프라인",
+   "why": "파이프라인은 정착 외래어다. 절대 바꾸지 마라.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "firehose",
+   "bad": "소방 호스로 들이붓듯",
+   "good": "대량 스트림 / 전량 수신",
+   "why": "소방 은유 없이도 양이 많다는 뜻이 전달된다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "fire-and-forget",
+   "bad": "쏘고 잊기 / 발사 후 망각",
+   "good": "단방향 비동기 호출 / fire-and-forget",
+   "why": "군사 은유를 벗기고 동작으로 말한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "errors bubble up",
+   "bad": "에러가 거품처럼 올라옵니다 / 위로 부풀어 오릅니다",
+   "good": "예외가 상위로 전파됩니다",
+   "why": "전파가 이 동작의 표준 한국어다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "event bubbling (DOM)",
+   "bad": "이벤트 거품 현상",
+   "good": "이벤트 버블링",
+   "why": "프런트엔드 용어로 정착했다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "cascading failure",
+   "bad": "폭포처럼 쏟아지는 장애",
+   "good": "연쇄 장애",
+   "why": "연쇄가 짧고 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "ripple effect",
+   "bad": "물결 효과 / 파문이 퍼집니다",
+   "good": "파급 효과 / 영향 범위",
+   "why": "수면 은유 대신 한자어를 쓴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "blast radius",
+   "bad": "여파가 미치는 범위 / 폭발 반경",
+   "good": "영향 범위",
+   "why": "짧고 이미 통용된다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "metaphor",
+   "en": "thundering herd",
+   "bad": "천둥 치는 소떼",
+   "good": "요청 쏠림 / 동시 폭주",
+   "why": "동시에 몰린다는 사실만 남기면 된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "metaphor",
+   "en": "noisy neighbor",
+   "bad": "시끄러운 이웃",
+   "good": "자원 간섭",
+   "why": "공동주택 은유 대신 자원 간섭으로 말한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "metaphor",
+   "en": "deep dive",
+   "bad": "깊이 잠수해 보겠습니다",
+   "good": "자세히 살펴보겠습니다 / 심층 분석",
+   "why": "잠수 은유는 한국어 실무 대화에 없다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "idempotent",
+   "bad": "아이덴포턴트",
+   "good": "멱등(멱등성)",
+   "why": "API·수학 문헌 표준은 '멱등'",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "idempotent",
+   "bad": "이뎀포턴트",
+   "good": "멱등(멱등성)",
+   "why": "API·수학 문헌 표준은 '멱등'",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "coupling / loose coupling",
+   "bad": "커플링",
+   "good": "결합도, 느슨한 결합",
+   "why": "설계 문맥의 표준은 결합도",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "coupling / loose coupling",
+   "bad": "루즈 커플링",
+   "good": "결합도, 느슨한 결합",
+   "why": "설계 문맥의 표준은 결합도",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "cohesion",
+   "bad": "코히전",
+   "good": "응집도",
+   "why": "결합도와 짝으로 굳은 한자어",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "cache",
+   "bad": "캐쉬",
+   "good": "캐시",
+   "why": "이미 표준 표기, 되돌리면 못 알아봄",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "commit",
+   "bad": "변경을 제출했습니다, 확정",
+   "good": "커밋했습니다",
+   "why": "git 용어는 음차가 표준",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "branch",
+   "bad": "가지를 만들다",
+   "good": "브랜치를 만들다",
+   "why": "git 용어는 음차가 표준",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "deploy",
+   "bad": "디플로이",
+   "good": "배포",
+   "why": "이 자리는 한자어가 표준, 음차가 오히려 판교어",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "dependency",
+   "bad": "디펜던시",
+   "good": "의존성",
+   "why": "한자어가 표준 표기",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "literal",
+   "en": "backward compatibility",
+   "bad": "백워드 컴패터빌리티",
+   "good": "하위 호환",
+   "why": "짧고 이미 통용됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "throughput",
+   "bad": "스루풋",
+   "good": "처리량",
+   "why": "한자어가 짧고 표준",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "first-class citizen",
+   "bad": "일급 시민",
+   "good": "일급 객체(일급으로 다루다)",
+   "why": "'일급'은 정착, '시민'은 정착 안 함",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "separation of concerns",
+   "bad": "걱정 분리",
+   "good": "관심사 분리",
+   "why": "'관심사'는 이미 정착한 번역 — 판정: 정착",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "separation of concerns",
+   "bad": "우려 사항 분리",
+   "good": "관심사 분리",
+   "why": "'관심사'는 이미 정착한 번역 — 판정: 정착",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "happy path",
+   "bad": "행복한 경로",
+   "good": "정상 경로",
+   "why": "감정어가 아니라 정상 흐름을 뜻함",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "API surface",
+   "bad": "API 표면",
+   "good": "공개 API 범위(노출 범위)",
+   "why": "surface를 '표면'으로 옮기면 물리적 뜻만 남음",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "latency",
+   "bad": "레이턴시",
+   "good": "지연 시간",
+   "why": "문서 표기는 한자어. 단 테일 레이턴시처럼 복합어로 굳은 경우는 예외",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "side effect",
+   "bad": "사이드 이펙트",
+   "good": "부수 효과",
+   "why": "함수형 문헌 표준은 부수 효과",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "race condition",
+   "bad": "레이스 컨디션",
+   "good": "경쟁 조건",
+   "why": "문서 표기는 '경쟁 조건'이 표준",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "deadlock",
+   "bad": "데드락",
+   "good": "교착 상태",
+   "why": "OS 교과서 표준 한자어",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "starvation",
+   "bad": "스타베이션",
+   "good": "기아 상태",
+   "why": "교착 상태와 짝으로 굳은 용어",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "concurrency / parallelism",
+   "bad": "컨커런시",
+   "good": "동시성, 병렬성",
+   "why": "짝으로 굳은 한자어",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "concurrency / parallelism",
+   "bad": "패러렐리즘",
+   "good": "동시성, 병렬성",
+   "why": "짝으로 굳은 한자어",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "immutable",
+   "bad": "이뮤터블",
+   "good": "불변(불변 객체)",
+   "why": "한자어가 표준",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "eventual consistency",
+   "bad": "이벤추얼 컨시스턴시",
+   "good": "최종 일관성",
+   "why": "분산 시스템 표준 번역이 있음",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "observability",
+   "bad": "옵저버빌리티",
+   "good": "관측 가능성",
+   "why": "제품명이 아니면 한자어로 씀",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "bottleneck",
+   "bad": "보틀넥",
+   "good": "병목",
+   "why": "더 짧고 표준",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "regression",
+   "bad": "리그레션",
+   "good": "회귀(회귀 테스트)",
+   "why": "표준 번역이 이미 있음",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "leaky abstraction",
+   "bad": "새는 추상화",
+   "good": "추상화 누수",
+   "why": "명사구 한자어가 통용됨",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "graceful degradation",
+   "bad": "우아한 성능 저하",
+   "good": "단계적 기능 축소",
+   "why": "기능을 줄여서라도 계속 동작한다는 뜻을 짧게 담는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "sanity check",
+   "bad": "온전성 검사",
+   "good": "정상 동작 확인",
+   "why": "사전 직역, 실무에서 안 쓰는 말",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "breaking change",
+   "bad": "브레이킹 체인지",
+   "good": "하위 호환이 깨지는 변경",
+   "why": "이미 있는 '하위 호환'을 활용",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "flaky test",
+   "bad": "플레이키 테스트",
+   "good": "플래키 테스트",
+   "why": "음차로는 뜻이 안 섬",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "flaky test",
+   "bad": "흐물거리는 테스트",
+   "good": "플래키 테스트",
+   "why": "음차로는 뜻이 안 섬",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "dirty flag / dirty state",
+   "bad": "더러운 상태",
+   "good": "변경됨 표시(수정 여부)",
+   "why": "'더러운'은 오해만 부름",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "dead letter queue",
+   "bad": "죽은 편지 큐",
+   "good": "데드 레터 큐(DLQ)",
+   "why": "직역하면 우편 은유만 남음",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "canary deployment",
+   "bad": "탄광 속 새 배포",
+   "good": "카나리 배포",
+   "why": "은유 설명 말고 용어만 씀",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "canary deployment",
+   "bad": "카나리아 새 배포",
+   "good": "카나리 배포",
+   "why": "은유 설명 말고 용어만 씀",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "smoke test",
+   "bad": "연기 테스트",
+   "good": "스모크 테스트",
+   "why": "음차가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "hook",
+   "bad": "갈고리",
+   "good": "훅",
+   "why": "음차가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "wrapper",
+   "bad": "포장지",
+   "good": "래퍼(감싸는 계층)",
+   "why": "음차 또는 서술로 씀",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "wrapper",
+   "bad": "싸개",
+   "good": "래퍼(감싸는 계층)",
+   "why": "음차 또는 서술로 씀",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "stub / mock",
+   "bad": "그루터기",
+   "good": "스텁, 목 객체",
+   "why": "테스트 도구 이름은 음차가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "stub / mock",
+   "bad": "모조품",
+   "good": "스텁, 목 객체",
+   "why": "테스트 도구 이름은 음차가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "polling",
+   "bad": "여론조사",
+   "good": "폴링(주기적 조회)",
+   "why": "사전 첫 뜻 오역",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "polling",
+   "bad": "투표",
+   "good": "폴링(주기적 조회)",
+   "why": "사전 첫 뜻 오역",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "heartbeat",
+   "bad": "심장 박동",
+   "good": "하트비트",
+   "why": "음차가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "orphan process",
+   "bad": "버려진 프로세스",
+   "good": "고아 프로세스",
+   "why": "교과서에 '고아/좀비'로 정착",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "cache eviction",
+   "bad": "퇴거",
+   "good": "축출(캐시에서 제거)",
+   "why": "'퇴거'는 부동산 용어",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "shard",
+   "bad": "조각",
+   "good": "샤드",
+   "why": "음차가 표준",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "fallback",
+   "bad": "되돌아가기",
+   "good": "폴백(대체 경로)",
+   "why": "음차 또는 '대체'로 씀",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "exponential backoff",
+   "bad": "지수적 물러서기",
+   "good": "지수 백오프(지연 후 재시도)",
+   "why": "'물러서기'로는 뜻이 안 통함",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "mutex",
+   "bad": "상호 배제 장치",
+   "good": "뮤텍스",
+   "why": "개념 설명은 상호 배제, 표기는 뮤텍스",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "nondeterministic",
+   "bad": "논디터미니스틱",
+   "good": "비결정적",
+   "why": "한자어가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "reentrant",
+   "bad": "리엔트런트",
+   "good": "재진입 가능",
+   "why": "한자어가 표준",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "resilience",
+   "bad": "리질리언스",
+   "good": "복원력",
+   "why": "한자어가 짧고 통용됨",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "consumer (API 사용 측)",
+   "bad": "소비자",
+   "good": "호출 측 / 사용 측",
+   "why": "메시징이 아니면 '소비자'는 어색",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "consumer / producer (메시징)",
+   "bad": "받는 쪽",
+   "good": "컨슈머, 프로듀서",
+   "why": "이 맥락은 음차가 정착, 풀어쓰면 도리어 모호",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "consumer / producer (메시징)",
+   "bad": "보내는 쪽으로 풀어쓰기",
+   "good": "컨슈머, 프로듀서",
+   "why": "이 맥락은 음차가 정착, 풀어쓰면 도리어 모호",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "subject (검사 대상)",
+   "bad": "테스트 주체",
+   "good": "테스트 대상",
+   "why": "subject는 '하는 쪽'이 아니라 '되는 쪽'",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "subject (검사 대상)",
+   "bad": "검사 주체",
+   "good": "테스트 대상",
+   "why": "subject는 '하는 쪽'이 아니라 '되는 쪽'",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "Subject (옵저버 패턴, RxJS)",
+   "bad": "주제 객체",
+   "good": "Subject(원어 유지)",
+   "why": "식별자와 붙어 다니므로 원어가 안전",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "store (상태 관리)",
+   "bad": "가게",
+   "good": "스토어",
+   "why": "라이브러리 용어로 음차가 굳음",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "store (상태 관리)",
+   "bad": "창고",
+   "good": "스토어",
+   "why": "라이브러리 용어로 음차가 굳음",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "single responsibility",
+   "bad": "단독 책임",
+   "good": "단일 책임(SRP)",
+   "why": "SOLID 번역이 '단일 책임'으로 고정 — 판정: 정착",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "single responsibility",
+   "bad": "유일 책무",
+   "good": "단일 책임(SRP)",
+   "why": "SOLID 번역이 '단일 책임'으로 고정 — 판정: 정착",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "cross-cutting concern",
+   "bad": "가로지르는 걱정거리",
+   "good": "횡단 관심사",
+   "why": "AOP 문헌에 정착",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "break the contract",
+   "bad": "계약을 깨다",
+   "good": "규약을 어기다(호환이 깨지다)",
+   "why": "contract 직역이 문장까지 번짐",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "single source of truth",
+   "bad": "단일 진실 공급원",
+   "good": "단일 기준 데이터(SSOT)",
+   "why": "직역 조합어, 서술이 더 자연스러움",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "dry run",
+   "bad": "마른 실행",
+   "good": "모의 실행(드라이런)",
+   "why": "직역이 뜻을 잃음",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "rate limit",
+   "bad": "레이트 리밋",
+   "good": "요청 제한(속도 제한)",
+   "why": "한자어가 짧음",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "literal",
+   "en": "test code",
+   "bad": "시험 코드",
+   "good": "테스트 코드",
+   "why": "'시험'은 학교 시험으로 읽힘",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "interface",
+   "bad": "접속면",
+   "good": "인터페이스",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "interface",
+   "bad": "연결면",
+   "good": "인터페이스",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "refactoring",
+   "bad": "코드 개조",
+   "good": "리팩터링",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "log",
+   "bad": "기록부",
+   "good": "로그",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "log",
+   "bad": "통나무",
+   "good": "로그",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "build",
+   "bad": "짓기",
+   "good": "빌드",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "build",
+   "bad": "축조",
+   "good": "빌드",
+   "why": "정착 음차를 되돌리면 안 됨",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "literal",
+   "en": "leader election",
+   "bad": "레더 선출",
+   "good": "리더 선출",
+   "why": "leader는 '리더', '레더'라는 표기는 없음",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "We regenerate the cache on every call.",
+   "bad": "우리는 호출마다 캐시를 재생성합니다.",
+   "good": "호출마다 캐시가 새로 만들어집니다.",
+   "why": "영어 we 직역. 한국어 기술 설명문은 주어를 비웁니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "Let's check the logs first.",
+   "bad": "우리가 먼저 로그를 확인해 봐야 합니다.",
+   "good": "먼저 로그를 보겠습니다.",
+   "why": "we를 주어로 살리면 내 일이 아닌 것처럼 들립니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "I have fixed the bug.",
+   "bad": "저는 이 버그를 수정했습니다.",
+   "good": "이 버그를 수정했습니다.",
+   "why": "1인칭 주어는 한국어에서 기본적으로 생략합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "You can run the tests with npm test.",
+   "bad": "당신은 npm test로 테스트를 실행할 수 있습니다.",
+   "good": "npm test로 테스트를 돌릴 수 있습니다.",
+   "why": "you를 '당신'으로 옮기면 번역서 문체가 됩니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "Your code has a race condition.",
+   "bad": "당신의 코드에 경쟁 조건이 있습니다.",
+   "good": "이 코드에 경쟁 조건이 있습니다.",
+   "why": "소유격 your는 '이'로 바꾸거나 빼는 쪽이 자연스럽습니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "your project's configuration file",
+   "bad": "당신의 프로젝트의 설정 파일을 수정했습니다.",
+   "good": "프로젝트 설정 파일을 수정했습니다.",
+   "why": "'의'가 겹치면 읽기 어려워집니다. 관형격은 한 번만 씁니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "To answer your question, ...",
+   "bad": "당신의 질문에 답하자면, 이 값은 요청마다 새로 계산됩니다.",
+   "good": "이 값은 요청마다 새로 계산됩니다.",
+   "why": "영어식 답변 서두는 한국어에서 통째로 뺍니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "It is recommended that you call init() first.",
+   "bad": "init()을 먼저 호출하는 것이 권장됩니다.",
+   "good": "init()을 먼저 호출해야 합니다.",
+   "why": "It is recommended 직역. 한국어는 당위 표현으로 바로 말합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "handle the request",
+   "bad": "요청에 대한 처리를 진행합니다.",
+   "good": "요청을 처리합니다.",
+   "why": "명사구+기능동사 직역. 동사 하나로 끝납니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "perform validation on the input",
+   "bad": "입력값에 대한 검증을 수행합니다.",
+   "good": "입력값을 검증합니다.",
+   "why": "'수행하다'는 대개 지울 수 있는 군더더기입니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "We performed a refactoring of the module.",
+   "bad": "모듈에 대한 리팩터링 작업을 실시했습니다.",
+   "good": "모듈을 리팩터링했습니다.",
+   "why": "'작업을 실시'는 문장만 길게 만듭니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "Performance needs to be improved.",
+   "bad": "성능 개선을 위한 작업이 필요한 상황입니다.",
+   "good": "성능을 개선해야 합니다.",
+   "why": "동사를 명사로 만든 뒤 '작업', '상황'을 붙이면 뜻이 흐려집니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "We verified that it is reproducible.",
+   "bad": "재현이 가능한지에 대한 확인을 했습니다.",
+   "good": "재현되는지 확인했습니다.",
+   "why": "'~에 대한 확인을 하다'는 '확인하다'로 줄어듭니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This value will be removed in the next release.",
+   "bad": "이 값은 다음 배포에서 제거되어질 예정입니다.",
+   "good": "이 값은 다음 배포에서 제거됩니다.",
+   "why": "'되어질'은 이중 피동입니다. 한국어에 없는 형태입니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This looks like a caching problem.",
+   "bad": "캐시 문제로 보여집니다.",
+   "good": "캐시 문제로 보입니다.",
+   "why": "'보여지다'는 이중 피동입니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This helper is only used in tests.",
+   "bad": "이 헬퍼는 테스트에서만 사용되어집니다.",
+   "good": "이 헬퍼는 테스트에서만 사용됩니다.",
+   "why": "피동은 한 겹으로 충분합니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This function is called twice.",
+   "bad": "이 함수가 두 번 불려집니다.",
+   "good": "이 함수가 두 번 호출됩니다.",
+   "why": "이중 피동이고, 기술 문맥에서는 '호출'이 정착어입니다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "The value is stored by the cache.",
+   "bad": "이 값은 캐시에 의해 저장됩니다.",
+   "good": "이 값은 캐시에 저장됩니다.",
+   "why": "영어 by를 '에 의해'로 옮기면 어색합니다. 조사로 해결됩니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "Tests are run by CI.",
+   "bad": "테스트는 CI에 의해 실행됩니다.",
+   "good": "테스트는 CI에서 돌아갑니다.",
+   "why": "행위자 표시는 '에서'로 충분합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This config is not used anywhere.",
+   "bad": "이 설정은 어디에서도 쓰여지지 않습니다.",
+   "good": "이 설정은 어디에서도 쓰이지 않습니다.",
+   "why": "'쓰여지다'는 이중 피동입니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "We modified several files.",
+   "bad": "여러 파일들을 수정했습니다.",
+   "good": "여러 파일을 수정했습니다.",
+   "why": "'여러'가 이미 복수입니다. '들'이 겹칩니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "Many tests failed.",
+   "bad": "많은 테스트들이 실패했습니다.",
+   "good": "테스트 여러 개가 실패했습니다.",
+   "why": "수량 표현 뒤의 '들'은 군더더기입니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "We updated all dependencies.",
+   "bad": "모든 의존성들을 최신으로 올렸습니다.",
+   "good": "의존성을 전부 최신으로 올렸습니다.",
+   "why": "'모든 ~들'은 복수 표시가 두 번 들어갑니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This error tells you that the config is missing.",
+   "bad": "이 오류는 당신에게 설정이 빠졌다고 알려줍니다.",
+   "good": "이 오류는 설정이 빠졌다는 뜻입니다.",
+   "why": "무생물이 사람에게 말하는 구조는 영어 문법입니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This test shows us that the cache is empty.",
+   "bad": "이 테스트는 우리에게 캐시가 비어 있음을 보여줍니다.",
+   "good": "이 테스트를 보면 캐시가 비어 있습니다.",
+   "why": "'~는 우리에게 ~을 보여준다'는 통째로 영어 구문입니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This change brings a performance improvement.",
+   "bad": "이 변경은 성능 향상을 가져옵니다.",
+   "good": "이렇게 바꾸면 빨라집니다.",
+   "why": "무생물 주어가 무엇을 '가져오는' 구조는 영어식입니다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This document explains the setup.",
+   "bad": "이 문서는 설치 방법을 설명해 줍니다.",
+   "good": "설치 방법은 이 문서에 있습니다.",
+   "why": "사물이 '설명해 주는' 구조는 한국어에서 겉돕니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This patch will help resolve the issue.",
+   "bad": "이 패치는 문제를 해결하는 데 도움을 줄 것입니다.",
+   "good": "이 패치로 문제가 해결됩니다.",
+   "why": "help 직역이 문장을 두 배로 늘립니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "That is because the cache is cleared on every request.",
+   "bad": "그것은 캐시가 요청마다 비워지기 때문입니다.",
+   "good": "캐시가 요청마다 비워지기 때문입니다.",
+   "why": "That is because의 that은 옮기지 않습니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "It is important to release the lock.",
+   "bad": "락을 해제하는 것은 중요합니다.",
+   "good": "락은 반드시 해제해야 합니다.",
+   "why": "It is important to 직역. 한국어는 당위 표현으로 바로 씁니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "It's worth noting that this function is idempotent.",
+   "bad": "주목할 점은 이 함수가 멱등이라는 것입니다.",
+   "good": "이 함수는 멱등입니다.",
+   "why": "영어 강조 구문을 옮기면 빈 절이 하나 늘어납니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "Interestingly, the retry happens twice.",
+   "bad": "재시도가 두 번 일어난다는 점이 흥미롭습니다.",
+   "good": "재시도가 두 번 일어납니다.",
+   "why": "가주어 감상 표현 대신 사실과 판단을 나눠 씁니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This means the request is sent twice.",
+   "bad": "이것은 요청이 두 번 전송된다는 것을 의미합니다.",
+   "good": "그래서 요청이 두 번 전송됩니다.",
+   "why": "This means 직역. 접속사 하나로 끝납니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "If the test fails, then check the log.",
+   "bad": "만약 테스트가 실패한다면, 그러면 로그를 확인하세요.",
+   "good": "테스트가 실패하면 로그를 보세요.",
+   "why": "if~then의 then은 한국어 어미에 이미 들어 있습니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "in the case of a timeout",
+   "bad": "타임아웃인 경우에 있어서는 재시도를 합니다.",
+   "good": "타임아웃이면 재시도합니다.",
+   "why": "'경우에 있어서'는 어미 하나로 줄어듭니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "For that reason, we rolled back.",
+   "bad": "그러한 이유로 인하여 배포를 되돌렸습니다.",
+   "good": "그래서 배포를 되돌렸습니다.",
+   "why": "'~로 인하여'는 대개 '그래서'로 끝납니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "in terms of performance",
+   "bad": "성능의 관점에서 보았을 때 이 방식이 더 낫습니다.",
+   "good": "성능만 보면 이 방식이 낫습니다.",
+   "why": "in terms of 직역이 수식절을 늘립니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "with respect to memory usage",
+   "bad": "메모리 사용량에 있어서는 차이가 없습니다.",
+   "good": "메모리 사용량은 차이가 없습니다.",
+   "why": "'~에 있어서'는 조사 '은/는'으로 충분합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "things like retries and timeouts",
+   "bad": "재시도나 타임아웃과 같은 것들을 먼저 확인했습니다.",
+   "good": "재시도와 타임아웃부터 확인했습니다.",
+   "why": "'~와 같은 것들'은 항목을 그대로 나열하면 사라집니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This function has been working this way for a long time.",
+   "bad": "이 함수는 오랫동안 이렇게 동작해 왔습니다.",
+   "good": "이 함수는 예전부터 이렇게 동작합니다.",
+   "why": "현재완료를 '~해 왔습니다'로 옮기면 늘어집니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "I had already run the tests.",
+   "bad": "테스트는 이미 실행했었습니다.",
+   "good": "테스트는 이미 실행했습니다.",
+   "why": "과거완료 직역. 시점은 '이미'가 이미 표시합니다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "I will clean this up in the next commit.",
+   "bad": "다음 커밋에서 이 부분을 정리할 것입니다.",
+   "good": "다음 커밋에서 이 부분을 정리하겠습니다.",
+   "why": "will 직역보다 '-겠습니다'가 자연스럽습니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "I fixed the function that was causing slow responses because it rebuilt the cache on every call.",
+   "bad": "호출마다 캐시를 새로 만들어서 응답을 느리게 만들고 있던 이 함수를 수정했습니다.",
+   "good": "이 함수가 호출마다 캐시를 새로 만들고 있었습니다. 그래서 응답이 느렸고, 지금은 고쳤습니다.",
+   "why": "영어 관계절을 명사 앞에 쌓지 말고 문장을 끊습니다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "This change removes the cache rebuild, which reduces latency, while all tests still pass and backward compatibility is preserved.",
+   "bad": "이 변경은 캐시 재생성을 없애 지연 시간을 줄이면서, 동시에 모든 테스트를 통과하고 하위 호환도 유지합니다.",
+   "good": "캐시 재생성을 없애 지연 시간을 줄였습니다. 테스트는 전부 통과하고 하위 호환도 그대로입니다.",
+   "why": "영어 한 문장을 한국어 한 문장으로 옮기면 늘어집니다. 끊어 씁니다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "Also, I added logs. Also, I strengthened the tests.",
+   "bad": "또한 로그를 추가했습니다. 또한 테스트도 보강했습니다.",
+   "good": "로그를 추가하고 테스트도 보강했습니다.",
+   "why": "Also를 문장마다 옮기면 읽는 리듬이 끊깁니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "Therefore we disabled the cache. Therefore responses got faster.",
+   "bad": "따라서 캐시를 껐습니다. 따라서 응답이 빨라졌습니다.",
+   "good": "캐시를 껐더니 응답이 빨라졌습니다.",
+   "why": "인과는 접속 부사보다 어미로 붙이는 쪽이 짧습니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This structure is extensible and flexible.",
+   "bad": "이 구조는 확장적이고 유연적입니다.",
+   "good": "이 구조는 확장성이 좋고 유연합니다.",
+   "why": "'-적'을 아무 데나 붙이면 없는 말이 됩니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "in terms of readability",
+   "bad": "가독성적인 측면에서 개선이 필요합니다.",
+   "good": "가독성을 개선해야 합니다.",
+   "why": "'-적인 측면에서'는 빼도 뜻이 그대로 남습니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This improves stability, scalability, and maintainability.",
+   "bad": "이 방식은 안정성과 확장성과 유지보수성을 모두 향상시킵니다.",
+   "good": "이 방식은 안정성, 확장성, 유지보수성이 모두 좋아집니다.",
+   "why": "'-성' 명사를 나열하면 무슨 말인지 흐려집니다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "We externalized the configuration.",
+   "bad": "설정을 외부화하는 작업을 진행했습니다.",
+   "good": "설정을 별도 파일로 분리했습니다.",
+   "why": "'-화' 뒤에 '작업을 진행'까지 붙으면 두 겹으로 늘어납니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This class has three dependencies.",
+   "bad": "이 클래스는 세 개의 의존성을 가지고 있습니다.",
+   "good": "이 클래스는 의존성이 세 개입니다.",
+   "why": "have 직역. 한국어는 '있다'로 씁니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "I modified three files.",
+   "bad": "3개의 파일을 수정했습니다.",
+   "good": "파일 3개를 수정했습니다.",
+   "why": "영어 수량 표현 순서를 그대로 두면 어색합니다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "This is a race condition.",
+   "bad": "이것은 하나의 경쟁 조건입니다.",
+   "good": "경쟁 조건입니다.",
+   "why": "영어 부정관사는 옮기지 않습니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This is one of the most common mistakes.",
+   "bad": "이것은 가장 흔한 실수들 중의 하나입니다.",
+   "good": "흔한 실수입니다.",
+   "why": "one of the 직역은 길기만 합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "You need to adjust the retry count.",
+   "bad": "재시도 횟수를 조정할 필요가 있습니다.",
+   "good": "재시도 횟수를 조정해야 합니다.",
+   "why": "need to 직역. '-해야 합니다'가 짧습니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This value ends up being computed twice.",
+   "bad": "이 값이 두 번 계산되게 됩니다.",
+   "good": "이 값이 두 번 계산됩니다.",
+   "why": "'되게 됩니다'는 피동이 겹친 형태입니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This setting disables the cache.",
+   "bad": "이 설정이 캐시를 비활성화시켜 줍니다.",
+   "good": "이 설정은 캐시를 비활성화합니다.",
+   "why": "'-화시키다'는 '-하다'로 충분합니다. '-해 주다'도 군더더기입니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "Don't forget to run the migration.",
+   "bad": "마이그레이션을 실행하는 것을 잊지 마세요.",
+   "good": "마이그레이션도 실행해야 합니다.",
+   "why": "Don't forget to 직역보다 할 일을 바로 말합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "If you want, you can turn this check off.",
+   "bad": "만약 당신이 원한다면 이 검사를 끌 수 있습니다.",
+   "good": "필요하면 이 검사를 끌 수 있습니다.",
+   "why": "if you want는 '필요하면'으로 줄입니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "As mentioned above, this path is unused.",
+   "bad": "위에서 언급된 바와 같이 이 경로는 사용되지 않습니다.",
+   "good": "앞에서 말했듯이 이 경로는 쓰이지 않습니다.",
+   "why": "영어 수동 인용 구문을 능동으로 바꿉니다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "Let's talk about the caching strategy.",
+   "bad": "이제 캐시 전략에 대해 이야기해 봅시다.",
+   "good": "캐시 전략을 보겠습니다.",
+   "why": "영어식 진행 안내문은 한국어에서 대개 뺍니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "It is not that this approach doesn't work.",
+   "bad": "이 방식이 동작하지 않는 것은 아닙니다.",
+   "good": "이 방식도 동작하기는 합니다.",
+   "why": "이중 부정을 그대로 옮기면 뜻이 늦게 도착합니다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "I think this part is the cause.",
+   "bad": "저는 이 부분이 원인이라고 생각합니다.",
+   "good": "이 부분이 원인으로 보입니다.",
+   "why": "I think 직역보다 추정 어미로 처리합니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "There is a bug in this handler.",
+   "bad": "이 핸들러에는 하나의 버그가 존재합니다.",
+   "good": "이 핸들러에 버그가 있습니다.",
+   "why": "there is 직역에 '존재'까지 붙으면 무거워집니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This makes the code more readable.",
+   "bad": "이것은 코드를 더 읽기 쉽게 만들어 줍니다.",
+   "good": "이렇게 하면 코드가 읽기 쉬워집니다.",
+   "why": "make 직역 '만들어 주다'는 대개 '-어집니다'로 바뀝니다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "syntax",
+   "en": "This flag allows you to skip the cache.",
+   "bad": "이 플래그는 당신이 캐시를 건너뛸 수 있도록 허용합니다.",
+   "good": "이 플래그를 주면 캐시를 건너뜁니다.",
+   "why": "allow you to 직역은 주어와 목적어를 둘 다 늘립니다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "The tests are being run.",
+   "bad": "테스트가 실행되고 있는 중입니다.",
+   "good": "테스트가 돌고 있습니다.",
+   "why": "진행 표현에 '중'까지 겹칩니다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "syntax",
+   "en": "And I also made it write logs.",
+   "bad": "그리고 로그도 남기도록 했습니다.",
+   "good": "로그도 남기도록 했습니다.",
+   "why": "And로 문장을 시작하는 습관은 한국어에서 더 튑니다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "deploy",
+   "bad": "디플로이했습니다",
+   "good": "배포했습니다",
+   "why": "배포가 표준 번역어로 굳었고 릴리스 노트·운영 문서도 모두 배포로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "fix",
+   "bad": "픽스했습니다",
+   "good": "수정했습니다",
+   "why": "픽스는 구어 전용이고 커밋 메시지·문서에서는 수정이 표준이다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "there is an issue",
+   "bad": "이 부분에 이슈가 있습니다",
+   "good": "이 부분에 문제가 있습니다",
+   "why": "이슈는 이슈 트래커의 티켓을 뜻할 때만 남기고, 문제라는 뜻이면 문제로 쓴다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "confirm",
+   "bad": "컨펌 부탁드립니다",
+   "good": "확인 부탁드립니다",
+   "why": "결재 절차면 승인, 단순 검토면 확인으로 갈라 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "agree",
+   "bad": "어그리합니다",
+   "good": "동의합니다",
+   "why": "동의가 더 짧고 문서에 쓰는 말이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "assign",
+   "bad": "저에게 어사인해 주세요",
+   "good": "저에게 배정해 주세요",
+   "why": "배정 또는 담당자 지정이 문서용 표현이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "share",
+   "bad": "쉐어하겠습니다",
+   "good": "공유하겠습니다",
+   "why": "공유가 표준이고 쉐어는 외래어 표기법에도 어긋난다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "follow up",
+   "bad": "팔로업하겠습니다",
+   "good": "후속 처리하겠습니다",
+   "why": "후속 처리·후속 작업이 문서에서 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "check the logs",
+   "bad": "로그를 체크했습니다",
+   "good": "로그를 확인했습니다",
+   "why": "확인이 표준이다. 다만 헬스 체크·체크박스·체크섬은 굳은 말이라 건드리지 않는다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "I'll lead this",
+   "bad": "제가 리드하겠습니다",
+   "good": "제가 맡겠습니다",
+   "why": "맡다·주도하다로 쓰고, 직책 이름일 때만 리드를 남긴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "put it up for review",
+   "bad": "리뷰 태웠습니다",
+   "good": "리뷰를 요청했습니다",
+   "why": "리뷰를 태운다는 사내 구어다. 글에서는 요청·등록으로 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "let's sync up",
+   "bad": "내일 싱크 맞춰요",
+   "good": "내일 논의하죠",
+   "why": "사람 사이는 논의·조율, 데이터 일치는 동기화로 갈라 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "align on direction",
+   "bad": "방향을 얼라인합시다",
+   "good": "방향을 맞춥시다",
+   "why": "맞추다·합의하다로 충분하고, 정렬은 UI 배치에만 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "spec out / descope",
+   "bad": "이번 범위에서 스펙아웃했습니다",
+   "good": "이번 범위에서 제외했습니다",
+   "why": "제외가 정확하다. 스펙아웃은 뜻이 반대로 읽히기도 한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "develop it further",
+   "bad": "더 디벨롭해 보겠습니다",
+   "good": "더 개선해 보겠습니다",
+   "why": "개선·발전이 표준이고 개발과 혼동되지 않는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "contact",
+   "bad": "담당자에게 컨택했습니다",
+   "good": "담당자에게 연락했습니다",
+   "why": "연락이 표준 문어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "drop",
+   "bad": "이 기능은 드랍했습니다",
+   "good": "이 기능은 제외했습니다",
+   "why": "제외·중단이 정확하고 드랍은 표기도 비표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "hold",
+   "bad": "일단 홀드하겠습니다",
+   "good": "일단 보류하겠습니다",
+   "why": "보류가 표준 문어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "performance",
+   "bad": "퍼포먼스가 나쁩니다",
+   "good": "성능이 떨어집니다",
+   "why": "성능이 표준 기술용어다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "side effect",
+   "bad": "사이드 이펙트가 있습니다",
+   "good": "부수 효과가 있습니다",
+   "why": "부수 효과가 표준 용어다. 의도치 않은 악영향이면 부작용으로 쓴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "dependency",
+   "bad": "디펜던시가 꼬였습니다",
+   "good": "의존성이 꼬였습니다",
+   "why": "의존성이 이미 표준 한자어 용어다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "update the component's state",
+   "bad": "이 컴포넌트의 state를 업데이트합니다",
+   "good": "이 컴포넌트의 상태를 갱신합니다",
+   "why": "식별자 이름이 아니라 개념을 가리키면 한국어 용어로 쓴다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "call this function",
+   "bad": "이 function을 call합니다",
+   "good": "이 함수를 호출합니다",
+   "why": "함수·호출은 표준 한국어 용어가 있다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "resource (headcount)",
+   "bad": "리소스가 부족합니다",
+   "good": "인력이 부족합니다",
+   "why": "사람을 뜻하면 인력·여력, CPU·메모리를 뜻할 때만 자원·리소스로 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "decision",
+   "bad": "디시전이 필요합니다",
+   "good": "결정이 필요합니다",
+   "why": "결정이 표준이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "remind",
+   "bad": "리마인드 드립니다",
+   "good": "다시 안내드립니다",
+   "why": "다시 알려 드립니다·재안내가 문어 표현이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "be involved",
+   "bad": "저도 인볼브되어 있습니다",
+   "good": "저도 참여하고 있습니다",
+   "why": "참여가 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "rejected",
+   "bad": "리젝됐습니다",
+   "good": "반려됐습니다",
+   "why": "반려·거절이 문어다. PR 상태 표시는 영문 그대로 둔다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "approve",
+   "bad": "어프루브했습니다",
+   "good": "승인했습니다",
+   "why": "승인이 표준이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "support",
+   "bad": "이 옵션을 서포트합니다",
+   "good": "이 옵션을 지원합니다",
+   "why": "지원이 표준 번역어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "try",
+   "bad": "한번 트라이해 보겠습니다",
+   "good": "한번 시도해 보겠습니다",
+   "why": "시도가 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "install",
+   "bad": "패키지를 인스톨했습니다",
+   "good": "패키지를 설치했습니다",
+   "why": "설치가 표준이고 인스톨은 명령어 이름으로만 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "run the script",
+   "bad": "스크립트를 런했습니다",
+   "good": "스크립트를 실행했습니다",
+   "why": "실행이 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "merge",
+   "bad": "머지 쳤습니다",
+   "good": "머지했습니다",
+   "why": "머지는 그대로 쓰되 치다·때리다 같은 구어 동사를 붙이지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "delayed",
+   "bad": "일정이 딜레이됐습니다",
+   "good": "일정이 지연됐습니다",
+   "why": "지연이 표준이고 지연 시간과도 짝이 맞는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "impact",
+   "bad": "임팩트가 큽니다",
+   "good": "영향이 큽니다",
+   "why": "영향이 표준이고 영향 범위와도 짝이 맞는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "response / request",
+   "bad": "리스폰스가 느립니다",
+   "good": "응답이 느립니다",
+   "why": "응답·요청이 표준 용어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "validation",
+   "bad": "밸리데이션을 추가했습니다",
+   "good": "검증을 추가했습니다",
+   "why": "검증이 표준이고 입력 검사도 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "config",
+   "bad": "컨피그를 바꿨습니다",
+   "good": "설정을 바꿨습니다",
+   "why": "설정이 표준이다. 파일 이름을 가리킬 때만 config로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "input / output",
+   "bad": "인풋과 아웃풋을 비교했습니다",
+   "good": "입력과 출력을 비교했습니다",
+   "why": "입력·출력이 표준 용어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "priority",
+   "bad": "프라이어리티가 높습니다",
+   "good": "우선순위가 높습니다",
+   "why": "우선순위가 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "ignore",
+   "bad": "이 경고는 이그노어했습니다",
+   "good": "이 경고는 무시했습니다",
+   "why": "무시가 표준이고 설정 항목 이름일 때만 영문을 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "notify",
+   "bad": "노티 드리겠습니다",
+   "good": "알려 드리겠습니다",
+   "why": "알림·통보가 문어이고 노티는 줄임 구어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "agenda",
+   "bad": "어젠다를 정리했습니다",
+   "good": "안건을 정리했습니다",
+   "why": "안건이 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "ASAP",
+   "bad": "에이셉으로 처리하겠습니다",
+   "good": "최대한 빨리 처리하겠습니다",
+   "why": "구어 약어를 문서에 그대로 쓰지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "capacity",
+   "bad": "캐파가 안 됩니다",
+   "good": "여력이 없습니다",
+   "why": "사람·일정은 여력, 시스템은 처리 용량으로 갈라 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "detail",
+   "bad": "디테일을 확인해 주세요",
+   "good": "세부 사항을 확인해 주세요",
+   "why": "세부 사항이 문어다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "workaround",
+   "bad": "워크어라운드로 넘겼습니다",
+   "good": "우회 방법으로 넘겼습니다",
+   "why": "우회 방법·임시 조치가 통용된다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "communicate",
+   "bad": "팀과 커뮤니케이션했습니다",
+   "good": "팀과 논의했습니다",
+   "why": "논의·전달·소통 중 맥락에 맞는 말을 고른다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "deprecated",
+   "bad": "이 API는 deprecated 됐습니다",
+   "good": "이 API는 폐기 예정입니다",
+   "why": "사용 중단·폐기 예정이 표준이고, 영어 서술어를 한국어 문장에 붙이지 않는다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "raise an issue",
+   "bad": "이슈 레이즈하겠습니다",
+   "good": "문제를 제기하겠습니다",
+   "why": "제기하다가 문어이고, 티켓을 만드는 뜻이면 이슈를 등록하겠습니다로 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "iterate over the array",
+   "bad": "array를 iterate합니다",
+   "good": "배열을 순회합니다",
+   "why": "배열·순회가 표준 용어다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "return a value",
+   "bad": "value를 리턴합니다",
+   "good": "값을 반환합니다",
+   "why": "값·반환이 표준 용어다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "simple",
+   "bad": "구조가 심플합니다",
+   "good": "구조가 단순합니다",
+   "why": "단순하다·간단하다가 표준이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "pangyo",
+   "en": "heavy query",
+   "bad": "쿼리가 헤비합니다",
+   "good": "쿼리가 무겁습니다",
+   "why": "무겁다·부담이 크다가 자연스럽다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "clear",
+   "bad": "조건이 클리어합니다",
+   "good": "조건이 명확합니다",
+   "why": "명확하다, 조건을 충족한다는 뜻이면 충족한다로 갈라 쓴다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "kick off",
+   "bad": "다음 주에 킥오프합니다",
+   "good": "다음 주에 착수합니다",
+   "why": "착수·시작이 문어다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "action item",
+   "bad": "액션 아이템을 정리했습니다",
+   "good": "후속 작업을 정리했습니다",
+   "why": "후속 작업·할 일이 문어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "ground rule",
+   "bad": "그라운드 룰을 정합시다",
+   "good": "기본 규칙을 정합시다",
+   "why": "기본 규칙이 뜻이 바로 통한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "tech spec",
+   "bad": "테크 스펙 문서를 썼습니다",
+   "good": "기술 설계 문서를 썼습니다",
+   "why": "기술 설계서·설계 문서가 문어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "deadline",
+   "bad": "데드라인이 다음 주입니다",
+   "good": "기한이 다음 주입니다",
+   "why": "기한·마감일이 문어다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "roll out",
+   "bad": "단계적으로 롤아웃합니다",
+   "good": "순차적으로 배포합니다",
+   "why": "배포로 통일하고 규모를 나타내려면 순차·단계적을 붙인다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "escalate",
+   "bad": "에스컬레이션하겠습니다",
+   "good": "상위에 보고하겠습니다",
+   "why": "보고·이관이 문어다. 장애 대응 절차 이름일 때는 그대로 두어도 된다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "FYI",
+   "bad": "FYI, 로그도 남겼습니다",
+   "good": "참고로 로그도 남겼습니다",
+   "why": "참고로가 한국어 문어 표현이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "pangyo",
+   "en": "TBD",
+   "bad": "이 항목은 TBD입니다",
+   "good": "이 항목은 미정입니다",
+   "why": "미정이 짧고 분명하다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "수정했다. 테스트도 추가했다.",
+   "good": "수정했습니다. 테스트도 추가했습니다.",
+   "why": "대화 답변의 기본 종결은 ~습니다다. 평서체 ~한다는 쓰지 않는다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "고쳤어요. 테스트는 전부 통과합니다.",
+   "good": "고쳤습니다. 테스트는 전부 통과합니다.",
+   "why": "한 답변에서 ~해요와 ~습니다를 섞지 않는다. 기본은 ~습니다다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "답변 전체를 ~해요체로 씀",
+   "good": "기본은 ~습니다, 가벼운 맞장구 한두 문장만 ~해요",
+   "why": "~해요체 허용 범위는 한 답변에 한두 문장까지다. 그 이상이면 어투가 바뀐 것이다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "이거 고치면 될 듯",
+   "good": "이 부분을 고치면 됩니다",
+   "why": "반말과 구어 축약은 쓰지 않는다. 동료체는 존댓말이다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "- 캐시를 다시 만들지 않도록 수정했습니다\n- 테스트 추가",
+   "good": "- 캐시 재생성 제거\n- 테스트 추가",
+   "why": "목록과 할 일 항목은 명사구로 통일한다. 문장과 명사구를 섞지 않는다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "캐시를 새로 만들지 않도록 고쳤습니다 (커밋 제목)",
+   "good": "캐시 재생성 제거 (커밋 제목)",
+   "why": "커밋 제목과 PR 제목에는 존댓말을 쓰지 않는다. 명사구나 평서형으로 쓴다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "Please check",
+   "bad": "확인하십시오",
+   "good": "확인해 주세요",
+   "why": "~하십시오는 문서체다. 대화에서는 ~하세요나 ~해 주세요가 자연스럽다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "해야 한다.",
+   "good": "해야 합니다.",
+   "why": "사용자에게 하는 말은 존댓말로 끝낸다. 인용이 아니면 평서체를 쓰지 않는다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "I can help you with that",
+   "bad": "~해 드릴 수 있습니다",
+   "good": "~하겠습니다",
+   "why": "가능 표현과 겸양이 겹친 과공손이다. 할 일은 바로 하겠다고 쓴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "~하도록 하겠습니다",
+   "good": "~하겠습니다",
+   "why": "하도록 하다는 사역 표현을 불필요하게 덧댄 형태다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "I'm sorry, but",
+   "bad": "죄송하지만",
+   "good": "(삭제하고 사실부터)",
+   "why": "사과로 문장을 열지 않는다. 원인과 사실을 먼저 쓴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "I'm so sorry about that",
+   "bad": "정말 죄송합니다",
+   "good": "죄송합니다",
+   "why": "사과는 한 문장까지다. 강조 부사를 붙이면 본론이 밀린다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "~하실 수 있으십니다",
+   "good": "~하실 수 있습니다",
+   "why": "이중 존대다. 존대 어미는 한 번만 붙인다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "I hope this helps!",
+   "bad": "도움이 되셨으면 좋겠습니다",
+   "good": "(삭제)",
+   "why": "내용이 없는 맺음말이다. 결과만 남긴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "Let me know if you have any questions!",
+   "bad": "궁금한 점이 있으면 언제든 말씀해 주세요",
+   "good": "(삭제) 또는 필요하면 말씀해 주세요",
+   "why": "상담원 맺음말이다. 동료는 이런 문장으로 끝내지 않는다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "Happy to help with anything else",
+   "bad": "무엇이든 도와드리겠습니다",
+   "good": "(삭제)",
+   "why": "범위가 없는 호의 표현은 정보가 없다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "If you don't mind",
+   "bad": "혹시 괜찮으시다면",
+   "good": "괜찮으시면",
+   "why": "혹시는 군더더기다. 조심하는 말을 겹치지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "Speaking of which, let me explain",
+   "bad": "~에 대해서 말씀드리자면",
+   "good": "(삭제하고 바로 본론)",
+   "why": "본론을 예고하는 문장은 본론을 늦추기만 한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "Let me walk you through this step by step",
+   "bad": "지금부터 차근차근 설명드리겠습니다",
+   "good": "(삭제하고 바로 설명)",
+   "why": "설명을 예고하지 않고 설명한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "After I checked, I found that",
+   "bad": "제가 확인해 본 결과",
+   "good": "확인해 보니",
+   "why": "1인칭 주어를 매 문장에 넣지 않는다. 한국어는 주어를 생략한다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "고객님",
+   "good": "(호칭 생략)",
+   "why": "상담 호칭이다. 동료 사이에는 호칭을 쓰지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "I think that",
+   "bad": "제 생각에는",
+   "good": "(삭제하고 근거를 쓴다)",
+   "why": "근거가 있으면 단정하고, 없으면 무엇이 불확실한지 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "You could modify it like this",
+   "bad": "이렇게 수정할 수 있습니다",
+   "good": "이렇게 수정하면 됩니다",
+   "why": "가능형을 남용하면 판단을 미루는 말투가 된다. 권고라면 권고로 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "That's a great point!",
+   "bad": "아주 좋은 지적입니다",
+   "good": "맞습니다",
+   "why": "칭찬을 빼고 동의만 남긴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "Exactly right!",
+   "bad": "정확히 맞습니다!",
+   "good": "맞습니다",
+   "why": "강조 부사와 느낌표가 정보를 늘리지 않는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "successfully completed",
+   "bad": "성공적으로",
+   "good": "(삭제)",
+   "why": "successfully 직역이다. 한국어는 완료했다고만 쓴다.",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "dramatically faster",
+   "bad": "엄청나게 빨라집니다",
+   "good": "3배 빨라집니다",
+   "why": "과장 부사 대신 수치를 쓴다. 수치가 없으면 부사도 빼다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "powerful feature",
+   "bad": "강력한 기능입니다",
+   "good": "~을 할 수 있습니다",
+   "why": "마케팅 형용사다. 기능은 하는 일로 설명한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "Surprisingly,",
+   "bad": "놀랍게도",
+   "good": "(삭제)",
+   "why": "놀람은 정보가 아니다. 예상과 다른 이유를 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "JSON",
+   "bad": "JSON를",
+   "good": "JSON을",
+   "why": "발음 [제이슨]이 ㄴ 받침으로 끝나므로 을이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "SQL",
+   "bad": "SQL를",
+   "good": "SQL을",
+   "why": "발음 [에스큐엘]이 ㄹ 받침으로 끝나므로 을이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "with the URL",
+   "bad": "URL으로",
+   "good": "URL로",
+   "why": "ㄹ 받침 뒤에는 으로가 아니라 로다. SQL, XML, HTML도 같다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "UUID",
+   "bad": "UUID을",
+   "good": "UUID를",
+   "why": "발음 [유유아이디]가 모음으로 끝나므로 를이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "S3",
+   "bad": "S3을",
+   "good": "S3를",
+   "why": "발음 [에스쓰리]가 모음으로 끝나므로 를이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "React",
+   "bad": "React을",
+   "good": "React를",
+   "why": "철자는 t로 끝나지만 발음 [리액트]는 모음으로 끝난다. 대표적 함정이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "Rust",
+   "bad": "Rust을",
+   "good": "Rust를",
+   "why": "발음 [러스트]가 모음으로 끝난다. commit과 달리 끝에 으 소리가 붙는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "GitHub",
+   "bad": "GitHub을",
+   "good": "GitHub를",
+   "why": "발음 [깃허브]가 모음으로 끝나므로 를이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "token",
+   "bad": "token를",
+   "good": "token을",
+   "why": "발음 [토큰]이 ㄴ 받침으로 끝나므로 을이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "queue",
+   "bad": "queue을",
+   "good": "queue를",
+   "why": "발음 [큐]가 모음으로 끝나므로 를이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "the commit is",
+   "bad": "commit가",
+   "good": "commit이",
+   "why": "이/가도 같은 규칙이다. [커밋]은 받침이 있으므로 이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "commit and branch",
+   "bad": "commit와",
+   "good": "commit과",
+   "why": "과/와도 같은 규칙이다. 받침이 있으면 과다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "cache 를",
+   "good": "cache를",
+   "why": "조사는 원어에 붙여 쓴다. 영문과 한글 사이를 띄우는 규칙의 예외다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "1으로",
+   "good": "1로",
+   "why": "[일]은 ㄹ 받침이므로 로다. 2는 [이]라서 2로, 6은 [육]이라서 6으로다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "data",
+   "bad": "데이타",
+   "good": "데이터",
+   "why": "외래어 표기법.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "parameter",
+   "bad": "파라메터",
+   "good": "파라미터",
+   "why": "외래어 표기법. 문맥에 따라 매개변수도 좋은 선택이다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "scheduler",
+   "bad": "스케쥴러",
+   "good": "스케줄러",
+   "why": "외래어에 쟈, 져, 쥬, 챠, 쵸를 쓰지 않는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "browser",
+   "bad": "브라우져",
+   "good": "브라우저",
+   "why": "쟈, 져, 쥬 표기 금지 규칙의 같은 사례다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "rendering",
+   "bad": "랜더링",
+   "good": "렌더링",
+   "why": "외래어 표기법.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "license",
+   "bad": "라이센스",
+   "good": "라이선스",
+   "why": "외래어 표기법.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "access",
+   "bad": "엑세스",
+   "good": "액세스",
+   "why": "외래어 표기법. 문맥에 따라 접근이 더 짧다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "business",
+   "bad": "비지니스",
+   "good": "비즈니스",
+   "why": "외래어 표기법.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "transaction",
+   "bad": "트렌젝션",
+   "good": "트랜잭션",
+   "why": "외래어 표기법.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "registry",
+   "bad": "레지스터리",
+   "good": "레지스트리",
+   "why": "외래어 표기법. register와 registry를 섞은 오기다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "Windows",
+   "bad": "윈도우즈",
+   "good": "Windows",
+   "why": "표기법은 윈도, 관행은 윈도우로 갈린다. 제품명은 원어로 쓰면 둘 다 피한다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "dynamic allocation",
+   "bad": "다이나믹 할당",
+   "good": "동적 할당",
+   "why": "표기법은 다이내믹, 관행은 다이나믹이다. 한자어 동적이 짧고 갈릴 일도 없다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "management",
+   "bad": "메니지먼트",
+   "good": "관리 (제품명처럼 원어 표기를 유지해야 하면 매니지먼트)",
+   "why": "외래어 표기법.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "JSON",
+   "bad": "Json을",
+   "good": "JSON을",
+   "why": "약어는 전부 대문자로 쓴다. Api, Url, Sql도 같다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "GitHub Actions",
+   "bad": "깃허브 액션즈",
+   "good": "GitHub Actions",
+   "why": "제품명은 원어로 쓴다. 음차는 이미 굳은 것만 쓴다(자바, 파이썬, 도커).",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "해야합니다",
+   "good": "해야 합니다",
+   "why": "본용언과 보조용언 사이를 띄어 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "어떻게 할 지",
+   "good": "어떻게 할지",
+   "why": "어미 -ㄹ지는 붙여 쓴다. 시간 경과를 뜻하는 의존명사 지만 띄운다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "배포한지 3일",
+   "good": "배포한 지 3일",
+   "why": "시간 경과의 지는 의존명사라 띄어 쓴다. 앞 항목과 짝을 이루는 함정이다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "하는것",
+   "good": "하는 것",
+   "why": "의존명사 것은 띄어 쓴다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "됬습니다",
+   "good": "됐습니다",
+   "why": "되었다의 준말은 됐다다. 됬다는 표기가 없다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "함으로서",
+   "good": "함으로써",
+   "why": "수단과 방법은 -으로써, 자격과 신분은 -으로서다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "궁굼한",
+   "good": "궁금한",
+   "why": "맞춤법. 궁금하다가 바른 표기다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "50 %",
+   "bad": "50 %",
+   "good": "50%",
+   "why": "단위 기호는 숫자에 붙인다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "30 percent",
+   "bad": "30퍼센트",
+   "good": "30%",
+   "why": "단위는 기호로 쓴다. 밀리초도 10ms로 쓴다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "1000000 rows",
+   "bad": "1000000건",
+   "good": "100만 건",
+   "why": "큰 수는 만 단위로 끊거나 세 자리 쉼표를 넣는다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "10 milliseconds",
+   "bad": "10 밀리세컨드",
+   "good": "10ms",
+   "why": "단위를 음차하지 않는다. 기호가 짧고 정확하다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "테스트 ( 3건 )",
+   "good": "테스트(3건)",
+   "why": "괄호 안쪽에 공백을 두지 않고 여는 괄호는 앞말에 붙인다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "변경 사항 : 캐시 제거",
+   "good": "변경 사항: 캐시 제거",
+   "why": "콜론 앞에 공백을 두지 않는다. 마크다운 굵은 글씨 뒤에서도 같다.",
+   "lintable": false,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "**캐시**를 **새로** 만듭니다",
+   "good": "캐시를 새로 만듭니다",
+   "why": "한 문장에 굵은 글씨가 둘 이상이면 강조가 사라진다. 강조는 문단에 하나까지다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "Fixed it!",
+   "bad": "고쳤습니다!",
+   "good": "고쳤습니다.",
+   "why": "느낌표를 쓰지 않는다. 사실에 감탄을 붙이지 않는다.",
+   "lintable": true,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "Checking...",
+   "bad": "확인 중입니다...",
+   "good": "확인 중입니다.",
+   "why": "말줄임표로 문장을 흐리지 않는다.",
+   "lintable": true,
+   "priority": "참고"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "✅",
+   "good": "(제거하고 문장으로)",
+   "why": "사용자가 이모지를 쓰지 않으면 쓰지 않는다. 상태는 문장이나 표로 쓴다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "🎉",
+   "good": "(제거)",
+   "why": "축하 이모지는 정보가 없다. 완료는 완료했다고 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "`getUser()를`",
+   "good": "`getUser()`를",
+   "why": "조사를 백틱 안에 넣으면 식별자가 달라진다. 조사는 코드 바깥에 쓴다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "",
+   "bad": "Redis캐시를 비웠습니다",
+   "good": "Redis 캐시를 비웠습니다",
+   "why": "영문과 한글 사이는 띄우고 조사만 붙인다. 조사와 구분해야 하므로 기계 검사는 오탐이 많다.",
+   "lintable": false,
+   "priority": "보통"
+  },
+  {
+   "category": "register",
+   "en": "Error: cannot find module 'foo'",
+   "bad": "오류: 'foo' 모듈을 찾을 수 없습니다 (원문 대체)",
+   "good": "Error: cannot find module 'foo' (원문 인용 후 한국어로 설명)",
+   "why": "로그와 오류 메시지 원문은 번역하지 않는다. 검색이 안 되면 쓸모가 없어진다.",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "빌드가 완료되셨습니다",
+   "good": "빌드가 끝났습니다",
+   "why": "사물 존대. 사물에는 높임을 쓰지 않습니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "이 옵션은 지원되지 않으십니다",
+   "good": "이 옵션은 지원되지 않습니다",
+   "why": "사물 존대",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "identifiers",
+   "bad": "사용자_조회() 함수가 '설정 파일'을 읽습니다",
+   "good": "getUser()가 src/config.ts를 읽습니다",
+   "why": "식별자·경로·플래그는 번역하지 않습니다. 번역하면 사용자가 그대로 따라 칠 수 없습니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "아마도 캐시 문제인 것 같기도 합니다",
+   "good": "캐시 문제로 보입니다. 로그로 확인하겠습니다",
+   "why": "헤지 중첩. 추정과 확인을 나눠 한 번만 말합니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "본 변경 사항은 상기 모듈에 대하여 적용됨",
+   "good": "이 변경은 해당 모듈에 적용됩니다",
+   "why": "반대 방향 과교정. 한자어를 쓰라는 것이 공문서체를 쓰라는 뜻은 아닙니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "register",
+   "en": "—",
+   "bad": "캐시 재생성을 없애도록 하겠습니다",
+   "good": "캐시 재생성을 없앴습니다",
+   "why": "이미 한 일을 미래형으로 보고하지 않습니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "hanja",
+   "en": "—",
+   "bad": "결합도(coupling)를 낮추고 응집도(cohesion)를 높였습니다",
+   "good": "결합도를 낮추고 응집도를 높였습니다",
+   "why": "원어 병기는 문서에서 첫 등장 한 번만 합니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "syntax",
+   "en": "—",
+   "bad": "한 문장에 절을 셋 이상 이어 붙이기",
+   "good": "절 두 개까지. 50자를 넘으면 문장을 나눕니다",
+   "why": "영어 한 문장을 한국어 한 문장으로 고집하면 늘어집니다",
+   "lintable": false,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "user",
+   "bad": "유저가 로그인하면",
+   "good": "사용자가 로그인하면",
+   "why": "확실한 우리말이 있는 기본 명사는 음차하지 않습니다",
+   "lintable": true,
+   "priority": "핵심"
+  },
+  {
+   "category": "pangyo",
+   "en": "admin",
+   "bad": "어드민 화면",
+   "good": "관리자 화면",
+   "why": "위와 같습니다",
+   "lintable": true,
+   "priority": "보통"
+  }
+ ]
+}
