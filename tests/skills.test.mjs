@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,20 +60,18 @@ for (const name of skillNames) {
     // 가리키는 방식은 스킬마다 다르다. 구현 예시를 담는 스킬은 examples/ 를 가리키고,
     // 참고용 스킬은 rules/ 나 scripts/ 를 가리킨다. 중요한 것은 그 파일이 있는 것이다.
     const { body } = readSkill(name);
-    const referenced = [...body.matchAll(/`?((?:examples|rules|scripts|hooks)\/[\w./-]+)`?/g)].map(
-      (match) => match[1]
-    );
+    // **경로는 스킬 파일 기준이어야 한다.** 사용자 세션에서는 작업 디렉터리가 사용자의
+    // 프로젝트이고 플러그인은 다른 곳에 있다. 저장소 뿌리 기준으로 적으면 가리키는 곳이
+    // 없는데, 개발 환경에서는 우연히 맞아 시험이 통과한다.
+    const referenced = [
+      ...body.matchAll(/`((?:\.\.\/)*(?:examples|rules|scripts|hooks)\/[\w./-]+)`/g),
+    ].map((match) => match[1]);
     assert.ok(referenced.length > 0, "동작하는 코드나 자료표를 가리켜야 한다");
 
-    const missing = [...new Set(referenced)].filter((relative) => {
-      // examples/ 는 스킬 안의 상대 경로, 나머지는 저장소 뿌리 기준이다.
-      const path = relative.startsWith("examples/")
-        ? join(SKILLS_DIR, name, relative)
-        : join(ROOT, relative);
-      // 와일드카드를 담은 참조는 존재 확인 대상이 아니다.
-      return !relative.includes("*") && !existsSync(path);
-    });
-    assert.deepEqual(missing, [], "가리키는 파일이 없다");
+    const missing = [...new Set(referenced)]
+      .filter((relative) => !relative.includes("*"))
+      .filter((relative) => !existsSync(resolve(SKILLS_DIR, name, relative)));
+    assert.deepEqual(missing, [], "스킬 파일 기준으로 풀었을 때 없는 경로가 있다");
   });
 
   test(`${name}: 하지 말라고 말리는 절이 있다`, () => {

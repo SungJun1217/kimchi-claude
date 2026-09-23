@@ -7,8 +7,10 @@ description: Use when asked to review, rewrite or proofread Korean technical pro
 # 한국어 글 다듬기
 
 출력 스타일이 **매 문장에** 적용하는 규칙은 분량 상한 때문에 50개 남짓입니다.
-전체 규칙은 560개가 넘고 `rules/` 에 있습니다. 글을 검토하거나 고쳐 달라는 요청을 받으면
-그 표를 열어 보십시오.
+전체 규칙은 560개가 넘습니다. 글을 검토하거나 고쳐 달라는 요청을 받으면 그 표를 열어 보십시오.
+
+**규칙표는 이 파일 기준 `../../rules/` 에 있습니다.** 플러그인 디렉터리 안이고, 사용자의
+작업 디렉터리가 아닙니다. 경로를 사용자 프로젝트 기준으로 찾으면 없습니다.
 
 ## 언제 이 스킬을 쓰나
 
@@ -38,13 +40,13 @@ description: Use when asked to review, rewrite or proofread Korean technical pro
 
 | 파일 | 다루는 것 |
 |---|---|
-| `rules/hanja.md` | 영어 개념에 대응하는 한국어 기술용어. 대개 한자어 |
-| `rules/metaphors.md` | 영어 은유의 정착 여부 판정. 얇다·두껍다·깊다는 정착하지 않았다 |
-| `rules/terms.md` | 직역 신조어와 불필요한 음차. 반대로 정착 외래어를 되돌리는 실수도 |
-| `rules/patterns.md` | 번역체 문장 구조. 인칭 주어 직역, 기능동사 남용, 이중 피동 |
-| `rules/pangyo.md` | 판교어와 한영 혼용 |
-| `rules/register.md` | 어투 일관성, 사물 존대, 외래어 표기, 띄어쓰기 |
-| `rules/observed.md` | 실제 출력에서 관찰한 실패. 짜낸 예시보다 값어치가 크다 |
+| `../../rules/hanja.md` | 영어 개념에 대응하는 한국어 기술용어. 대개 한자어 |
+| `../../rules/metaphors.md` | 영어 은유의 정착 여부 판정. 얇다·두껍다·깊다는 정착하지 않았다 |
+| `../../rules/terms.md` | 직역 신조어와 불필요한 음차. 반대로 정착 외래어를 되돌리는 실수도 |
+| `../../rules/patterns.md` | 번역체 문장 구조. 인칭 주어 직역, 기능동사 남용, 이중 피동 |
+| `../../rules/pangyo.md` | 판교어와 한영 혼용 |
+| `../../rules/register.md` | 어투 일관성, 사물 존대, 외래어 표기, 띄어쓰기 |
+| `../../rules/observed.md` | 실제 출력에서 관찰한 실패. 짜낸 예시보다 값어치가 크다 |
 
 표의 `검사` 칸이 그 규칙을 누가 막는지 알려 줍니다.
 
@@ -61,11 +63,16 @@ description: Use when asked to review, rewrite or proofread Korean technical pro
 
 규칙표를 눈으로 훑기 전에 린터를 돌리면 잡히는 것은 먼저 걸러집니다.
 
+채점 도구도 플러그인 디렉터리 안에 있습니다. 이 파일 기준 `../../scripts/score-response.mjs` 입니다.
+
 ```bash
-node scripts/score-response.mjs 문서.md          # 걸리는 표현을 나열한다
-node scripts/score-response.mjs --fix 문서.md    # 치환 규칙을 적용한 결과를 내보낸다
-node scripts/score-response.mjs --json 문서.md   # 기계가 읽을 형태
+node <플러그인>/scripts/score-response.mjs 문서.md          # 걸리는 표현을 나열한다
+node <플러그인>/scripts/score-response.mjs --fix 문서.md    # 치환 규칙을 적용한 결과
+node <플러그인>/scripts/score-response.mjs --json 문서.md   # 기계가 읽을 형태
 ```
+
+도구를 돌릴 수 없는 환경(샌드박스가 플러그인 디렉터리를 막는 경우)이면 규칙표를 읽어
+직접 판단하십시오. 위의 다섯 순위만으로도 대부분 갈립니다.
 
 린터가 0건이라고 해서 자연스러운 글은 아닙니다. 문장 구조와 어투는 읽어야 압니다.
 
