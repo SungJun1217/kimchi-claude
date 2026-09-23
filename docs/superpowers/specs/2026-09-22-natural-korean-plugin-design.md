@@ -62,12 +62,16 @@
 
 ## 구조
 
+두 층으로 되어 있고 두 층이 정반대 원칙으로 동작한다. 말투는 항상 켜져 있어야 하고,
+지식은 필요할 때만 열려야 한다.
+
 ```
 kimchi-claude/
 ├── .claude-plugin/
 │   ├── plugin.json
 │   └── marketplace.json           저장소를 그대로 마켓플레이스로 쓴다
-├── output-styles/
+│
+├── output-styles/                 항상 켜져 있는 층
 │   └── natural-korean.md          생성물. 시스템 프롬프트에 강제 적용된다
 ├── rules/                         자료 원본. 사람이 읽고 기계가 파싱한다
 │   ├── hanja.md                   한자어 기술용어 대응표
@@ -75,18 +79,41 @@ kimchi-claude/
 │   ├── terms.md                   직역·음차 오류
 │   ├── patterns.md                번역체 문장 구조
 │   ├── pangyo.md                  판교어와 한영 혼용
-│   └── register.md                어투·표기 규칙
-├── scripts/
-│   ├── build-style.mjs            rules/ → output-styles/ 생성
-│   ├── import-corpus.mjs          조사 결과(JSON) → rules/*.md. 개발용
-│   └── score-response.mjs         한국어 글을 규칙표로 채점한다
-├── hooks/                         v0.2. 커밋 메시지·문서 파일 검사
+│   ├── register.md                어투·표기 규칙
+│   └── observed.md                실제 출력에서 관찰한 사례. 손으로 유지한다
+│
+├── skills/                        필요할 때 열리는 층
+│   ├── korean-encoding/           CP949, 엑셀 CSV BOM, NFC/NFD, 초성 검색, 조사 선택
+│   ├── korean-datetime/           공휴일과 대체공휴일, 음력, KST, 영업일, 만 나이
+│   ├── korean-identifiers/        주민번호(검증 불가·저장 금지), 사업자번호, 마스킹
+│   └── korean-formats/            주소, 전화번호, 이름에 대한 가정
+│
+├── hooks/
 │   ├── hooks.json
-│   ├── guard-artifact.mjs
-│   └── lib/{rules,lint,segment,detect}.mjs
+│   ├── guard.mjs                  산출물 검사의 단일 진입점. 차단이 경고보다 앞선다
+│   ├── session-language.mjs       저장소의 산출물 언어를 세션 시작에 알려 준다
+│   └── lib/
+│       ├── rules.mjs              마크다운 표 → 규칙 객체
+│       ├── segment.mjs            검사 제외 구간(코드·경로·예외 표시)
+│       ├── detect.mjs             한국어 문서인지 판정
+│       ├── lint.mjs               규칙 검사와 자동 교정. 조사 안전장치
+│       ├── particle.mjs           영어 낱말 뒤 조사를 발음으로 판정
+│       ├── pii.mjs                주민등록번호 탐지
+│       ├── artifact.mjs           말투 판정. 훅 입출력은 다루지 않는다
+│       └── repo-language.mjs      커밋 이력과 문서로 산출물 언어를 추론
+│
+├── scripts/
+│   ├── build-style.mjs            rules/ → output-styles/ 생성. README 숫자도 써 넣는다
+│   ├── import-corpus.mjs          조사 결과(JSON) → rules/*.md. 개발용, 일회성
+│   └── score-response.mjs         한국어 글을 채점한다. --fix 로 교정도 한다
+│
+├── corpus/                        처음 들여온 규칙 자료. 출처 추적용
 ├── evals/                         claude plugin eval 세트
-└── tests/
+└── tests/                         스킬 예시 코드까지 검증한다
 ```
+
+스킬마다 `examples/` 에 동작하는 코드가 들어 있고 시험이 그것을 검증한다. 산문만 쓰면
+클로드가 다시 짜면서 또 틀린다.
 
 ### 왜 출력 스타일인가
 
