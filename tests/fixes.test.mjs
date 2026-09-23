@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rule as base } from "./helpers.mjs";
-import { applyFixes, hasFinalConsonant, isParticleSafe } from "../hooks/lib/lint.mjs";
+import {
+  applyFixes,
+  hasFinalConsonant,
+  isParticleSafe,
+  primaryGood,
+  autoFixReplacement,
+} from "../hooks/lib/lint.mjs";
+import { particleHeads } from "../hooks/lib/particle.mjs";
 
 // 이 시험 묶음의 기본값만 여기서 정하고, 규칙 객체 모양은 helpers 가 갖는다.
 const rule = (overrides = {}) => base({ bad: "리팩토링", good: "리팩터링", why: "외래어 표기법", priority: "보통", source: "register.md", ...overrides });
@@ -139,4 +146,28 @@ test("건너뛴 이유의 조사도 받침에 맞춘다", () => {
   const dep = rule({ bad: "디펜던시", good: "의존성" });
   const withGa = applyFixes("디펜던시가 꼬였습니다.", [dep]);
   assert.match(withGa.skipped[0].reason, /"가"가 깨집니다/);
+});
+
+test("괄호 안의 쉼표에서 잘리지 않는다", () => {
+  // 쉼표로 먼저 자르고 괄호를 벗기면 "백분위 (p95, p99)" 가 "백분위 (p95" 가 된다.
+  // 괄호가 반토막 난 채로 본문에 꽂힌다. 괄호를 먼저 벗겨야 한다.
+  assert.equal(primaryGood("백분위 (p95, p99)"), "백분위");
+  assert.equal(primaryGood("지연 시간 (p50, p95, p99 기준)"), "지연 시간");
+  assert.equal(primaryGood("인가 / 권한 확인"), "인가");
+  assert.equal(primaryGood("결합도, 느슨한 결합"), "결합도");
+});
+
+test("구두점이 남은 대체 표현은 쓰지 않는다", () => {
+  // 마지막 방어선이다. 주 표현을 뽑은 뒤에도 괄호나 쉼표가 남아 있으면 꽂을 수 없다.
+  const broken = rule({ bad: "나쁜 표현", good: "반쪽 (괄호" });
+  assert.equal(autoFixReplacement(broken), null);
+  assert.equal(applyFixes("나쁜 표현 입니다.", [broken]).applied.length, 0);
+});
+
+test("조사 첫 글자 집합이 짝 표에서 유도된다", () => {
+  // 조사 지식을 두 곳에 적으면 한쪽만 고치게 된다.
+  const heads = particleHeads();
+  for (const particle of ["을", "를", "이", "가", "은", "는", "과", "와", "으", "로"]) {
+    assert.ok(heads.has(particle[0]), `${particle} 의 첫 글자가 빠졌다`);
+  }
 });

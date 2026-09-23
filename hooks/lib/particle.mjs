@@ -25,6 +25,18 @@ const PAIRS = [
   ["과", "와"],
 ];
 
+/**
+ * 조사들의 첫 글자 집합. 짝 표에서 유도한다.
+ *
+ * lint.mjs 가 "이 글자가 조사일 수 있는가"를 판정할 때 쓴다. 짝 표가 원본이므로
+ * 조사를 하나 더하면 두 곳이 함께 늘어난다.
+ *
+ * @returns {Set<string>}
+ */
+export function particleHeads() {
+  return new Set(PAIRS.flat().map((particle) => particle[0]));
+}
+
 // 순수 숫자는 한국어 수사로 읽는다. 3 → 삼(ㅁ).
 const DIGIT_KOREAN = [
   true, // 0 영·공 — ㅇ

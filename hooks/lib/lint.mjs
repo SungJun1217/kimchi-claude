@@ -4,6 +4,7 @@
 // 코드나 경로 안에서는 애초에 매치가 일어나지 않는다. 위치 비교를 따로 할 필요가 없다.
 
 import { maskProtected, isIgnoredFile } from "./segment.mjs";
+import { particleHeads } from "./particle.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
 
 // 규칙의 "쓰지 말 것" 칸에서 ~ 는 "앞뒤에 무엇이 붙든"을 뜻한다.
@@ -20,11 +21,9 @@ const HANGUL_START = 0xac00;
 const HANGUL_END = 0xd7a3;
 const JAMO_COUNT = 28;
 
-// 앞말의 받침에 따라 형태가 갈리는 조사들의 첫 글자.
-// 넉넉하게 담는다. 잘못 포함해도 교정을 건너뛸 뿐이라 안전한 방향이다.
-const PARTICLE_HEADS = new Set([
-  "을", "를", "이", "가", "은", "는", "과", "와", "으", "로", "나", "라", "며", "야", "아",
-]);
+// 조사 지식은 particle.mjs 의 짝 표가 원본이다. 여기서는 첫 글자만 유도해 쓴다.
+// 두 곳에 적으면 한쪽만 고치게 된다.
+const PARTICLE_HEADS = particleHeads();
 
 /** 앞말의 받침에 따라 목적격 조사를 고른다. */
 function objectParticle(word) {
@@ -128,6 +127,9 @@ function declaresLeadingContext(good) {
 // 자동 교정에 쓸 수 없다는 신호. 파싱할 수 없는 메타 주석들이다.
 const NOT_A_REPLACEMENT = /생략|또는|참조|문맥|\.{3}|…/;
 
+// 주 표현을 뽑은 뒤에도 남아 있으면 안 되는 구두점.
+const LEFTOVER_PUNCTUATION = /[(),/|]/;
+
 /**
  * 쓸 것 칸에서 실제로 문장에 꽂을 표현 하나를 뽑는다.
  *
@@ -139,9 +141,12 @@ const NOT_A_REPLACEMENT = /생략|또는|참조|문맥|\.{3}|…/;
  */
 export function primaryGood(good) {
   if (typeof good !== "string") return "";
-  const firstAlternative = stripWildcardEdges(good).split(/\s*[\/|,]\s*/)[0];
-  return firstAlternative
-    .replace(/\s*\([^)]*\)\s*/g, " ")
+
+  // 괄호를 먼저 벗기고 나서 대안을 자른다. 순서를 뒤집으면 괄호 안의 쉼표에서 잘려
+  // "백분위 (p95, p99)" 가 "백분위 (p95" 가 된다. 괄호가 반토막 난 채로 본문에 꽂힌다.
+  const withoutNotes = stripWildcardEdges(good).replace(/\s*\([^)]*\)\s*/g, " ");
+  return withoutNotes
+    .split(/\s*[\/|,]\s*/)[0]
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -166,6 +171,8 @@ export function autoFixReplacement(rule) {
   const replacement = primaryGood(good);
   if (replacement.length === 0) return null;
   if (replacement.includes(WILDCARD)) return null;
+  // 뽑아낸 뒤에도 구두점이 남아 있으면 본문에 그대로 꽂을 수 없다. 마지막 방어선이다.
+  if (LEFTOVER_PUNCTUATION.test(replacement)) return null;
   // 앞말이 붙는다고 선언했는데 조사로 시작하면 앞말의 받침을 알아야 한다. 규칙 표에는 없다.
   if (declaresLeadingContext(good) && startsWithParticle(replacement)) return null;
   return replacement;
