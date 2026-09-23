@@ -16,7 +16,22 @@ description: Use when handling Korean text encoding or search — CP949 EUC-KR l
 const csv = "﻿" + rows.map((row) => row.join(",")).join("\r\n");
 ```
 
-줄바꿈도 `\r\n` 이어야 엑셀이 제대로 나눕니다.
+줄바꿈도 `\r\n` 이어야 엑셀이 제대로 나눕니다. `toExcelCsv()` 가 둘을 함께 처리합니다.
+
+**그리고 수식 주입을 막아야 합니다.** `=`, `+`, `-`, `@` 로 시작하는 값을 엑셀과 구글
+스프레드시트가 **수식으로 실행합니다.** 상호나 비고란에 실제로 들어오고, 받는 사람의
+기기에서 실행되므로 보안 문제입니다. 앞에 홑따옴표를 붙이면 문자열로 다룹니다.
+`escapeForSpreadsheet()` 를 쓰십시오.
+
+**전각 문자와 보이지 않는 글자가 섞인다.** 관공서 자료와 웹에서 복사한 값에
+`１２３`(전각 숫자), 전각 하이픈, U+00A0(줄바꿈 없는 공백), 폭 없는 글자가 들어옵니다.
+눈으로는 구별할 수 없고 정규식 `\d` 에도 걸리지 않아서 **검증이 조용히 실패합니다.**
+
+```js
+import { cleanField, normalizeWidth } from "./examples/tabular.mjs";
+
+cleanField(row["사업자등록번호"]); // 폭·공백·정규화를 한 번에
+```
 
 **옛 파일이 CP949 다.** 관공서 자료, 은행 거래 내역, 레거시 시스템 내보내기가 아직
 CP949/EUC-KR 입니다. Node 는 CP949 를 기본으로 지원하지 않아 `iconv-lite` 같은 것이 필요합니다.
@@ -35,6 +50,26 @@ import { normalizeForStorage, differsOnlyByNormalization } from "./examples/hang
 normalizeForStorage(uploadedName); // 저장 전에 반드시
 differsOnlyByNormalization(a, b); // 버그를 진단할 때
 ```
+
+## 앞자리 0 이 날아간다
+
+한국 자료의 식별자는 대개 0 으로 시작합니다. 사업자번호, 우편번호, 전화번호, 계좌번호.
+숫자로 읽으면 앞자리 0 이 사라집니다.
+
+더 나쁜 경우가 있습니다. **받은 파일이 이미 엑셀을 거쳤으면 원본이 이미 망가져 있습니다.**
+담당자가 열어 저장한 순간 0 이 없어지거나 지수 표기(`1.23457E+09`)로 바뀝니다.
+
+**0 을 채워 복구하려 들지 마십시오.** 잘못 채우면 다른 사업자의 번호가 됩니다.
+이상 자료로 표시해 담당자에게 되돌리는 것이 유일한 해결입니다.
+
+```js
+import { checkDigitCount } from "./examples/tabular.mjs";
+
+const check = checkDigitCount(row["사업자등록번호"], 10);
+if (!check.ok) reject(row, check.reason); // 채우지 않고 되돌린다
+```
+
+내보낼 때는 xlsx 셀 서식을 문자열로 지정하십시오. 아니면 받는 쪽에서 다시 날아갑니다.
 
 ## 초성 검색
 
@@ -85,3 +120,7 @@ import { particleFor } from "./examples/hangul-jamo.mjs";
 - 코드포인트로 한글 정렬하기 — 사전순이 아닙니다
 - 문자열 이어붙이기로 조사 만들기 — 절반은 틀립니다
 - `slice` 로 한글 자르기 — 자모 분리된 문자열에서는 글자가 깨집니다. `[...text]` 를 쓰십시오
+- 전각 숫자를 정제하지 않기 — `\d` 에 걸리지 않아 검증이 조용히 실패합니다
+- 식별자를 숫자로 읽기 — 앞자리 0 이 날아갑니다. 문자열로 다루십시오
+- 날아간 0 을 채워 복구하기 — 다른 사업자의 번호가 됩니다. 되돌려야 합니다
+- 스프레드시트로 내보낼 때 수식 주입을 막지 않기

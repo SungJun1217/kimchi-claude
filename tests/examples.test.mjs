@@ -13,6 +13,13 @@ import {
   normalizeForStorage,
   differsOnlyByNormalization,
 } from "../skills/korean-encoding/examples/hangul-jamo.mjs";
+import {
+  normalizeWidth,
+  cleanField,
+  checkDigitCount,
+  escapeForSpreadsheet,
+  toExcelCsv,
+} from "../skills/korean-encoding/examples/tabular.mjs";
 import { withSubstitutes, addBusinessDays } from "../skills/korean-datetime/examples/substitute-holiday.mjs";
 import {
   isValidBusinessNumber,
@@ -363,4 +370,69 @@ test("같은 주소를 정규화 형태와 무관하게 견준다", () => {
   assert.ok(sameAddress("서울 강남구 테헤란로 123", nfd), "자모 분리 때문에 다르게 보인다");
   assert.ok(sameAddress("서울 강남구 테헤란로 123 (역삼동)", "서울강남구 테헤란로 123"));
   assert.ok(!sameAddress("테헤란로 123", "테헤란로 124"));
+});
+
+// ── 표 형식 자료 정제 ───────────────────────────────────────
+//
+// 이 절이 다루는 결함은 모두 예외를 던지지 않는다. 조용히 잘못된 값을 만들어 흘러간다.
+
+test("전각 영숫자를 반각으로 바꾼다", () => {
+  // 관공서 자료에 전각 숫자가 섞여 온다. \d 에 걸리지 않아 검증이 조용히 실패한다.
+  assert.equal(normalizeWidth("１２３-４５-６７８９１"), "123-45-67891");
+  assert.equal(normalizeWidth("ＡＢＣ"), "ABC");
+  assert.equal(normalizeWidth("（주）"), "(주)", "한글은 건드리지 않는다");
+  assert.equal(normalizeWidth(null), "");
+});
+
+test("보이지 않는 글자를 정리한다", () => {
+  assert.equal(normalizeWidth("가 나"), "가 나", "줄바꿈 없는 공백");
+  assert.equal(normalizeWidth("가　나"), "가 나", "전각 공백");
+  assert.equal(normalizeWidth("가​나"), "가나", "폭 없는 공백");
+  assert.equal(normalizeWidth("가﻿나"), "가나", "BOM");
+});
+
+test("자료 값을 비교할 수 있는 형태로 정제한다", () => {
+  assert.equal(cleanField("  １２３  -​４５  "), "123 -45");
+  assert.equal(cleanField("한글".normalize("NFD")), "한글", "NFC 로 모은다");
+  assert.equal(cleanField(undefined), "");
+});
+
+test("앞자리 0 이 날아간 것을 알아낸다", () => {
+  assert.deepEqual(checkDigitCount("0123456789", 10), { ok: true });
+  const short = checkDigitCount("123456789", 10);
+  assert.equal(short.ok, false);
+  assert.match(short.reason, /채워 넣지 말고/, "복구하지 말라고 말해야 한다");
+});
+
+test("엑셀을 거쳐 훼손된 값을 알아낸다", () => {
+  const broken = checkDigitCount("1.23457E+09", 10);
+  assert.equal(broken.ok, false);
+  assert.match(broken.reason, /지수 표기/);
+});
+
+test("전각 숫자로 와도 자리 수를 센다", () => {
+  assert.deepEqual(checkDigitCount("０１２３４５６７８９", 10), { ok: true });
+});
+
+test("스프레드시트 수식 주입을 막는다", () => {
+  // 받는 사람의 기기에서 실행되므로 보안 문제다.
+  for (const payload of ["=SUM(A1)", "+1+1", "-1+1", "@SUM(A1)"]) {
+    assert.equal(escapeForSpreadsheet(payload), `'${payload}`, payload);
+  }
+  assert.equal(escapeForSpreadsheet("아무개상사"), "아무개상사", "보통 값은 건드리지 않는다");
+  assert.equal(escapeForSpreadsheet(null), "");
+});
+
+test("엑셀에서 열리는 CSV 를 만든다", () => {
+  const csv = toExcelCsv([["상호", "번호"], ["=cmd|calc", "0123456789"]]);
+  assert.ok(csv.startsWith("﻿"), "BOM 이 없으면 엑셀이 CP949 로 읽는다");
+  assert.ok(csv.includes("\r\n"), "줄바꿈이 CRLF 여야 한다");
+  assert.ok(csv.includes("'=cmd|calc"), "수식 주입을 막아야 한다");
+  assert.ok(csv.includes("0123456789"), "앞자리 0 이 살아 있어야 한다");
+});
+
+test("쉼표와 따옴표가 든 값을 감싼다", () => {
+  const csv = toExcelCsv([['아무개, 상사', '따옴표 "있음"']]);
+  assert.ok(csv.includes('"아무개, 상사"'));
+  assert.ok(csv.includes('"따옴표 ""있음"""'));
 });
