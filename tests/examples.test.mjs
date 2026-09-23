@@ -12,6 +12,7 @@ import {
   particleFor,
   normalizeForStorage,
   differsOnlyByNormalization,
+  sortKorean,
 } from "../skills/korean-encoding/examples/hangul-jamo.mjs";
 import {
   normalizeWidth,
@@ -84,6 +85,43 @@ test("초성 질의와 보통 질의를 함께 처리한다", () => {
   // 음절 질의를 초성으로 처리하면 "ㄱ" 으로 시작하는 모든 것이 걸려 방해가 된다.
   assert.ok(!matches("고추장", "김"));
   assert.ok(matches("아무것", ""), "빈 질의는 모두 통과");
+});
+
+test("입력 도중인 질의도 찾는다", () => {
+  // 한글 입력기는 "김치" 를 치는 동안 기 → 김 → 김ㅊ → 김치 를 보낸다.
+  for (const typing of ["기", "김", "김ㅊ", "김치", "김치ㅉ"]) {
+    assert.ok(matches("김치찌개", typing), `${typing} 에서 결과가 사라지면 안 된다`);
+  }
+  assert.ok(matches("기미", "김"), "받침이 다음 음절 초성으로 넘어갈 수 있다");
+  assert.ok(matches("가방", "갑"), "가 → 갑 → 가바 → 가방");
+  assert.ok(matches("닭갈비", "달"), "겹받침의 앞 자음까지 친 상태");
+  assert.ok(!matches("고추장", "기"));
+  assert.ok(!matches("기미", "깁"));
+  assert.ok(!matches("김밥", "깁"));
+});
+
+test("맥에서 올린 NFD 대상과 대소문자를 가리지 않는다", () => {
+  assert.ok(matches("김치찌개".normalize("NFD"), "ㄱㅊ"));
+  assert.equal(toChosung("김치".normalize("NFD")), "ㄱㅊ");
+  assert.ok(matches("iOS앱", "ios"));
+});
+
+// ── 정렬 ────────────────────────────────────────────────────
+
+test("현대 한글끼리는 코드포인트 순서가 이미 가나다순이다", () => {
+  // 이 사실을 모르면 필요 없는 정렬 규칙을 직접 짠다.
+  const words = ["닭", "달걀", "달", "값", "갑옷", "까치", "김치"];
+  assert.deepEqual([...words].sort(), sortKorean(words));
+});
+
+test("영문·숫자·NFD 가 섞이면 한국어 순서로 정렬한다", () => {
+  const sorted = sortKorean(["파일10", "Apple", "다".normalize("NFD"), "파일2", "가"]);
+  assert.deepEqual(sorted.map((word) => word.normalize("NFC")), ["가", "다", "파일2", "파일10", "Apple"]);
+});
+
+test("정렬은 원본 값을 바꾸지 않는다", () => {
+  const nfd = "다".normalize("NFD");
+  assert.ok(sortKorean([nfd]).includes(nfd), "NFC 는 비교에만 쓰고 원본을 돌려준다");
 });
 
 // ── 자모와 조사 ──────────────────────────────────────────────
