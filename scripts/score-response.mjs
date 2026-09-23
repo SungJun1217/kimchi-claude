@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { loadRules } from "../hooks/lib/rules.mjs";
 import { lint, applyFixes, formatFindings } from "../hooks/lib/lint.mjs";
 import { looksKorean, countHangul } from "../hooks/lib/detect.mjs";
+import { findParticleErrors, fixParticles, formatParticleErrors } from "../hooks/lib/particle.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -49,8 +50,9 @@ function main() {
   }
 
   if (fix) {
-    const result = applyFixes(text, rules);
-    process.stdout.write(result.text);
+    // 조사를 먼저 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있어 순서가 중요하다.
+    const result = applyFixes(fixParticles(text).text, rules);
+    process.stdout.write(fixParticles(result.text).text);
     if (result.skipped.length > 0) {
       console.error(`\n손대지 않은 것 ${result.skipped.length}건:`);
       for (const item of result.skipped) {
@@ -61,6 +63,7 @@ function main() {
   }
 
   const findings = lint(text, rules);
+  const particles = findParticleErrors(text);
 
   if (json) {
     console.log(
@@ -69,8 +72,9 @@ function main() {
           korean: looksKorean(text),
           hangul: countHangul(text),
           rules: rules.length,
-          violations: findings.length,
-          per1000: densityPer1000(findings, text),
+          violations: findings.length + particles.length,
+          particleErrors: particles.length,
+          per1000: densityPer1000([...findings, ...particles], text),
           findings: findings.map(({ matched, good, why, index, priority, source }) => ({
             matched, good, why, index, priority, source,
           })),
@@ -79,7 +83,7 @@ function main() {
         2
       )
     );
-    process.exit(findings.length === 0 ? 0 : 1);
+    process.exit(findings.length + particles.length === 0 ? 0 : 1);
   }
 
   if (!looksKorean(text)) {
@@ -87,13 +91,17 @@ function main() {
     return;
   }
 
-  if (findings.length === 0) {
+  if (findings.length === 0 && particles.length === 0) {
     console.log(`걸리는 표현이 없습니다. (한글 ${countHangul(text)}자, 규칙 ${rules.length}개)`);
     return;
   }
 
-  console.log(formatFindings(findings));
-  console.log(`\n한글 1000자당 ${densityPer1000(findings, text)}건.`);
+  if (findings.length > 0) console.log(formatFindings(findings));
+  if (particles.length > 0) {
+    if (findings.length > 0) console.log("");
+    console.log(formatParticleErrors(particles));
+  }
+  console.log(`\n한글 1000자당 ${densityPer1000([...findings, ...particles], text)}건.`);
   process.exit(1);
 }
 

@@ -16,6 +16,7 @@ import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRules } from "./lib/rules.mjs";
 import { lint, applyFixes, formatFindings } from "./lib/lint.mjs";
+import { findParticleErrors, fixParticles, formatParticleErrors } from "./lib/particle.mjs";
 import { looksKorean } from "./lib/detect.mjs";
 import { isIgnoredFile } from "./lib/segment.mjs";
 
@@ -153,8 +154,16 @@ function handlePreToolUse(toolName, toolInput, targets, rules) {
   let changed = false;
 
   for (const target of targets) {
-    const result = applyFixes(target.text, rules);
-    if (result.text === target.text) continue;
+    // 조사를 먼저 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있다.
+    const withParticles = fixParticles(target.text);
+    const result = applyFixes(withParticles.text, rules);
+    const fixedText = fixParticles(result.text).text;
+    if (fixedText === target.text) continue;
+    result.text = fixedText;
+    result.applied = [
+      ...withParticles.applied.map((hit) => ({ matched: hit.matched, replacement: `${hit.word}${hit.correct}` })),
+      ...result.applied,
+    ];
 
     if (toolName === "Bash") {
       // 명령 전체에서 해당 메시지 부분만 갈아 끼운다.
@@ -191,14 +200,16 @@ function handlePostToolUse(targets, rules) {
   const findings = targets.flatMap((target) =>
     lint(target.text, rules).map((finding) => ({ ...finding, label: target.label }))
   );
-  if (findings.length === 0) return;
+  const particles = targets.flatMap((target) => findParticleErrors(target.text));
+  if (findings.length === 0 && particles.length === 0) return;
 
   const label = targets[0]?.label || "";
   emit({
     hookSpecificOutput: {
       hookEventName: "PostToolUse",
       additionalContext: [
-        formatFindings(findings, label),
+        findings.length > 0 ? formatFindings(findings, label) : "",
+        particles.length > 0 ? formatParticleErrors(particles) : "",
         "",
         "저장소에 남는 글이므로 위 표현을 고쳐 주십시오. 코드와 식별자는 그대로 두십시오.",
       ].join("\n"),
