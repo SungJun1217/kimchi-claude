@@ -28,7 +28,12 @@ import {
   maskAccount,
   maskAddress,
 } from "../skills/korean-identifiers/examples/masking.mjs";
-import { parsePhone, formatPhone, toInternational } from "../skills/korean-formats/examples/phone.mjs";
+import {
+  parsePhone,
+  formatPhone,
+  toInternational,
+  isSafeNumber,
+} from "../skills/korean-formats/examples/phone.mjs";
 import {
   isValidPostalCode,
   addressKind,
@@ -289,6 +294,22 @@ test("대표번호는 지역번호가 없다", () => {
 test("인터넷전화와 평생번호를 알아본다", () => {
   assert.equal(parsePhone("07012345678").kind, "특수번호");
   assert.deepEqual(parsePhone("050512345678"), { kind: "특수번호", parts: ["0505", "1234", "5678"] });
+});
+
+test("050 대역 전체를 받는다", () => {
+  // 0505 만 받으면 오픈마켓 주문의 안심번호가 검증에서 떨어져 배송 알림이 못 나간다.
+  for (const prefix of ["0502", "0503", "0504", "0505", "0506", "0507"]) {
+    assert.ok(parsePhone(`${prefix}12345678`) !== null, prefix);
+  }
+});
+
+test("안심번호를 따로 가른다", () => {
+  // 유효 기간이 있어 회원 정보에 영구 보관하면 안 된다. 주문 단위로만 쓴다.
+  assert.equal(parsePhone("050412345678").kind, "안심번호");
+  assert.ok(isSafeNumber("0504-1234-5678"));
+  assert.ok(!isSafeNumber("0505-1234-5678"), "0505 는 평생번호다");
+  assert.ok(!isSafeNumber("010-1234-5678"));
+  assert.equal(formatPhone("050412345678"), "0504-1234-5678");
 });
 
 test("알 수 없는 번호는 null 을 돌려준다", () => {

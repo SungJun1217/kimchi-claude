@@ -1,6 +1,6 @@
 {
   "name": "kimchi-claude",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "private": true,
   "type": "module",
   "description": "한국어로 물으면 한국 개발자가 실제로 쓰는 말투로 답하는 클로드 코드 플러그인",
