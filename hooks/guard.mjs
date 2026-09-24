@@ -53,11 +53,20 @@ function checkPii(pii, toolName, toolInput) {
 
   const targets = pii.extractPiiTargets(toolName, toolInput);
   const found = targets.flatMap((target) =>
-    pii.findResidentNumbers(target.text).map((hit) => ({ ...hit, label: target.label }))
+    pii.findResidentNumbers(target.text, { pathOnly: target.kind === "path" }).map((hit) => ({
+      ...hit,
+      label: target.label,
+      kind: target.kind,
+      editIndex: target.editIndex,
+    }))
   );
   if (found.length === 0) return null;
 
-  return { message: pii.formatLeak(found, found[0].label), block: mode !== "warn" };
+  // 대상 이름(파일 경로)에도 번호가 실려 올 수 있다 — 메시지가 그대로 유출 경로가
+  // 되지 않도록 가린다. label 은 항상 경로이거나("명령"처럼) 대시 형태가 아니면
+  // 애초에 안 걸리는 짧은 문자열이라 pathOnly 규칙을 그대로 써도 안전하다.
+  const label = pii.redactText(found[0].label, { pathOnly: true });
+  return { message: pii.formatLeak(found, label), block: mode !== "warn" };
 }
 
 /**

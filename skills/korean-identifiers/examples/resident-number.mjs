@@ -20,19 +20,135 @@
 // 마스킹한 값만 나가야 한다. masking.mjs 를 참고할 것.
 
 /**
- * 주민등록번호 형태를 띈 문자열을 찾는 패턴. 검증이 아니라 탐지용이다.
+ * 주민등록번호 형태를 띈 문자열을 찾는 기본 패턴. 검증이 아니라 탐지용이고, 하이픈이나
+ * 공백 정도의 흔한 표기만 받는다.
  *
  * \b 를 쓰지 않는다. 밑줄을 단어 문자로 보기 때문에 `order_9001011234567` 같은 식별자
  * 안에서 매치가 일어난다. 앞뒤 경계를 직접 본다.
  *
  * 전각 숫자와 전각 하이픈도 받는다. 한글 문서에서 복사한 번호가 그렇게 온다.
  * `\d` 는 ASCII 숫자만 받아서 전각이 한 글자만 섞여도 탐지를 빠져나간다.
+ *
+ * 실전 탐지(붙여넣기에 섞이는 보이지 않는 서식 문자, en-dash 같은 대시 변종, 타임스탬프
+ * 오탐 방지)는 이 패턴 하나로는 부족해서 findResidentNumbers() 가 따로 처리한다.
  */
 export const RESIDENT_NUMBER_PATTERN =
   /(?<![0-9０-９A-Za-z_])[0-9０-９]{6}[-－\s]?[1-8１-８][0-9０-９]{6}(?![0-9０-９A-Za-z_])/g;
 
 // 전각 숫자를 반각으로 되돌리고 숫자만 남긴다.
 const digitsOf = (value) => String(value ?? "").normalize("NFKC").replace(/\D/g, "");
+
+// 눈에 안 보이는 서식 문자. 붙여넣기 과정에서 숫자 사이에 흔히 섞인다.
+const ZERO_WIDTH = new Set([0x200b, 0x200c, 0x200d, 0x2060, 0x00ad, 0xfeff]);
+
+// 대시류 문자를 전부 '-' 로 접는다. en-dash·em-dash·전각 하이픈까지 실제로 온다.
+const DASH_LIKE = new Set([0x002d, 0xff0d, 0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2212, 0xfe63]);
+
+// 탭·NBSP·표의문자 공백을 보통 공백 하나로 접는다. 탭은 ASCII 지만 구분자로 안
+// 쳐 주면 놓치므로 여기서 접어야 한다.
+// \s 가 받던 공백은 모두 받는다. 처음에 탭·NBSP·U+3000 만 넣었다가 엔 스페이스(U+2002),
+// 가는 공백(U+2009), 좁은 NBSP(U+202F), 세로 탭, 폼 피드를 쓴 번호를 놓쳤다.
+const SPACE_LIKE = new Set([
+  0x09, 0x0b, 0x0c, 0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+  0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+]);
+
+// 아라비아 숫자(٠-٩)는 NFKC 로 안 접힌다. 전각·수학 굵은 숫자는 NFKC 가 접어 준다.
+function foldDigit(codePoint, char) {
+  if (codePoint >= 0x0660 && codePoint <= 0x0669) return String(codePoint - 0x0660);
+  const folded = char.normalize("NFKC");
+  return /^[0-9]$/.test(folded) ? folded : null;
+}
+
+// 이 문자들이 없으면 원문을 그대로 써도 결과가 같다 — 한글 문서든 순수 아스키든
+// 코드 포인트 배열을 새로 만들 필요가 없다. 서로게이트 쌍(이모지 등)이 하나라도
+// 있으면 그 뒤로 코드 포인트 색인과 UTF-16 색인이 어긋나므로 느린 경로로 보낸다.
+const NEEDS_FOLD = new RegExp(
+  "[\\t\\v\\f\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\u200B\\u200C\\u200D\\u2060\\u00AD\\uFEFF" +
+    "\\uFF0D\\u2010\\u2011\\u2012\\u2013\\u2014\\u2212\\uFE63" +
+    "\\uFF10-\\uFF19\\u0660-\\u0669\\uD800-\\uDBFF]"
+);
+
+function buildClean(line) {
+  if (!NEEDS_FOLD.test(line)) return { chars: null, clean: line, map: null };
+  const chars = Array.from(line);
+  let clean = "";
+  const map = [];
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i];
+    const cp = ch.codePointAt(0);
+    if (ZERO_WIDTH.has(cp)) continue;
+    let rep = ch;
+    if (DASH_LIKE.has(cp)) rep = "-";
+    else if (SPACE_LIKE.has(cp)) rep = " ";
+    else {
+      const digit = foldDigit(cp, ch);
+      if (digit !== null) rep = digit;
+    }
+    // UTF-16 단위로 훑는다. 정규식 index 가 그 단위라 clean/map 길이가 맞아야 한다.
+    for (let u = 0; u < rep.length; u += 1) {
+      clean += rep[u];
+      map.push(i);
+    }
+  }
+  return { chars, clean, map };
+}
+
+// 점·밑줄·슬래시는 실측 후 뺐다 — 부동소수점, 날짜/번호 나열, `ORD_`·`IMG_` 류
+// 식별자와 겹친다. hooks/lib/pii.mjs 의 SEP 설명을 참고할 것.
+const SEP = "(?: ?- ?| {1,2})";
+const CANDIDATE_SEPARATED = new RegExp(`(?<![0-9.])([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`, "g");
+const CANDIDATE_GLUED = /(?<![0-9A-Za-z_.])([0-9]{6})([1-8][0-9]{6})(?![0-9A-Za-z_])/g;
+
+// 콜론/대입 바로 앞의 키 이름 자체가 시간을 가리킬 때만 타임스탬프로 보고 넘어간다.
+// 줄 전체에 시간 낱말이 있다는 것만으로는 부족하다 — 그러면 같은 줄의 다른 필드
+// 때문에 rrn 자신이 빠져나간다. ms 와 맨 ts 는 너무 흔해서 뺐다(ts 는 키 전체가
+// 정확히 "ts" 일 때만 인정).
+// 키 이름 끝만 본다. 낱말 뒤 꼬리는 시간 필드에서 실제로 쓰는 것만 받는다.
+// 꼬리를 아무 글자나 받자 dateOfBirth·date_of_birth 가 시간 키로 빠져나갔고,
+// 대소문자를 무시하자 lat·format 처럼 at 으로 끝나는 키가 모두 빠져나갔다.
+// 생년월일 필드는 주민등록번호가 붙여 넣어지는 바로 그 자리라 birth 가 든 키는 예외가 아니다.
+const TIME_KEY_WORD = /^(?:time|date|timestamp|stamp|epoch|created|updated|expires|modified|issued|deleted)(?:_?(?:at|on|ms|time|stamp|utc))?$/i;
+const TIME_KEY_CAMEL_AT = /^[a-z][A-Za-z0-9]*At$/;
+const TIME_KEY_SNAKE_AT = /^[a-z0-9_]+_at$/i;
+
+function isTimeLikeKey(before) {
+  const key = before.match(/[A-Za-z0-9_]+$/)?.[0];
+  if (!key || /birth/i.test(key)) return false;
+  return TIME_KEY_WORD.test(key) || TIME_KEY_CAMEL_AT.test(key) || TIME_KEY_SNAKE_AT.test(key) || /^ts$/i.test(key);
+}
+
+function keyBeforeIsTimeLike(clean, matchIndex) {
+  let i = matchIndex - 1;
+  while (i >= 0 && clean[i] === " ") i -= 1;
+  if (i >= 0 && (clean[i] === '"' || clean[i] === "'")) i -= 1;
+  if (i < 0 || (clean[i] !== ":" && clean[i] !== "=")) return false;
+  i -= 1;
+  while (i >= 0 && clean[i] === " ") i -= 1;
+  if (i >= 0 && (clean[i] === '"' || clean[i] === "'")) i -= 1;
+  return isTimeLikeKey(clean.slice(0, i + 1));
+}
+
+function scanLine(rawLine) {
+  const { clean } = buildClean(rawLine);
+  const results = [];
+
+  CANDIDATE_SEPARATED.lastIndex = 0;
+  let match;
+  while ((match = CANDIDATE_SEPARATED.exec(clean)) !== null) {
+    if (!looksLikeResidentNumber(match[0])) continue;
+    results.push(match[0]);
+  }
+
+  CANDIDATE_GLUED.lastIndex = 0;
+  while ((match = CANDIDATE_GLUED.exec(clean)) !== null) {
+    if (!looksLikeResidentNumber(match[0])) continue;
+    if (keyBeforeIsTimeLike(clean, match.index)) continue;
+    results.push(match[0]);
+  }
+
+  return results;
+}
 
 /**
  * 형식만 확인한다. 유효한 번호인지는 알 수 없다.
@@ -86,7 +202,5 @@ export function findResidentNumbers(text) {
   if (typeof text !== "string") return [];
   // 형태만 맞는 것을 모두 보고하면 주문번호와 타임스탬프가 섞인다.
   // 앞 6자리가 말이 되는 생년월일인지까지 보면 오탐이 크게 줄어든다.
-  return [...text.matchAll(RESIDENT_NUMBER_PATTERN)]
-    .map((match) => match[0])
-    .filter((value) => looksLikeResidentNumber(value));
+  return text.split("\n").flatMap((line) => scanLine(line));
 }
