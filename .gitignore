@@ -2,3 +2,7 @@ node_modules/
 
 # remember 플러그인의 세션 기록. 프로젝트 코드가 아니다.
 .remember/
+
+# 개인 설정과 병렬 에이전트 worktree. 저장소 안에 생기지만 커밋 대상이 아니다.
+.claude/settings.local.json
+.claude/worktrees/
