@@ -15,7 +15,13 @@ const WILDCARD_PATTERN = "[^\\n]{0,20}";
 const MIN_LITERAL_LENGTH = 2;
 
 // 한 규칙이 같은 문서에서 몇 번까지 보고할지. 같은 지적을 수십 번 쏟아내면 읽지 않는다.
+// 겹침을 해소한 **뒤**에 적용한다. 해소하기 전에 적용하면 "루즈 커플링" 안에 갇힌 "커플링"
+// 매치가 짧은 규칙의 몫을 다 써버려서, 뒤에 진짜로 따로 나온 "커플링"은 못 잡는다.
 const MAX_HITS_PER_RULE = 3;
+
+// 정규식 실행 자체가 오래 걸리는 것을 막는 안전 상한. 겹침 해소 전 원본 매치에 적용하므로
+// 최종 보고 개수(MAX_HITS_PER_RULE)보다 넉넉해야 겹쳐서 버려질 매치도 해소 단계까지 살아남는다.
+const MAX_RAW_HITS_PER_RULE = 50;
 
 const HANGUL_START = 0xac00;
 const HANGUL_END = 0xd7a3;
@@ -224,6 +230,96 @@ export function isParticleSafe(bad, good, nextChar, prevChar = "") {
 }
 
 /**
+ * 규칙의 금칙어 안쪽에 물결표가 있는지 본다.
+ *
+ * "만약 ~라면, 그러면" 같은 문장 패턴 규칙은 앞뒤로 최대 20자까지 아무 내용이나 물고
+ * 매치한다. 그 폭 안에 우연히 다른 규칙(예: "임시 저장소")이 들어 있어도 두 규칙은
+ * 서로 다른 것을 지적하는 것이지 한쪽이 다른 쪽을 가리키는 게 아니다. 길이만 보고
+ * 겹침을 해소하면 패턴 규칙이 항상 이겨서 그 안의 진짜 지적을 삼켜 버린다.
+ *
+ * @param {string} bad
+ * @returns {boolean}
+ */
+function hasInteriorWildcard(bad) {
+  return typeof bad === "string" && stripWildcardEdges(bad).includes(WILDCARD);
+}
+
+/**
+ * 정렬된 배열에서 index가 target 이상인 첫 자리를 찾는다.
+ * @param {object[]} sorted index 오름차순, 서로 겹치지 않음
+ * @param {number} target
+ * @returns {number}
+ */
+function lowerBound(sorted, target) {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid].index < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * 겹치는 발견을 정리한다. 같은 구간을 두 규칙이 잡으면 더 긴 쪽만 남긴다.
+ *
+ * "루즈 커플링"과 "커플링"이 같은 문장에서 함께 잡히면, 짧은 "커플링"만 지적해서는
+ * 독자가 "루즈"는 왜 안 걸리는지 헷갈린다. 긴 쪽이 뜻을 더 구체적으로 담고 있으므로
+ * 긴 쪽을 남기고 그 구간에 포함된 짧은 것은 버린다.
+ *
+ * 물결표가 있는 문장 패턴 규칙은 이 해소에서 아예 빠진다. 항상 남고, 다른 발견을
+ * 밀어내지도 않는다 — hasInteriorWildcard 의 설명을 보라.
+ *
+ * 길이 내림차순으로 훑으며 이미 받아들인 구간과 겹치면 버리는 탐욕법을 쓴다. 길이가 같으면
+ * 앞쪽(index 오름차순)을 먼저 받아들인다. accepted를 index 오름차순으로 유지하면, 이미
+ * 받아들인 구간끼리는 서로 겹치지 않으므로 새 후보가 겹칠 수 있는 상대는 삽입 지점의
+ * 양옆 둘뿐이다 — 매번 accepted 전체를 훑지 않고 이진 탐색으로 그 둘만 본다.
+ *
+ * @param {object[]} findings index 순으로 정렬되어 있지 않아도 된다
+ * @returns {object[]} index 오름차순
+ */
+function resolveOverlaps(findings) {
+  const wildcard = [];
+  const plain = [];
+  for (const finding of findings) {
+    (hasInteriorWildcard(finding.bad) ? wildcard : plain).push(finding);
+  }
+
+  const ordered = plain.sort((a, b) => b.length - a.length || a.index - b.index);
+  const accepted = [];
+
+  for (const finding of ordered) {
+    const end = finding.index + finding.length;
+    const pos = lowerBound(accepted, finding.index);
+    const before = accepted[pos - 1];
+    const after = accepted[pos];
+    const overlapsBefore = before !== undefined && before.index + before.length > finding.index;
+    const overlapsAfter = after !== undefined && after.index < end;
+    if (!overlapsBefore && !overlapsAfter) accepted.splice(pos, 0, finding);
+  }
+
+  return [...accepted, ...wildcard].sort((a, b) => a.index - b.index);
+}
+
+/**
+ * 규칙별 보고 개수 상한을 적용한다. 겹침을 해소한 **뒤**에 불러야 한다.
+ * @param {object[]} findings index 오름차순
+ * @returns {object[]}
+ */
+function capPerRule(findings) {
+  const counts = new Map();
+  const capped = [];
+  for (const finding of findings) {
+    const count = counts.get(finding.bad) ?? 0;
+    if (count >= MAX_HITS_PER_RULE) continue;
+    counts.set(finding.bad, count + 1);
+    capped.push(finding);
+  }
+  return capped;
+}
+
+/**
  * 문장에 규칙을 적용해 위반 목록을 돌려준다.
  *
  * @param {string} text
@@ -247,7 +343,7 @@ export function lint(text, rules) {
     pattern.lastIndex = 0;
     let hits = 0;
     let match;
-    while ((match = pattern.exec(masked)) !== null && hits < MAX_HITS_PER_RULE) {
+    while ((match = pattern.exec(masked)) !== null && hits < MAX_RAW_HITS_PER_RULE) {
       if (match[0].length === 0) {
         pattern.lastIndex += 1;
         continue;
@@ -267,7 +363,7 @@ export function lint(text, rules) {
     }
   }
 
-  return findings.sort((a, b) => a.index - b.index);
+  return capPerRule(resolveOverlaps(findings));
 }
 
 /**

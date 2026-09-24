@@ -106,6 +106,38 @@ test("문서 전체 예외 표시가 있으면 검사하지 않는다", () => {
   assert.deepEqual(lint(text, [rule()]), []);
 });
 
+test("겹치는 발견은 더 긴 쪽만 남긴다", () => {
+  // "루즈 커플링" 안에 "커플링"이 포함된다. 둘 다 잡히면 짧은 쪽은 버린다.
+  const outer = rule({ bad: "루즈 커플링", good: "느슨한 결합" });
+  const inner = rule({ bad: "커플링", good: "결합도" });
+  const findings = lint("루즈 커플링 구조로 바꿨습니다.", [outer, inner]);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].bad, "루즈 커플링");
+});
+
+test("겹치지 않으면 둘 다 남는다", () => {
+  const outer = rule({ bad: "루즈 커플링", good: "느슨한 결합" });
+  const inner = rule({ bad: "커플링", good: "결합도" });
+  const findings = lint("커플링 문제입니다.", [outer, inner]);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].bad, "커플링");
+});
+
+test("따로 떨어진 매치는 둘 다 남는다", () => {
+  const outer = rule({ bad: "루즈 커플링", good: "느슨한 결합" });
+  const inner = rule({ bad: "커플링", good: "결합도" });
+  const findings = lint("루즈 커플링 구조입니다. 나중에 커플링 문제가 또 생겼습니다.", [outer, inner]);
+  assert.deepEqual(findings.map((f) => f.bad), ["루즈 커플링", "커플링"]);
+});
+
+test("맞닿기만 하고 겹치지 않는 두 구간은 둘 다 남는다", () => {
+  // 앞 구간의 끝(index+length)이 뒤 구간의 시작과 같으면 겹친 게 아니다.
+  const first = rule({ bad: "가나", good: "다름1" });
+  const second = rule({ bad: "다라", good: "다름2" });
+  const findings = lint("가나다라", [first, second]);
+  assert.deepEqual(findings.map((f) => f.bad), ["가나", "다라"]);
+});
+
 test("'~지 여부'는 동사 어미 뒤만 잡고 '지'로 끝나는 명사는 두고 본다", () => {
   // 한 줄짜리 '~지 여부' 규칙이 유지·금지·방지 여부까지 잡고 틀린 교정을 권했다.
   const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
@@ -115,4 +147,40 @@ test("'~지 여부'는 동사 어미 뒤만 잡고 '지'로 끝나는 명사는 
   for (const clean of ["세션 유지 여부를 설정합니다.", "캐시 삭제 금지 여부", "중복 방지 여부를 옵션으로 둡니다.", "배포 중지 여부", "사용자 인지 여부", "성공 여부를 기록합니다."]) {
     assert.deepEqual(hits(clean), [], clean);
   }
+});
+
+test("실제 규칙표에서도 '루즈 커플링'은 '커플링'에 겹쳐 잡히지 않는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const findings = lint("루즈 커플링 구조로 바꿨습니다.", rules);
+  const hits = findings.filter((f) => f.bad === "커플링" || f.bad === "루즈 커플링");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].bad, "루즈 커플링");
+});
+
+test("문장 패턴 규칙은 폭 안에 겹친 낱말 규칙을 삼키지 않는다", () => {
+  // "만약 ~라면, 그러면"의 물결표는 앞뒤 20자까지 아무 내용이나 문다. 그 폭 안에
+  // 우연히 "임시 저장소"가 있어도 둘은 서로 다른 지적이다. 길이만 보고 겹침을
+  // 해소하면 항상 더 긴 문장 패턴이 이겨서 낱말 지적을 지워 버린다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+
+  const s1 = lint("만약 임시 저장소라면, 그러면 다시 채웁니다.", rules);
+  assert.ok(s1.some((f) => f.bad === "만약 ~라면, 그러면"), "문장 패턴이 사라졌다");
+  assert.ok(s1.some((f) => f.bad === "임시 저장소"), "낱말 지적이 삼켜졌다");
+
+  const s2 = lint("그것은 루즈 커플링 구조를 택하기 때문입니다.", rules);
+  assert.ok(s2.some((f) => f.bad === "그것은 ~하기 때문입니다"), "문장 패턴이 사라졌다");
+  assert.ok(s2.some((f) => f.bad === "루즈 커플링"), "낱말 지적이 삼켜졌다");
+});
+
+test("규칙별 상한은 겹침 해소 뒤에 적용된다", () => {
+  // "루즈 커플링"이 "커플링"의 상한(3)을 겹침 해소 전에 다 써버리면, 뒤에 따로 나오는
+  // 진짜 "커플링"은 보고되지 않는다.
+  const outer = rule({ bad: "루즈 커플링", good: "느슨한 결합" });
+  const inner = rule({ bad: "커플링", good: "결합도" });
+  const text = "루즈 커플링 구조입니다. ".repeat(3) + "커플링 문제입니다. ".repeat(2);
+  const findings = lint(text, [outer, inner]);
+  assert.deepEqual(
+    findings.map((f) => f.bad),
+    ["루즈 커플링", "루즈 커플링", "루즈 커플링", "커플링", "커플링"]
+  );
 });
