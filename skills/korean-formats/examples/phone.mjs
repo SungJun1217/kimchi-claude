@@ -22,6 +22,7 @@ const MOBILE_PREFIXES = ["010", "011", "016", "017", "018", "019"];
 // 050 대역은 평생번호와 안심번호로 나뉜다. 0502~0507 이 모두 쓰이므로 0505 만 받으면
 // 오픈마켓 주문의 안심번호(0504 등)가 검증에서 떨어진다. 배송 알림이 못 나간다.
 const SPECIAL_PREFIXES = [
+  "060", // 전화정보서비스(유료 정보 안내)
   "070", // 인터넷전화
   "080", // 수신자부담
   "0502", "0503", "0504", "0505", "0506", "0507", // 평생번호·안심번호
@@ -29,6 +30,27 @@ const SPECIAL_PREFIXES = [
 
 /** 050 대역 가운데 안심번호로 쓰이는 접두사. 유효 기간이 있어 영구 보관하면 안 된다. */
 const SAFE_NUMBER_PREFIXES = new Set(["0504", "0503", "0506", "0507"]);
+
+/**
+ * 국제 형식·국제 접속번호가 섞여 와도 국내 형식 숫자열로 되돌린다.
+ *
+ * "+82", "0082", "+82 (0)10" 처럼 국가번호 앞뒤에 붙는 표기가 다양하다. "(0)"은
+ * 국가번호 뒤에 앞자리 0을 괄호로 표시하는 관행이라 숫자만 남기면 이미 0이 살아 있고,
+ * 없는 경우에만 0을 다시 붙여야 한다. 이 판단을 파싱과 안심번호 판정이 각자 따로 하면
+ * 하나를 고쳐도 다른 하나가 남아 어긋난다.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function toDomesticDigits(value) {
+  let digits = String(value).normalize("NFKC").replace(/\D/g, "");
+  if (digits.startsWith("0082")) digits = digits.slice(2); // 0082 → 82, 국제 접속번호
+  if (digits.startsWith("82")) {
+    const rest = digits.slice(2);
+    digits = rest.startsWith("0") ? rest : `0${rest}`;
+  }
+  return digits;
+}
 
 /**
  * 안심번호인지 알려준다.
@@ -41,7 +63,7 @@ const SAFE_NUMBER_PREFIXES = new Set(["0504", "0503", "0506", "0507"]);
  * @returns {boolean}
  */
 export function isSafeNumber(value) {
-  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
+  const digits = toDomesticDigits(value);
   return [...SAFE_NUMBER_PREFIXES].some((prefix) => digits.startsWith(prefix));
 }
 
@@ -52,10 +74,7 @@ export function isSafeNumber(value) {
  * @returns {{kind: string, parts: string[]}|null} 알 수 없으면 null
  */
 export function parsePhone(value) {
-  let digits = String(value).normalize("NFKC").replace(/\D/g, "");
-
-  // 국제 형식을 국내 형식으로 되돌린다. +82-10-1234-5678 → 01012345678
-  if (digits.startsWith("82")) digits = `0${digits.slice(2)}`;
+  const digits = toDomesticDigits(value);
 
   const mobile = MOBILE_PREFIXES.find((prefix) => digits.startsWith(prefix));
   if (mobile) {

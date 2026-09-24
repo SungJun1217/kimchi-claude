@@ -61,8 +61,8 @@ export function differsOnlyByNormalization(a, b) {
  * @returns {{initial: string, medial: string, final: string}|null}
  */
 export function decompose(char) {
-  const code = char.codePointAt(0);
-  if (code < SYLLABLE_BASE || code > SYLLABLE_LAST) return null;
+  const code = char?.codePointAt(0);
+  if (code === undefined || code < SYLLABLE_BASE || code > SYLLABLE_LAST) return null;
 
   const offset = code - SYLLABLE_BASE;
   return {
@@ -81,6 +81,9 @@ export function decompose(char) {
  * 영어나 숫자로 끝나면 발음으로 판단해야 하는데 자동으로는 알 수 없다.
  * 그런 경우에는 조사를 쓰지 않는 문장으로 바꾸는 편이 안전하다.
  *
+ * macOS 에서 온 NFD 문자열은 음절이 자모로 흩어져 있어 마지막 "글자"가 온전한 음절이
+ * 아니라 홑자모가 된다. NFC 로 모으고 나서 마지막 글자를 본다.
+ *
  * @param {string} word
  * @param {"을/를"|"이/가"|"은/는"|"과/와"|"으로/로"} pair
  * @returns {string|null} 판정할 수 없으면 null
@@ -96,7 +99,7 @@ export function particleFor(word, pair) {
   const chosen = PAIRS[pair];
   if (!chosen) return null;
 
-  const last = [...word].at(-1);
+  const last = [...word.normalize("NFC")].at(-1);
   const parts = last === undefined ? null : decompose(last);
   if (parts === null) return null; // 한글이 아니면 발음을 알 수 없다
 

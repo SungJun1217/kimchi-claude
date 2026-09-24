@@ -29,6 +29,13 @@ const COMPOUND_FINAL_HEAD = {
   "ㄽ": "ㄹ", "ㄾ": "ㄹ", "ㄿ": "ㄹ", "ㅀ": "ㄹ", "ㅄ": "ㅂ",
 };
 
+// 겹받침의 둘째 자음. 겹받침을 다 친 질의("닭")가 대상에서는 다음 음절 초성으로 넘어가
+// 나뉘어 있을 때("달" + "걀") 맞춰 보는 데 쓴다.
+const COMPOUND_FINAL_TAIL = {
+  "ㄳ": "ㅅ", "ㄵ": "ㅈ", "ㄶ": "ㅎ", "ㄺ": "ㄱ", "ㄻ": "ㅁ", "ㄼ": "ㅂ",
+  "ㄽ": "ㅅ", "ㄾ": "ㅌ", "ㄿ": "ㅍ", "ㅀ": "ㅎ", "ㅄ": "ㅅ",
+};
+
 /**
  * 음절 하나의 초성을 돌려준다. 한글 음절이 아니면 그 글자를 그대로 돌려준다.
  *
@@ -38,6 +45,7 @@ const COMPOUND_FINAL_HEAD = {
  * @returns {string}
  */
 export function initialOf(char) {
+  if (char === "") return null; // 빈 문자열은 글자가 아니다
   const code = char.codePointAt(0);
   if (code < SYLLABLE_BASE || code > SYLLABLE_LAST) return char;
   return INITIALS[Math.floor((code - SYLLABLE_BASE) / (MEDIAL_COUNT * FINAL_COUNT))];
@@ -70,7 +78,8 @@ export function isChosungQuery(query) {
  * 입력 도중인 마지막 음절이 대상 글자와 맞는지 본다.
  *
  * "기" 는 "김" 의 앞부분이다(받침을 아직 안 쳤다). "김" 은 "기미" 의 앞부분일 수도 있다
- * (다음 모음을 치면 받침이 다음 음절의 초성으로 넘어간다). "달" 은 "닭" 의 앞부분이다.
+ * (다음 모음을 치면 받침이 다음 음절의 초성으로 넘어간다). "달" 은 "닭" 의 앞부분이고,
+ * 거꾸로 겹받침을 다 친 "닭"은 대상에서 "달" + "걀" 로 나뉘어 있어도 찾아야 한다.
  *
  * @param {string} typed 질의의 마지막 음절
  * @param {string} char 대상의 같은 자리 글자
@@ -86,6 +95,10 @@ function composingMatches(typed, char, next) {
 
   if (q.final === "") return true;
   if (COMPOUND_FINAL_HEAD[h.final] === q.final) return true;
+  // 질의가 겹받침이고 대상은 그 첫 자음까지만 종성으로 갖고 있으면, 둘째 자음이 다음
+  // 음절의 초성으로 넘어갔는지 본다. "닭" 질의가 "달"(종성 ㄹ) + "걀"(초성 ㄱ) 과 만난다.
+  if (COMPOUND_FINAL_HEAD[q.final] === h.final && next !== undefined && initialOf(next) === COMPOUND_FINAL_TAIL[q.final])
+    return true;
   return h.final === "" && next !== undefined && initialOf(next) === q.final;
 }
 

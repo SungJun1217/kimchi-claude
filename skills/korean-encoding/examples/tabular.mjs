@@ -11,7 +11,7 @@ const FULLWIDTH_OFFSET = 0xfee0;
 // 공백으로 보이지만 공백이 아닌 글자들. 관공서 자료와 웹에서 복사한 값에 섞인다.
 const INVISIBLE_SPACES = /[   -   　]/g;
 // 폭이 없어 눈에 보이지 않는 글자. 붙여넣기로 들어오고 비교를 깨뜨린다.
-const ZERO_WIDTH = /[​-‍﻿⁠]/g;
+const ZERO_WIDTH = /[\u200b-\u200d\ufeff\u2060]/g;
 
 /**
  * 전각 영숫자·기호를 반각으로 바꾸고, 보이지 않는 글자를 정리한다.
@@ -69,12 +69,16 @@ export function cleanField(value) {
  * @returns {{ok: boolean, reason?: string}}
  */
 export function checkDigitCount(value, expectedDigits) {
-  const raw = String(value ?? "");
-  if (/[eE]\+?\d/.test(raw)) {
+  // 폭을 먼저 맞춘다. 전각 E·플러스("１．２３４５７Ｅ＋０９")가 그대로면 지수 표기를 못 찾는다.
+  const normalized = normalizeWidth(String(value ?? "")).trim();
+
+  // 값 전체가 지수 표기 숫자 하나여야 한다. "서울 e1 12345" 처럼 문장에 섞인 e는
+  // 지수 표기가 아니고, "1.2E-05" 처럼 소수·음의 지수도 지수 표기다.
+  if (/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(normalized)) {
     return { ok: false, reason: "지수 표기다. 엑셀을 거치며 원본이 훼손됐다" };
   }
 
-  const digits = normalizeWidth(raw).replace(/\D/g, "");
+  const digits = normalized.replace(/\D/g, "");
   if (digits.length === expectedDigits) return { ok: true };
   if (digits.length < expectedDigits) {
     return {
@@ -112,11 +116,19 @@ export function escapeForSpreadsheet(value) {
  *
  * 줄바꿈은 CRLF 여야 엑셀이 제대로 나눈다.
  *
+ * **이 함수는 앞자리 0 을 지키지 못한다.** CSV 는 셀 서식이 없는 순수 텍스트라서 엑셀이
+ * 열 때 숫자로만 보이는 값을 다시 숫자로 해석해 0 을 지운다. `="0123"` 처럼 수식으로
+ * 감싸는 방법은 쓰지 않는다 — `escapeForSpreadsheet()` 의 수식 주입 방지와 충돌한다.
+ * 앞자리 0 을 반드시 지켜야 하면 CSV 가 아니라 xlsx 를 만들고 해당 열의 셀 서식을
+ * 문자열로 지정할 것.
+ *
  * @param {string[][]} rows
  * @returns {string}
  */
 export function toExcelCsv(rows) {
-  const BOM = "﻿";
+  // JSON 도구 인자로 "\uFEFF"를 쓰면 파싱 단계에서 진짜 BOM 문자로 풀려
+  // 소스에 보이지 않는 글자로 그대로 박힌다. 코드 포인트로 만들면 이 경로를 피한다.
+  const BOM = String.fromCharCode(0xfeff);
   const body = rows
     .map((row) =>
       row

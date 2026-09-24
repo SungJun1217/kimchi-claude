@@ -11,11 +11,18 @@
 // 기본주소를 사용자가 고칠 수 있게 두면 배송이 실패한다. 주소 검색 API(도로명주소
 // 안내시스템, 카카오·다음 우편번호 서비스)의 결과를 읽기 전용으로 저장한다.
 
+// 실제 배정된 우편번호는 앞 두 자리가 01~63 이다(우정사업본부 우편번호 체계 기준,
+// 서울 01xxx ~ 제주 63xxx). "00000"처럼 다섯 자리이기만 한 값을 형식 검사로 걸러낸다.
 /** 우편번호는 5자리다. 2015년 8월 이전은 6자리였다. */
-export const POSTAL_CODE_PATTERN = /^\d{5}$/;
+export const POSTAL_CODE_PATTERN = /^(?:0[1-9]|[1-5]\d|6[0-3])\d{3}$/;
 
 /**
- * 우편번호를 검증한다.
+ * 우편번호를 검증한다. 형식과 앞 두 자리의 배정 범위(01~63)만 본다.
+ *
+ * 실제로 쓰이는 번호인지는 확인하지 않는다. 우정사업본부가 우편번호를 새로 배정하거나
+ * 회수하면 이 범위 안에서도 없는 번호가 생긴다. 배송 전 검증은 주소 검색 API 결과를
+ * 그대로 신뢰하는 편이 안전하다.
+ *
  * @param {string} value
  * @returns {boolean}
  */
@@ -39,7 +46,10 @@ export function addressKind(address) {
   // 쉼표 뒤에 상세주소를 붙인다. 공백만 받으면 공식 표기를 판정하지 못한다.
   //
   // 지하 건물은 "을지로 지하 12", 임야 지번은 "봉천동 산 101" 처럼 번호 앞에 한 낱말이 끼어든다.
-  if (/[로길]\s*(지하\s*)?\d+(-\d+)?(?![\d-])/.test(text)) return "도로명";
+  //
+  // "을지로2가"·"종로1가" 처럼 숫자 뒤에 "가"가 바로 붙으면 도로명이 아니라 법정동
+  // 이름이다(지번주소). 숫자 뒤에 "가"가 오면 도로명으로 보지 않는다.
+  if (/[로길]\s*(지하\s*)?\d+(-\d+)?(?![\d-가])/.test(text)) return "도로명";
   if (/[동리가]\s*(산\s*)?\d+(-\d+)?(?![\d-])/.test(text)) return "지번";
   return "알 수 없음";
 }
@@ -58,15 +68,31 @@ export function addressKind(address) {
  */
 export function splitReference(address) {
   const text = String(address).trim();
-  const match = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(text);
-  if (match === null) return { base: text, reference: "" };
-  return { base: match[1].trim(), reference: match[2].trim() };
+  if (!text.endsWith(")")) return { base: text, reference: "" };
+
+  // 괄호 안에 괄호가 또 올 수 있다("역삼동, 아무(가)빌딩"). 정규식 하나로는 중첩을
+  // 다루지 못하므로 끝에서부터 괄호 깊이를 세어 바깥쪽 여는 괄호를 찾는다.
+  let depth = 0;
+  let start = -1;
+  for (let i = text.length - 1; i >= 0; i -= 1) {
+    if (text[i] === ")") depth += 1;
+    else if (text[i] === "(") {
+      depth -= 1;
+      if (depth === 0) {
+        start = i;
+        break;
+      }
+    }
+  }
+  if (start === -1) return { base: text, reference: "" };
+  return { base: text.slice(0, start).trim(), reference: text.slice(start + 1, -1).trim() };
 }
 
 /**
  * 두 주소가 같은 곳인지 견준다.
  *
- * 공백과 참고항목을 무시하고, 한글 정규화와 시도 이름을 맞춘다.
+ * 공백과 참고항목을 무시하고, 한글 정규화와 시도 이름을 맞춘다. 숫자와 숫자 사이의
+ * 공백만은 남긴다 — 지우면 "테헤란로 1 23"과 "테헤란로 12 3"이 같은 주소가 되어 버린다.
  * macOS 에서 입력한 주소와 서버에 저장된 주소가 자모 분리 때문에 다를 수 있다.
  *
  * **문자열 비교는 차선이다.** 시군구와 도로명도 바뀐다(인천 남구 → 미추홀구, 군위군의
@@ -79,8 +105,24 @@ export function splitReference(address) {
  */
 export function sameAddress(a, b) {
   const normalize = (value) => {
-    const [first, ...rest] = splitReference(value).base.normalize("NFC").trim().split(/\s+/);
-    return [canonicalRegion(first), ...rest].join("");
+    const tokens = splitReference(value).base.normalize("NFC").trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return "";
+    const [first, ...rest] = tokens;
+
+    // 시도 이름이 다음 낱말과 붙어 올 때가 있다("서울강남구"). 아는 시도 이름이 앞에
+    // 있으면 떼어 낸다.
+    const known = [...REGION_CANONICAL.keys()]
+      .sort((x, y) => y.length - x.length)
+      .find((name) => first.startsWith(name));
+    const joined =
+      known && known.length < first.length
+        ? [canonicalRegion(known), first.slice(known.length), ...rest].join(" ")
+        : [canonicalRegion(first), ...rest].join(" ");
+
+    // 공백 자체는 무시한다("강남구테헤란로"와 "강남구 테헤란로"는 같은 곳이다) —
+    // 다만 숫자와 숫자 사이의 공백만은 남긴다. 거기를 지우면 "테헤란로 1 23"과
+    // "테헤란로 12 3"이 이어붙어 같은 문자열이 되어 버린다.
+    return joined.replace(/(?<!\d)\s+|\s+(?!\d)/g, "");
   };
   return normalize(a) === normalize(b);
 }
