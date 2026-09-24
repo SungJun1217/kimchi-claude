@@ -289,6 +289,9 @@ export function warnAboutTone(targets, rules) {
   if (findings.length === 0 && particles.length === 0) return null;
 
   const label = targets[0]?.label || "";
+  // command 필드는 Bash 의 커밋 메시지다. 커밋 메시지에는 kimchi-ignore 표시를 붙일
+  // 수단이 없으므로(파일이 아니다) 이 안내는 문서 대상일 때만 낸다.
+  const isDocTarget = targets.some((target) => target.field !== "command");
   return {
     hookSpecificOutput: {
       hookEventName: "PostToolUse",
@@ -297,6 +300,10 @@ export function warnAboutTone(targets, rules) {
         particles.length > 0 ? formatParticleErrors(particles) : "",
         "",
         "저장소에 남는 글이므로 위 표현을 고쳐 주십시오. 코드와 식별자는 그대로 두십시오.",
+        isDocTarget
+          ? "사용자가 일부러 쓴 표현을 인용해야 한다면 그 줄에 `<!-- kimchi-ignore -->`를, 여러 줄이면 " +
+            "`<!-- kimchi-ignore-start -->`…`<!-- kimchi-ignore-end -->`로 감싸 두십시오(파일 전체를 빼는 표시는 쓰지 마십시오)."
+          : "",
       ].join("\n"),
     },
   };

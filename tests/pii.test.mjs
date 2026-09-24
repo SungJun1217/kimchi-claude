@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { findResidentNumbers, redact, redactText, formatLeak } from "../hooks/lib/pii.mjs";
 import { extractPiiTargets as extractTargets } from "../hooks/lib/pii.mjs";
 import { findResidentNumbers as skillFind } from "../skills/korean-identifiers/examples/resident-number.mjs";
+import { fastestMs } from "./helpers.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "guard.mjs");
@@ -513,18 +514,16 @@ test("이모지 앞의 열 번호는 코드 포인트 기준이다", () => {
 
 test("타이밍: 1MB 짜리 한 줄에서도 오늘의 자릿수 안에서 끝난다", () => {
   const line = "a1b23c4567 ".repeat(100000);
-  const start = Date.now();
-  findResidentNumbers(line);
-  const ms = Date.now() - start;
+  // 병렬로 도는 다른 시험 때문에 한 번 잰 값이 튈 수 있다. 최솟값이 실제 비용에
+  // 가깝고, 이차 비용 회귀는 최솟값에도 그대로 남는다(helpers.mjs 의 fastestMs 참고).
+  const ms = fastestMs(() => findResidentNumbers(line));
   console.log(`    1MB 한 줄: ${ms}ms (길이 ${line.length})`);
   assert.ok(ms < 500, `1MB 한 줄 검사가 ${ms}ms 걸렸다`);
 });
 
 test("타이밍: 5만 행 CSV 에서도 오늘의 자릿수 안에서 끝난다", () => {
   const rows = Array.from({ length: 50000 }, (_, i) => `row${i},value,2024-01-0${(i % 9) + 1}`).join("\n");
-  const start = Date.now();
-  findResidentNumbers(rows);
-  const ms = Date.now() - start;
+  const ms = fastestMs(() => findResidentNumbers(rows));
   console.log(`    5만 행 CSV: ${ms}ms`);
   assert.ok(ms < 500, `5만 행 CSV 검사가 ${ms}ms 걸렸다`);
 });
@@ -533,12 +532,19 @@ test("타이밍: 1MB 짜리 한글 문서도 아스키만큼 빠르다", () => {
   // 접을 문자가 없는 한글 텍스트는 빠른 경로를 타야 한다. 예전 구현은 "아스키뿐인가"로만
   // 빠른 경로를 갈랐는데, 그러면 한글이 섞인 순간 코드 포인트 배열을 매번 새로 만들어
   // 30배 가까이 느려졌다(1MB 한 줄 기준 5ms → 180ms, 실측 회귀).
+  //
+  // 절대 시간은 부하가 큰 환경(병렬로 도는 다른 시험)에서 흔들린다. 그래서 같은 줄
+  // 앞에 탭 하나만 붙여 느린 경로(코드 포인트 배열 생성)를 강제로 태운 값과 비교한다
+  // — 빠른 경로가 그 느린 경로보다 확연히 빨라야 한다는 조건은 부하와 무관하게 유효하다.
   const line = "결합도를 낮추면 변경 범위가 줄어듭니다. ".repeat(30000);
-  const start = Date.now();
-  findResidentNumbers(line);
-  const ms = Date.now() - start;
-  console.log(`    1MB 한글 줄: ${ms}ms (길이 ${line.length})`);
-  assert.ok(ms < 100, `1MB 한글 줄 검사가 ${ms}ms 걸렸다 — 빠른 경로를 안 탔다`);
+  const fastMs = fastestMs(() => findResidentNumbers(line));
+  const slowMs = fastestMs(() => findResidentNumbers(`\t${line}`));
+  console.log(`    1MB 한글 줄: 빠른 경로 ${fastMs}ms, 느린 경로(강제) ${slowMs}ms`);
+  assert.ok(fastMs < 300, `1MB 한글 줄 검사가 ${fastMs}ms 걸렸다 — 빠른 경로를 안 탔다`);
+  assert.ok(
+    fastMs * 5 < slowMs,
+    `빠른 경로(${fastMs}ms)가 느린 경로(${slowMs}ms)에 견줘 충분히 빠르지 않다 — 빠른 경로를 안 탄 것 같다`
+  );
 });
 
 test("생년월일 키와 at 으로 끝나는 보통 키는 시간 키로 보지 않는다", () => {

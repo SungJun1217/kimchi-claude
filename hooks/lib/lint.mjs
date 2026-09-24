@@ -679,18 +679,17 @@ export function applyFixes(text, rules, ext) {
   }
 
   // 뒤에서부터 고친다. 앞쪽을 먼저 고치면 뒤쪽 위치가 어긋난다.
+  //
+  // 겹침은 이미 lint() 안의 resolveOverlaps 가 해소했다 — 물결표가 있는 문장 패턴
+  // 규칙만 그 해소에서 빠지는데, 그 규칙들은 bad 안에 물결표가 있어 autoFixReplacement 가
+  // 항상 null 을 돌려주므로 애초에 갈아 끼우지 않는다. 그래서 여기서 candidates 끼리
+  // 겹칠 일이 없고, 별도의 겹침 검사가 필요 없다.
   const ordered = [...candidates].sort((a, b) => b.index - a.index);
 
   let result = text;
-  let lastStart = result.length;
 
   for (const finding of ordered) {
     const end = finding.index + finding.length;
-    if (end > lastStart) {
-      skipped.push({ ...finding, reason: "앞선 교정과 겹칩니다" });
-      continue;
-    }
-
     const replacement = autoFixReplacement(finding);
     if (replacement === null) {
       skipped.push({ ...finding, reason: "그대로 꽂을 수 있는 대체 표현이 아닙니다" });
@@ -707,7 +706,6 @@ export function applyFixes(text, rules, ext) {
 
     result = result.slice(0, finding.index) + replacement + result.slice(end);
     applied.push({ ...finding, replacement });
-    lastStart = finding.index;
   }
 
   return { text: result, applied: applied.reverse(), skipped };
@@ -723,18 +721,26 @@ export function applyFixes(text, rules, ext) {
 export function formatFindings(findings, label = "") {
   if (findings.length === 0) return "";
 
-  const lines = [
-    label
-      ? `${label}에서 어색한 한국어 표현 ${findings.length}건을 찾았습니다.`
-      : `어색한 한국어 표현 ${findings.length}건을 찾았습니다.`,
-    "",
-  ];
-
   const seen = new Set();
+  const rows = [];
   for (const finding of findings) {
     const key = `${finding.bad}\u0000${finding.good}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    rows.push(finding);
+  }
+
+  // 아래에 나열하는 줄 수(rows.length, 중복 제거)와 첫 문장의 건수가 같은 값이어야
+  // "3건을 찾았습니다" 인데 줄이 2개인 것처럼 세는 것과 보여 주는 것이 어긋나지 않는다.
+  // 실제 등장 횟수(findings.length)가 더 많으면 괄호로 총 등장 횟수를 덧붙인다.
+  const header =
+    rows.length === findings.length
+      ? `어색한 표현 ${rows.length}가지를 찾았습니다.`
+      : `어색한 표현 ${rows.length}가지(총 ${findings.length}곳)를 찾았습니다.`;
+
+  const lines = [label ? `${label}에서 ${header}` : header, ""];
+
+  for (const finding of rows) {
     const reason = finding.why ? ` (${finding.why})` : "";
     // 쓸 것을 적힌 그대로 보여 준다. "~될", "~습니다"처럼 어미를 적는 물결표는
     // 한국어에서 자연스러운 표기이므로 지우면 오히려 읽기 어려워진다.

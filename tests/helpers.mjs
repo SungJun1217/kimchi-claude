@@ -39,3 +39,26 @@ export function manyRules(count, build) {
     return rule(build(index, tag));
   });
 }
+
+/**
+ * fn() 을 여러 번 재서 가장 빠른 값을 돌려준다.
+ *
+ * CI/개발 머신에서 여러 시험이 동시에 도는 동안은 한 번 잰 시간이 다른 프로세스의
+ * 스케줄링에 그대로 흔들린다. 최솟값은 "이 코드가 실제로 걸리는 시간"에 훨씬
+ * 가깝고, 이차 비용 회귀(알고리즘이 O(n²)로 퇴화하는 것)는 최솟값에도 그대로 남는다
+ * — 재는 목적은 그 회귀를 잡는 것이지 절대 시간을 재는 것이 아니다.
+ *
+ * @param {() => void} fn
+ * @param {number} [runs]
+ * @returns {number} 밀리초
+ */
+export function fastestMs(fn, runs = 3) {
+  let best = Infinity;
+  for (let i = 0; i < runs; i += 1) {
+    const start = Date.now();
+    fn();
+    const ms = Date.now() - start;
+    if (ms < best) best = ms;
+  }
+  return best;
+}

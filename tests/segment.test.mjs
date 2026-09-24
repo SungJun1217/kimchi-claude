@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { maskProtected, isIgnoredFile, MASK } from "../hooks/lib/segment.mjs";
+import { fastestMs } from "./helpers.mjs";
 
 // 이 파일의 시험은 이 플러그인의 가장 큰 위험을 막는다.
 // contract 라는 변수명을 "계약"으로 고치라고 하는 오탐이다.
@@ -175,9 +176,9 @@ test("F8: 슬래시로 대안을 가르는 보통 문장은 덮지 않는다", (
 
 test("타이밍: 1MB 문서도 오늘의 자릿수 안에서 끝난다", () => {
   const doc = "결합도를 낮추면 변경 범위가 줄어듭니다. ".repeat(30000);
-  const start = Date.now();
-  maskProtected(doc);
-  const ms = Date.now() - start;
+  // 병렬로 도는 다른 시험 때문에 한 번 잰 값이 튈 수 있다. 최솟값이 실제 비용에
+  // 가깝고, 이차 비용 회귀는 최솟값에도 그대로 남는다(helpers.mjs 의 fastestMs 참고).
+  const ms = fastestMs(() => maskProtected(doc));
   console.log(`    1MB 문서 마스킹: ${ms}ms (길이 ${doc.length})`);
   assert.ok(ms < 2000, `1MB 문서 마스킹이 ${ms}ms 걸렸다`);
 });
@@ -211,9 +212,7 @@ test("항목1d: ::로 끝나는 줄이 있어도 마크다운(.md)에서는 뒤 
 test("타이밍: rST 지시자가 많은 560KB 문서도 이차 비용 없이 끝난다 (F8)", () => {
   const block = [".. code-block:: python", "", "    print(1)", "", "본문 문단입니다.", ""].join("\n");
   const doc = block.repeat(4000);
-  const start = Date.now();
-  maskProtected(doc, "rst");
-  const ms = Date.now() - start;
+  const ms = fastestMs(() => maskProtected(doc, "rst"));
   console.log(`    rST ${doc.length}자 마스킹: ${ms}ms`);
   assert.ok(ms < 1000, `rST 문서 마스킹이 ${ms}ms 걸렸다`);
 });
