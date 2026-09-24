@@ -11,7 +11,7 @@ kimchi-claude is a Claude Code **plugin**: when the user writes in Korean, Claud
 
 Node ESM, **zero dependencies**, no LLM calls in hooks or scripts. The design rationale lives in `docs/design.md` (Korean) — read the relevant section before changing a decision it records.
 
-Talk to the user in Korean. Code comments and the design doc are Korean 한다체; README and commit messages are Korean 합니다체. Instruction files meant for models (`AGENTS.md`, `CLAUDE.md`, `.claude/`) are English.
+Talk to the user in Korean. Code comments and the design doc are Korean 한다체; README, CONTRIBUTING.md and commit messages are Korean 합니다체. Instruction files meant for models (`AGENTS.md`, `CLAUDE.md`, `.claude/`) are English.
 
 ## Commands
 
