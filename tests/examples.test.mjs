@@ -195,13 +195,112 @@ test("신정과 현충일에는 대체공휴일이 없다", () => {
   assert.equal(withSubstitutes([{ date: "2026-08-15", name: "현충일" }]).length, 1);
 });
 
-test("두 공휴일이 같은 날이면 대체가 붙는다", () => {
-  // 2026-05-05 는 화요일이다. 겹침만으로 대체가 생긴다.
+test("두 공휴일이 같은 날이면 대체는 하나만 붙는다", () => {
+  // 2025-05-05 는 월요일이지만 겹침만으로 대체가 생긴다. 겹친 공휴일 개수만큼 붙지 않는다.
   const result = withSubstitutes([
-    { date: "2026-05-05", name: "어린이날" },
-    { date: "2026-05-05", name: "부처님오신날" },
+    { date: "2025-05-05", name: "어린이날" },
+    { date: "2025-05-05", name: "부처님오신날" },
   ]);
-  assert.equal(result.filter((day) => day.name === "대체공휴일").length, 2);
+  const substitutes = result.filter((day) => day.name === "대체공휴일");
+  assert.equal(substitutes.length, 1);
+  assert.equal(substitutes[0].date, "2025-05-06");
+});
+
+test("개천절과 추석이 같은 날 겹쳐도 대체는 하나만 붙는다", () => {
+  // 실제 달력이 아니라 규정을 검증하려고 지어낸 사례다 (2026-04-30 개정 이후 기준).
+  // 옛 연도(예: 2017년)는 그때 규정을 그대로 적용하면 안 된다 — 개천절이 대체 대상에
+  // 들어간 건 2021년 확대 이후이고, 이 표는 2026년 기준이다.
+  const result = withSubstitutes([
+    { date: "2026-10-05", name: "개천절" },
+    { date: "2026-10-05", name: "추석" },
+    { date: "2026-10-06", name: "추석" },
+  ]);
+  const substitutes = result.filter((day) => day.name === "대체공휴일");
+  assert.equal(substitutes.length, 1);
+});
+
+test("겹침은 정규화한 이름으로 센다 — 중복 입력이나 다른 표기는 겹침이 아니다", () => {
+  // 2026-05-05 는 화요일이라 겹침이 없으면 대체가 없어야 한다.
+  const duplicateEntry = withSubstitutes([
+    { date: "2026-05-05", name: "어린이날" },
+    { date: "2026-05-05", name: "어린이날" },
+  ]);
+  assert.equal(duplicateEntry.length, 2, "중복 입력행 자체는 겹침이 아니다");
+
+  // 노동절과 그 옛 이름(근로자의 날)이 같은 날 함께 들어와도 같은 공휴일이다. 2026-05-01 은 금요일.
+  const aliasPair = withSubstitutes([
+    { date: "2026-05-01", name: "노동절" },
+    { date: "2026-05-01", name: "근로자의 날" },
+  ]);
+  assert.equal(aliasPair.length, 2, "같은 공휴일의 다른 표기는 겹침이 아니다");
+
+  // "3·1절" 이라는 표기도 삼일절과 같이 대체가 붙는다. 2026-03-01 은 일요일이다.
+  const aliasName = withSubstitutes([{ date: "2026-03-01", name: "3·1절" }]);
+  assert.equal(aliasName.length, 2, "3·1절도 삼일절처럼 대체가 붙어야 한다");
+  assert.equal(aliasName[1].date, "2026-03-02");
+});
+
+test("겹침이 여럿인데 API가 준 대체공휴일 행이 하나뿐이면 나머지는 새로 만든다", () => {
+  // 개천절(10/3, 토)과 추석 연휴(10/4~10/6, 일~화)가 겹쳤다고 가정한 구성 사례.
+  // 각각 따로 대체가 필요한데 API 행은 10/7 하나뿐이다 — 개천절 몫으로 소진되고
+  // 추석 몫은 10/8에 새로 생겨야 한다. 하나가 다른 겹침의 대체까지 삼키면 안 된다.
+  const result = withSubstitutes([
+    { date: "2026-10-03", name: "개천절" },
+    { date: "2026-10-04", name: "추석" },
+    { date: "2026-10-05", name: "추석" },
+    { date: "2026-10-06", name: "추석" },
+    { date: "2026-10-07", name: "대체공휴일" },
+  ]);
+  const substitutes = result.filter((day) => day.name === "대체공휴일");
+  assert.deepEqual(
+    substitutes.map((day) => day.date).sort(),
+    ["2026-10-07", "2026-10-08"],
+    "기존 10/7 하나 + 소진되지 않은 겹침 몫으로 새로 생긴 10/8",
+  );
+});
+
+test("2026년 이전 근로자의 날은 대체 대상이 아니다", () => {
+  // 2021-05-01 은 토요일이다. 대통령령 제36290호 이전에는 근로자의 날이 관공서
+  // 공휴일 자체가 아니어서 대체가 붙지 않는다.
+  assert.equal(withSubstitutes([{ date: "2021-05-01", name: "근로자의 날" }]).length, 1);
+});
+
+test("임시공휴일과 선거일에는 대체공휴일이 없다", () => {
+  // 관공서의 공휴일에 관한 규정 제3조에 아예 없는 공휴일이다.
+  assert.equal(withSubstitutes([{ date: "2026-01-03", name: "임시공휴일" }]).length, 1);
+  assert.equal(withSubstitutes([{ date: "2026-06-07", name: "선거일" }]).length, 1);
+});
+
+test("공공데이터포털이 이미 계산해 준 대체공휴일은 중복으로 더 만들지 않는다", () => {
+  // 2024년 설날 연휴(2/9~2/11) + API가 이미 넣어 준 대체공휴일(2/12).
+  // 2/11이 일요일이라 다시 계산하면 2/12가 이미 점유돼 2/13에 또 만드는 버그가 있었다.
+  const result = withSubstitutes([
+    { date: "2024-02-09", name: "설날" },
+    { date: "2024-02-10", name: "설날" },
+    { date: "2024-02-11", name: "설날" },
+    { date: "2024-02-12", name: "대체공휴일" },
+  ]);
+  const substitutes = result.filter((day) => day.name === "대체공휴일");
+  assert.equal(substitutes.length, 1, "API가 준 대체공휴일 하나만 남아야 한다");
+  assert.equal(substitutes[0].date, "2024-02-12");
+});
+
+test("1월1일이라는 이름도 신정과 같이 대체가 붙지 않는다", () => {
+  // API가 신정을 "1월1일"로 표기하는 경우가 있다. 2023-01-01 은 일요일이다.
+  const result = withSubstitutes([{ date: "2023-01-01", name: "1월1일" }]);
+  assert.equal(result.length, 1);
+});
+
+test("2026년 노동절은 평일이라 대체가 붙지 않는다", () => {
+  // 대통령령 제36290호(2026-04-30 개정)로 노동절이 관공서 공휴일이 됐다. 2026-05-01 은 금요일.
+  assert.equal(withSubstitutes([{ date: "2026-05-01", name: "노동절" }]).length, 1);
+});
+
+test("노동절이 토요일이면 대체가 붙는다", () => {
+  // 2027-05-01 은 토요일, 5/2 는 일요일이다. 다음 평일인 5/3(월)로 대체된다.
+  const result = withSubstitutes([{ date: "2027-05-01", name: "노동절" }]);
+  assert.equal(result.length, 2);
+  assert.equal(result[1].date, "2027-05-03");
 });
 
 test("대체일은 이미 공휴일인 날을 건너뛴다", () => {
@@ -221,6 +320,17 @@ test("영업일을 더할 때 주말과 공휴일을 건너뛴다", () => {
   assert.equal(addBusinessDays("2026-03-05", 2, new Set()), "2026-03-09");
   // 월요일이 공휴일이면 화요일.
   assert.equal(addBusinessDays("2026-03-05", 2, new Set(["2026-03-09"])), "2026-03-10");
+  // 배열로 넘겨도 된다.
+  assert.equal(addBusinessDays("2026-03-05", 2, ["2026-03-09"]), "2026-03-10");
+});
+
+test("잘못된 입력은 조용히 틀리지 않고 던진다", () => {
+  assert.throws(() => addBusinessDays("2026-3-5", 1, new Set()), TypeError, "월/일 두 자리가 아니면 형식 오류");
+  assert.throws(() => addBusinessDays("2026-03-05", 1, "2026-03-09"), TypeError, "문자열은 Set도 배열도 아니다");
+  assert.throws(() => addBusinessDays("2026-03-05", 1, {}), TypeError);
+  assert.throws(() => withSubstitutes([{ date: "2025-02-30", name: "임시공휴일" }]), TypeError, "존재하지 않는 날짜");
+  assert.throws(() => kstRange("2026-3-1", "2026-04-01"), TypeError);
+  assert.throws(() => kstRange("2026-03-01", "x"), TypeError);
 });
 
 // ── 사업자등록번호 ──────────────────────────────────────────
@@ -499,36 +609,40 @@ test("쉼표와 따옴표가 든 값을 감싼다", () => {
 
 // ── 은행 영업일과 날짜 구간 ─────────────────────────────────
 
-test("근로자의 날은 공휴일이 아니지만 은행이 쉰다", () => {
-  // 관공서의 공휴일에 관한 규정에 없어서 공공데이터포털 목록에도 나오지 않는다.
-  // 공휴일 목록만 써서 이체 날짜를 잡으면 정산이 실패한다.
-  const closed = bankClosedDays(["2026-05-05"], [2026]);
-  assert.ok(closed.has("2026-05-01"), "근로자의 날이 빠졌다");
-  assert.ok(closed.has("2026-05-05"), "받은 공휴일이 빠졌다");
+test("2025년까지는 근로자의 날이 공휴일이 아니지만 은행이 쉰다", () => {
+  // 2026년 대통령령 제36290호로 노동절이 되기 전까지는 관공서 공휴일에 없어서
+  // 공공데이터포털 목록에도 나오지 않았다. 공휴일 목록만 써서 이체 날짜를 잡으면 정산이 실패한다.
+  const closed = bankClosedDays(["2025-05-05"], [2025]);
+  assert.ok(closed.has("2025-05-01"), "근로자의 날이 빠졌다");
+  assert.ok(closed.has("2025-05-05"), "받은 공휴일이 빠졌다");
+});
+
+test("2026년부터는 노동절이 공휴일 목록에 있으므로 은행 휴무일을 또 더하지 않는다", () => {
+  // 대통령령 제36290호(2026-04-30 개정) 이후로는 withSubstitutes() 가 준 목록에 이미 있다.
+  const closed = bankClosedDays([], [2026]);
+  assert.ok(!closed.has("2026-05-01"), "2026년부터는 여기서 더하지 않는다");
 });
 
 test("은행 휴무일을 쓰면 근로자의 날을 건너뛴다", () => {
-  // 2026-04-30 은 목요일, 5-01 은 금요일이다.
-  const bank = bankClosedDays([], [2026]);
-  assert.equal(addBusinessDays("2026-04-30", 1, bank), "2026-05-04", "5/1 과 주말을 건너뛴다");
+  // 2025-04-30 은 수요일, 5-01 은 목요일이다.
+  const bank = bankClosedDays([], [2025]);
+  assert.equal(addBusinessDays("2025-04-30", 1, bank), "2025-05-02", "5/1 과 주말을 건너뛴다");
   // 공휴일 목록만 쓰면 근로자의 날에 이체를 잡는다.
-  assert.equal(addBusinessDays("2026-04-30", 1, new Set()), "2026-05-01");
+  assert.equal(addBusinessDays("2025-04-30", 1, new Set()), "2025-05-01");
 });
 
 test("여러 해를 한 번에 담는다", () => {
-  const closed = bankClosedDays([], [2026, 2027]);
-  assert.ok(closed.has("2026-05-01"));
-  assert.ok(closed.has("2027-05-01"));
+  const closed = bankClosedDays([], [2024, 2025]);
+  assert.ok(closed.has("2024-05-01"));
+  assert.ok(closed.has("2025-05-01"));
 });
 
 test("날짜 구간을 반쯤 열린 형태로 만든다", () => {
   // BETWEEN ... 23:59:59 로 자르면 마지막 1초를 흘린다.
   const { startUtc, endUtc } = kstRange("2026-03-01", "2026-04-01");
-  assert.equal(startUtc, "2026-03-01T00:00:00+09:00");
-  assert.equal(endUtc, "2026-04-01T00:00:00+09:00");
-
-  // 경계가 실제로 한국 시간 0시여야 한다. UTC 로 잡으면 9시간 어긋난다.
-  assert.equal(new Date(startUtc).toISOString(), "2026-02-28T15:00:00.000Z");
+  // 경계가 실제로 한국 시간 0시의 UTC 순간이어야 한다. 9시간 앞선 전날 15시다.
+  assert.equal(startUtc, "2026-02-28T15:00:00.000Z");
+  assert.equal(endUtc, "2026-03-31T15:00:00.000Z");
 });
 
 test("구간 끝은 포함하지 않는다", () => {
