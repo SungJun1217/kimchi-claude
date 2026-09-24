@@ -9,7 +9,7 @@ kimchi-claude is a Claude Code **plugin**: when the user writes in Korean, Claud
 - **Always-on (tone)** — `output-styles/natural-korean.md`, force-applied into the system prompt. Generated from `rules/*.md` by `scripts/build-style.mjs`. `hooks/guard.mjs` checks artifacts (commit messages, Korean docs): tone → warn, resident registration numbers → block.
 - **On-demand (knowledge)** — `skills/korean-*` (encoding, datetime, identifiers, formats) and `skills/natural-korean-writing` (the full rule table, opened for review requests). Each knowledge skill ships working code in `skills/*/examples/*.mjs`.
 
-Node ESM, **zero dependencies**, no LLM calls in hooks or scripts. The design rationale lives in `docs/superpowers/specs/2026-09-22-natural-korean-plugin-design.md` (Korean) — read the relevant section before changing a decision it records.
+Node ESM, **zero dependencies**, no LLM calls in hooks or scripts. The design rationale lives in `docs/design.md` (Korean) — read the relevant section before changing a decision it records.
 
 Talk to the user in Korean. Code comments and the design doc are Korean 한다체; README and commit messages are Korean 합니다체. Instruction files meant for models (`AGENTS.md`, `CLAUDE.md`, `.claude/`) are English.
 
