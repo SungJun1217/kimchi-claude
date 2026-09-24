@@ -204,10 +204,10 @@ export function renderReadme(readme, rules, included) {
     COUNTS_OPEN,
     `| 갈래 | 개수 | 누가 막나 |`,
     `|---|---|---|`,
-    `| 치환 | ${count(CHECK_SUBSTITUTE)} | 린터가 자동으로 고친다 |`,
-    `| 정규식 | ${count(CHECK_REGEX)} | 린터가 잡아서 알려 준다 |`,
-    `| 프롬프트 | ${count(CHECK_PROMPT)} | 문자열로 못 잡는다. 출력 스타일만이 막는다 |`,
-    `| **합계** | **${rules.length}** | 그중 ${included}개가 출력 스타일 본문에 들어간다 |`,
+    `| 치환 | ${count(CHECK_SUBSTITUTE)} | 린터가 잡고, \`KIMCHI_AUTOFIX=1\`이면 바로 고칩니다 |`,
+    `| 정규식 | ${count(CHECK_REGEX)} | 린터가 잡아서 알려 줍니다 |`,
+    `| 프롬프트 | ${count(CHECK_PROMPT)} | 문자열로는 못 잡아서 출력 스타일로만 막습니다 |`,
+    `| **합계** | **${rules.length}** | 그중 ${included}개가 출력 스타일 본문에 들어갑니다 |`,
     COUNTS_CLOSE,
   ].join("\n");
 
