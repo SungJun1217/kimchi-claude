@@ -18,6 +18,7 @@ import {
   CHECK_REGEX,
   CHECK_SUBSTITUTE,
 } from "../hooks/lib/rules.mjs";
+import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -260,4 +261,4 @@ function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (isEntrypoint(import.meta.url)) main();

@@ -12,6 +12,7 @@
 //   KIMCHI_DISABLE=1      플러그인 훅 전체를 끈다
 
 import { readFileSync } from "node:fs";
+import { isEntrypoint } from "./lib/entrypoint.mjs";
 import { detectRepoLanguage, describeRepoLanguage } from "./lib/repo-language.mjs";
 
 function readStdin() {
@@ -48,7 +49,7 @@ function main() {
 }
 
 // 직접 실행될 때만 돈다.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntrypoint(import.meta.url)) {
   try {
     main();
   } catch {
