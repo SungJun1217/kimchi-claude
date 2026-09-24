@@ -223,7 +223,7 @@ function hero(c, data) {
       .join("");
 
   const lx = 32, rx = W - 32 - colW;
-  return svg(W, H, "같은 리뷰 질문에 플러그인을 끄고 켠 상태로 받은 실제 답변 비교. 끈 쪽은 계약이 얇다는 직역을 쓰고, 켠 쪽은 결합도와 영향 범위라는 표준 용어를 쓴다", c,
+  return svg(W, H, "같은 리뷰 질문에 플러그인을 끄고 켜서 받은 실제 답변입니다. 끈 쪽은 계약이 얇다는 직역을 쓰고, 켠 쪽은 결합도와 영향 범위라는 표준 용어를 씁니다", c,
     `.bad{fill:${c.red};font-weight:700;text-decoration:line-through;text-decoration-thickness:2px}` +
     `.good{fill:${c.green};font-weight:700}` +
     animation(times, CYCLE),
@@ -293,10 +293,10 @@ function guard(c, data) {
   const legend =
     `<g class="f${lg}"><rect x="760" y="300" width="248" height="112" rx="12" fill="${c.card}" stroke="${c.cardBorder}"/>` +
     `<text x="780" y="328" class="sans" font-size="13" fill="${c.muted}">기본값</text>` +
-    `<circle cx="786" cy="350" r="5" fill="${c.red}"/><text x="800" y="355" class="sans" font-size="13.5" fill="${c.text}">개인정보 → 막는다</text>` +
-    `<circle cx="786" cy="374" r="5" fill="${c.amber}"/><text x="800" y="379" class="sans" font-size="13.5" fill="${c.text}">말투 → 알려만 준다</text>` +
+    `<circle cx="786" cy="350" r="5" fill="${c.red}"/><text x="800" y="355" class="sans" font-size="13.5" fill="${c.text}">개인정보 → 차단</text>` +
+    `<circle cx="786" cy="374" r="5" fill="${c.amber}"/><text x="800" y="379" class="sans" font-size="13.5" fill="${c.text}">말투 → 경고만</text>` +
     `<circle cx="786" cy="398" r="5" fill="${c.blue}"/><text x="800" y="403" class="sans" font-size="13.5" fill="${c.text}">저장소 언어 → 한 번 안내</text></g>`;
-  return svg(W, H, "플러그인 훅이 세 가지로 개입하는 모습. 영어 저장소에서는 커밋을 영어로 쓰라고 안내하고, 주민등록번호가 든 파일 쓰기는 막고, 어색한 커밋 메시지는 고칠 표현을 알려 준다", c,
+  return svg(W, H, "훅이 개입하는 세 장면입니다. 영어 저장소에서는 커밋을 영어로 쓰라고 안내하고, 주민등록번호가 든 파일 쓰기는 막고, 어색한 커밋 메시지에는 고칠 표현을 알려 줍니다", c,
     animation(times, Math.ceil(t + 4)),
     chrome(c, W, H, "~/shop-api — claude  ·  kimchi-claude hooks") + body + legend);
 }
@@ -320,7 +320,7 @@ function layers(c) {
   // 왼쪽 층
   s += box(24, 24, 640, 372, c.redBg, c.red);
   s += `<text x="46" y="58" class="sans" font-size="17" font-weight="800" fill="${c.red}">항상 켜짐 — 말투</text>`;
-  s += `<text x="46" y="80" class="sans" font-size="13" fill="${c.text}">매 문장에 적용돼야 하니 모델의 판단에 맡기지 않는다</text>`;
+  s += `<text x="46" y="80" class="sans" font-size="13" fill="${c.text}">매 문장에 적용돼야 해서 모델 판단에 맡기지 않습니다</text>`;
   s += node(46, 104, 180, "rules/*.md", "사람이 읽는 규칙표", c.cardBorder);
   s += arrow(226, 133, 256, 133, c.red);
   s += node(258, 104, 170, "build-style.mjs", "순위대로 상한까지", c.cardBorder);
@@ -341,12 +341,12 @@ function layers(c) {
   });
   s += node(46, 326, 330, "hooks/session-language.mjs", "이력이 분명히 영어일 때만 한 번 안내", c.cardBorder);
   s += `<text x="400" y="352" class="sans" font-size="12.5" fill="${c.muted}">의존성 0 · LLM 호출 0</text>`;
-  s += `<text x="400" y="372" class="sans" font-size="12.5" fill="${c.muted}">실패하면 조용히 비켜난다</text>`;
+  s += `<text x="400" y="372" class="sans" font-size="12.5" fill="${c.muted}">실패하면 조용히 비켜납니다</text>`;
 
   // 오른쪽 층
   s += box(684, 24, 332, 372, c.greenBg, c.green);
   s += `<text x="706" y="58" class="sans" font-size="17" font-weight="800" fill="${c.green}">필요할 때 — 지식</text>`;
-  s += `<text x="706" y="80" class="sans" font-size="13" fill="${c.text}">그 일을 할 때만 열린다 · 동작하는 코드 포함</text>`;
+  s += `<text x="706" y="80" class="sans" font-size="13" fill="${c.text}">그 일을 할 때만 열립니다 · 동작하는 코드 포함</text>`;
   skills.forEach((name, i) => {
     const y = 100 + i * 57;
     s += box(706, y, 288, 48, c.card, c.cardBorder) +
@@ -354,7 +354,7 @@ function layers(c) {
       `<text x="738" y="${y + 21}" class="mono" font-size="13" font-weight="700" fill="${c.text}">${name}</text>` +
       `<text x="738" y="${y + 39}" class="sans" font-size="12" fill="${c.muted}">${esc(skillSub[i])}</text>`;
   });
-  return svg(W, H, "플러그인의 두 층. 왼쪽은 항상 켜진 말투 층으로 규칙표가 출력 스타일로 생성되어 시스템 프롬프트에 들어가고 훅이 산출물을 검사한다. 오른쪽은 필요할 때 여는 한국 개발 지식 스킬 다섯 개다", c,
+  return svg(W, H, "플러그인의 두 층입니다. 왼쪽 말투 층은 규칙표로 출력 스타일을 만들어 시스템 프롬프트에 넣고, 훅이 산출물을 검사합니다. 오른쪽은 필요할 때만 여는 한국 개발 지식 스킬 다섯 개입니다", c,
     `@keyframes dash{to{stroke-dashoffset:-22}}.flow{animation:dash 1.1s linear infinite}` +
     `@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}.pulse{animation:pulse 2s ease-in-out infinite}`,
     s);
