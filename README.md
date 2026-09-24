@@ -376,6 +376,7 @@ npm test        # 생성물이 최신인지 확인하고 시험을 돈다
 ```bash
 npm test          # 생성물 최신 여부 확인 + 단위 시험
 npm run build     # 출력 스타일 다시 생성
+npm run art       # README 그림 다시 생성. 문구는 훅과 린터가 만든다
 npm run score -- <file>   # 글 하나를 린터로 채점
 ```
 

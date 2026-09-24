@@ -20,12 +20,14 @@ npm test                                   # build --check (generated files fres
 node --test tests/particle.test.mjs        # one file
 node --test --test-name-pattern='<name>' "tests/*.test.mjs"   # one test by name
 npm run build                              # regenerate output-styles/natural-korean.md and the README counts block
+npm run art                                # regenerate the README figures in assets/ (hook messages and lint scores are computed, not typed)
 npm run score -- <file>                    # lint a response by hand
 npm run eval                               # claude plugin eval — launches child claude processes, costs tokens; only when the user asks
 echo '<hook json>' | node hooks/guard.mjs  # drive a hook directly with a synthetic payload
 ```
 
 - After editing `rules/*.md` or `scripts/build-style.mjs`, run `npm run build`; `npm test` fails if the generated files are stale.
+- `assets/*.svg` are generated too, and the hero figure's lint score covers every rule. After any change to `rules/`, hook messages, the lint/particle engine, `tests/fixtures/thin-contract-*`, or `scripts/build-readme-art.mjs`, run `npm run art` (a rule edit usually needs both `build` and `art`); `tests/readme-art.test.mjs` fails if the figures are stale.
 - Commit only with `npm test` green, and never push without asking.
 
 ## Branches and versions
