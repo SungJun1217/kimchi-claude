@@ -37,7 +37,7 @@ test("규칙이 표 행으로 들어간다", () => {
 
 test("소제목을 파일 이름으로 붙인다", () => {
   const { body } = buildBody([rule()]);
-  assert.match(body, /### 은유 — 벗기고 개념의 이름을 쓸 것/);
+  assert.match(body, /### 은유: 벗기고 개념의 이름을 쓸 것/);
 });
 
 test("이유를 모든 규칙에 붙인다", () => {
