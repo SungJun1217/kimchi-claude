@@ -1,27 +1,65 @@
 ---
 name: korean-encoding
-description: Use when handling Korean text encoding or search — CP949 EUC-KR legacy files, Excel CSV BOM mojibake (한글 깨짐), NFC/NFD Unicode normalization for filenames uploaded from macOS, 초성 검색 initial-consonant search, 한글 정렬 Korean collation, 자모 decomposition, choosing 을/를 이/가 particles in generated messages.
+description: Use when 엑셀 CSV 한글 깨짐, BOM, CP949/EUC-KR 인코딩 문제, 초성 검색, 한글 정렬, 파일명 NFC/NFD 정규화, 자모 분해, 을/를·이/가 조사 선택을 다룰 때 — Korean text encoding and search, legacy CP949/EUC-KR files, Excel CSV BOM mojibake, NFC/NFD normalization for macOS-uploaded filenames, initial-consonant (초성) search, Korean collation, particle selection in generated messages.
 ---
 <!-- kimchi-ignore-file 나쁜 예를 그대로 인용한다 -->
 
 # 한글 인코딩과 문자 처리
 
+예제 파일을 열 수 있으면 Read 로 열고, 권한 때문에 막히면 아래 코드를 그대로 쓰십시오.
+
 ## 인코딩이 깨지는 세 자리
 
 **엑셀에서 CSV 가 깨진다.** 엑셀은 UTF-8 파일에 BOM 이 없으면 시스템 기본 인코딩으로
-읽습니다. 한국어 윈도에서는 CP949 라서 한글이 전부 깨집니다. 해결은 BOM(`﻿`)을 앞에
-붙이는 것입니다. 파일 내용을 CP949 로 바꾸지 마십시오 — 엑셀은 열리지만 다른 도구가 깨집니다.
+읽습니다. 한국어 윈도에서는 CP949 라서 한글이 전부 깨집니다. 해결은 BOM 을 앞에 붙이는
+것입니다. 파일 내용을 CP949 로 바꾸지 마십시오 — 엑셀은 열리지만 다른 도구가 깨집니다.
+
+**BOM 을 `"\uFEFF"` 이스케이프로 쓰지 마십시오.** 도구 호출 인자는 JSON 이라 `\uFEFF`가
+파싱 단계에서 바로 진짜 BOM 문자로 풀립니다. 그러면 에디터 화면에 아무것도 안 보이는
+글자가 소스에 그대로 박혀서, 나중에 지우거나 옮기다가 없어져도 아무도 알아채지 못합니다.
+코드 포인트로 만드십시오.
 
 ```js
-const csv = "﻿" + rows.map((row) => row.join(",")).join("\r\n");
+const csv = String.fromCharCode(0xfeff) + rows.map((row) => row.join(",")).join("\r\n");
 ```
 
 줄바꿈도 `\r\n` 이어야 엑셀이 제대로 나눕니다. `toExcelCsv()` 가 둘을 함께 처리합니다.
 
+`toExcelCsv()` 도 **앞자리 0 은 지키지 못합니다.** CSV 에는 셀 서식이 없어서 엑셀이 열 때
+숫자로만 보이는 값을 다시 숫자로 해석합니다. 앞자리 0 을 지켜야 하면 CSV 가 아니라 xlsx 를
+만들고 해당 열을 문자열 서식으로 지정하십시오.
+
 **그리고 수식 주입을 막아야 합니다.** `=`, `+`, `-`, `@` 로 시작하는 값을 엑셀과 구글
 스프레드시트가 **수식으로 실행합니다.** 상호나 비고란에 실제로 들어오고, 받는 사람의
 기기에서 실행되므로 보안 문제입니다. 앞에 홑따옴표를 붙이면 문자열로 다룹니다.
-`escapeForSpreadsheet()` 를 쓰십시오.
+`escapeForSpreadsheet()` 를 쓰십시오. 아래는 `examples/tabular.mjs` 원본과 어긋나지
+않는 전체 구현입니다.
+
+```js
+// inline:tabular.mjs
+const FORMULA_STARTERS = /^[=+\-@\t\r]/;
+
+export function escapeForSpreadsheet(value) {
+  const text = String(value ?? "");
+  return FORMULA_STARTERS.test(text) ? `'${text}` : text;
+}
+
+export function toExcelCsv(rows) {
+  const BOM = String.fromCharCode(0xfeff);
+  const body = rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const safe = escapeForSpreadsheet(cell);
+          return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+        })
+        .join(",")
+    )
+    .join("\r\n");
+
+  return BOM + body;
+}
+```
 
 **전각 문자와 보이지 않는 글자가 섞인다.** 관공서 자료와 웹에서 복사한 값에
 `１２３`(전각 숫자), 전각 하이픈, U+00A0(줄바꿈 없는 공백), 폭 없는 글자가 들어옵니다.
@@ -140,7 +178,9 @@ import { particleFor } from "./examples/hangul-jamo.mjs";
 - 한글만 있는 목록에 정렬 규칙을 직접 짜기 — 코드포인트 순서가 이미 가나다순입니다. 영문·숫자·NFD가 섞일 때만 콜레이션이 필요합니다
 - 완성된 질의만 검색하기 — 입력 도중인 `김ㅊ`에서 결과가 사라집니다
 - 문자열 이어붙이기로 조사 만들기 — 절반은 틀립니다
-- `slice` 로 한글 자르기 — 자모 분리된 문자열에서는 글자가 깨집니다. `[...text]` 를 쓰십시오
+- `slice` 로 한글 자르기 — 자모 분리(NFD)된 문자열에서는 `[...text]` 도 깨집니다. 음절 하나가
+  여러 코드포인트로 흩어져 있어서 스프레드도 코드포인트 단위로 자르기 때문입니다. NFC 로
+  정규화하고 나서 자르거나, 자소 단위가 그대로 필요하면 `Intl.Segmenter` 를 쓰십시오
 - 전각 숫자를 정제하지 않기 — `\d` 에 걸리지 않아 검증이 조용히 실패합니다
 - 식별자를 숫자로 읽기 — 앞자리 0 이 날아갑니다. 문자열로 다루십시오
 - 날아간 0 을 채워 복구하기 — 다른 사업자의 번호가 됩니다. 되돌려야 합니다

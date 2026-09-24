@@ -1,10 +1,12 @@
 ---
 name: korean-identifiers
-description: Use when handling Korean identity numbers or personal data — 주민등록번호 resident registration number, 사업자등록번호 business number, 법인등록번호, PII masking, 개인정보 보호법 PIPA compliance, 본인인증 identity verification, CI/DI. Covers why resident number checksum validation is broken since 2020 and what to store instead.
+description: Use when handling Korean identity numbers or personal data — 주민등록번호 resident registration number, 사업자등록번호 business number, 법인등록번호, 개인정보 마스킹·주소 마스킹 PII masking (including address masking), 개인정보 보호법 PIPA compliance, 본인인증 identity verification, CI/DI. Covers why resident number checksum validation is broken since 2020 and what to store instead.
 ---
 <!-- kimchi-ignore-file 법령 용어와 나쁜 예를 그대로 인용한다 -->
 
 # 한국의 식별번호와 개인정보
+
+예제 파일을 열 수 있으면 Read 로 열고, 권한 때문에 막히면 아래 코드를 그대로 쓰십시오.
 
 ## 먼저 알아야 할 것 두 가지
 
@@ -66,6 +68,84 @@ isValidCorporateNumber("1234567890120"); // 가중치가 1·2 번갈이로 다�
 | 주소 | 도로명과 건물번호 | 동·호수를 남기면 특정됩니다 |
 
 동작하는 구현: `examples/masking.mjs`
+
+**주소 마스킹은 실패를 닫는 쪽으로 둡니다.** 도로명·지번을 알아볼 수 없다고 원본이나 첫
+낱말을 그대로 돌려주면 동·호수가 새어 나갑니다. 규칙은 이렇습니다.
+
+1. 도로명(`…로 123`, `…로123길 45`, `…길 45-6`, `…로 지하 12`)이나 지번(`…동 123-4`,
+   `…동2가 12-3`, `산 101`)을 알아보면 그 번호까지만 남기고 뒤는 가립니다.
+2. 숫자 바로 뒤에 **호·동·층**이 붙으면 그 숫자는 건물번호가 아니라 상세주소의 단위입니다
+   ("1203호"의 1203은 건물번호가 아닙니다) — 건물번호로 착각해 남기면 안 됩니다.
+3. 위 둘 다 아니면 첫 낱말이 **한국의 시/도 이름**(서울, 경기도 등, 별칭 포함)으로
+   시작하는지 봅니다. 아니면 무엇도 믿지 말고 통째로 가립니다(`"****"`).
+4. 시/도까지는 확인됐지만 그 뒤가 공백 없이 붙어 있으면(`"서울시강남구…"`) 시/도까지만
+   남기고, 공백으로 나뉘어 있으면 이어지는 시/군/구까지만 남깁니다. 숫자나 시/군/구가
+   아닌 낱말이 나오면 거기서 멈춥니다.
+
+`examples/masking.mjs` 원본과 어긋나지 않는 전체 구현입니다.
+
+```js
+// inline:masking.mjs
+const ROAD_DETAIL = /^(.*?[가-힣]+(?:로\d+길|[로길])\s*(?:지하\s*)?\d+(?:-\d+)?)(?![\d-가호동층길])/;
+
+const LOT_DETAIL = /^(.*?[가-힣]+(?:\d+가|[동리가])\s*(?:산\s*)?\d+(?:-\d+)?)(?![\d-호동층])/;
+
+const PROVINCE_NAMES = [
+  "서울특별시", "서울시", "서울",
+  "부산광역시", "부산시", "부산",
+  "대구광역시", "대구시", "대구",
+  "인천광역시", "인천시", "인천",
+  "광주광역시", "광주",
+  "대전광역시", "대전시", "대전",
+  "울산광역시", "울산시", "울산",
+  "세종특별자치시", "세종시", "세종",
+  "경기도", "경기",
+  "강원특별자치도", "강원도", "강원",
+  "충청북도", "충북",
+  "충청남도", "충남",
+  "전북특별자치도", "전라북도", "전북",
+  "전라남도", "전남",
+  "경상북도", "경북",
+  "경상남도", "경남",
+  "제주특별자치도", "제주도", "제주",
+].sort((a, b) => b.length - a.length);
+
+function safePrefix(text) {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return "";
+
+  const province = PROVINCE_NAMES.find((name) => tokens[0].startsWith(name));
+  if (province === undefined) return "";
+  if (tokens[0] !== province) return province;
+
+  let lastAdminIndex = 0;
+  for (let i = 1; i < tokens.length; i += 1) {
+    if (/\d/.test(tokens[i])) break;
+    if (!/[시군구]$/.test(tokens[i])) break;
+    lastAdminIndex = i;
+  }
+  return tokens.slice(0, lastAdminIndex + 1).join(" ");
+}
+
+function withMaskedRemainder(prefix, text) {
+  const remainder = text.slice(prefix.length).trim();
+  return remainder.length === 0 ? prefix : `${prefix} ****`;
+}
+
+export function maskAddress(value) {
+  const text = String(value).trim();
+
+  const road = ROAD_DETAIL.exec(text);
+  if (road !== null) return withMaskedRemainder(road[1], text);
+
+  const lot = LOT_DETAIL.exec(text);
+  if (lot !== null) return withMaskedRemainder(lot[1], text);
+
+  const prefix = safePrefix(text);
+  if (prefix.length === 0) return "****";
+  return prefix.length === text.length ? prefix : `${prefix} ****`;
+}
+```
 
 ## 관리자 화면
 

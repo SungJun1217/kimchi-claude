@@ -691,3 +691,159 @@ test("빈 값과 잘못된 입력에 안전하다", () => {
   assert.equal(masked.name, null);
   assert.equal(masked.phone, undefined);
 });
+
+test("이름 마스킹은 잘못된 입력에서 열려 있지 않다", () => {
+  // maskName(null) 이 String(null) 을 거치면 "n**l" 이 나와 "null" 을 이름처럼 마스킹해 버렸다.
+  assert.equal(maskName(null), "");
+  assert.equal(maskName(undefined), "");
+  assert.equal(maskName(42), "");
+});
+
+test("NFD 로 들어온 이름도 NFC 로 모아 마스킹한다", () => {
+  assert.equal(maskName("홍길동".normalize("NFD")), "홍*동");
+});
+
+test("도로명 주소를 알아보지 못하면 상세주소를 그대로 흘리지 않는다", () => {
+  // 도로명·지번 정규식이 매치하지 못하면 예전에는 원본을 그대로 돌려줘 동·호수가 새어 나갔다.
+  assert.equal(
+    maskAddress("경기 성남시 분당구 정자동 178-1 101동 1203호"),
+    "경기 성남시 분당구 정자동 178-1 ****",
+  );
+  assert.equal(maskAddress("서울 중구 을지로 지하 12 B101호"), "서울 중구 을지로 지하 12 ****");
+  assert.equal(maskAddress("서울 관악구 봉천동 산 101 2층"), "서울 관악구 봉천동 산 101 ****");
+  assert.equal(maskAddress("서울 중구 명동2가 12-3 501호"), "서울 중구 명동2가 12-3 ****");
+  assert.equal(
+    maskAddress("서울 강남구 테헤란로123길 45 302호"),
+    "서울 강남구 테헤란로123길 45 ****",
+    "로N길 도로명은 건물번호까지 남아야 한다",
+  );
+  assert.equal(
+    maskAddress("서울 종로구 종로1가 1 302호"),
+    "서울 종로구 종로1가 1 ****",
+    "로N가로 끝나는 법정동은 지번이다",
+  );
+});
+
+test("주소를 전혀 알아볼 수 없으면 시/군/구까지만 남긴다", () => {
+  // 실패를 열어 두면(원본 그대로) 상세주소가 새어 나간다. 실패는 닫는 쪽으로 둔다.
+  assert.equal(maskAddress("서울 강남구 아무개빌딩 42-1"), "서울 강남구 ****");
+});
+
+test("맥에서 올린 이름은 이미 마스킹된 도로명 주소를 그대로 지킨다", () => {
+  assert.equal(maskAddress("서울 강남구 테헤란로 123 101동 202호"), "서울 강남구 테헤란로 123 ****");
+});
+
+test("시/도조차 알아볼 수 없으면 첫 낱말을 그대로 돌려주지 않는다", () => {
+  // prefix === text 라는 이유만으로 원문을 그대로 돌려주던 옛 결함. 시/도가 없으면
+  // 아무것도 남기지 않는다.
+  assert.equal(maskAddress("은마아파트12동345호"), "****");
+  assert.equal(maskAddress("래미안101동1203호"), "****");
+  assert.equal(maskAddress("1203호"), "****");
+  assert.equal(maskAddress("101-1203"), "****");
+});
+
+test("시/도가 다음 낱말에 붙어 와도 시/도까지만 남긴다", () => {
+  // 공백이 아예 없는 입력은 시/군/구 경계를 안전하게 못 찾으므로 시/도까지만 믿는다.
+  assert.equal(maskAddress("서울시강남구역삼동래미안아파트101동1203호"), "서울시 ****");
+});
+
+test("건물번호 자리의 숫자가 실은 호·동·층 단위면 건물번호로 보지 않는다", () => {
+  // "1203"이 건물번호가 아니라 "1203호"의 호수라서, 남기면 상세주소가 새어 나간다.
+  assert.equal(maskAddress("경기도 수원시 팔달구 인계동 1203호"), "경기도 수원시 팔달구 ****");
+  assert.equal(maskAddress("부산 해운대구 우동 1203호"), "부산 해운대구 ****");
+  assert.equal(maskAddress("서울 강남구 도산대로 1203호"), "서울 강남구 ****");
+  assert.equal(maskAddress("서울 강남구 역삼동 101동 1203호"), "서울 강남구 ****");
+  assert.equal(maskAddress("서울 중구 을지로2가 101동 1203호"), "서울 중구 ****");
+  assert.equal(maskAddress("서울 강남구 논현로12길 3층"), "서울 강남구 ****");
+});
+
+// ── 전화번호 국제 형식 ──────────────────────────────────────
+
+test("국제 형식·국제 접속번호가 섞여도 국내 번호로 되돌린다", () => {
+  // "(0)"은 국가번호 뒤에 트렁크 0을 표시하는 관행 표기라 이미 0이 살아 있다.
+  assert.deepEqual(parsePhone("+82 (0)10-1234-5678"), { kind: "휴대전화", parts: ["010", "1234", "5678"] });
+  assert.deepEqual(parsePhone("+82-010-1234-5678"), { kind: "휴대전화", parts: ["010", "1234", "5678"] });
+  assert.deepEqual(parsePhone("0082-10-1234-5678"), { kind: "휴대전화", parts: ["010", "1234", "5678"] });
+});
+
+test("060 전화정보서비스를 알아본다", () => {
+  assert.equal(parsePhone("060-700-2000").kind, "특수번호");
+});
+
+test("안심번호 판정도 국제 형식을 국내 형식으로 되돌리고 나서 본다", () => {
+  // parsePhone은 안심번호로 읽는데 isSafeNumber는 따로 정규화하다가 어긋났다.
+  assert.ok(isSafeNumber("+82-504-1234-5678"));
+});
+
+// ── 우편번호 ────────────────────────────────────────────────
+
+test("형식만 맞는 00000은 우편번호가 아니다", () => {
+  // 앞 두 자리가 01~63 밖이면 실제로 배정된 적이 없다(우정사업본부 우편번호 체계).
+  assert.ok(!isValidPostalCode("00000"));
+  assert.ok(!isValidPostalCode("99999"));
+  assert.ok(isValidPostalCode("06236"));
+});
+
+// ── 도로명/지번 판정 ────────────────────────────────────────
+
+test("로N가로 끝나는 법정동은 지번이다", () => {
+  // "[로길]\d+" 검사가 먼저 걸려 "을지로2가"를 도로명으로 잘못 읽던 버그.
+  assert.equal(addressKind("서울 중구 을지로2가 199-15"), "지번");
+  assert.equal(addressKind("서울 종로구 종로1가 1"), "지번");
+  assert.equal(addressKind("서울 중구 충무로1가 24-1"), "지번");
+  assert.equal(addressKind("서울 중구 남대문로5가 84-11"), "지번");
+});
+
+test("같은 주소 비교는 토큰 경계를 지운 채 이어붙이지 않는다", () => {
+  // 이어붙이면 "테헤란로 1 23"과 "테헤란로 12 3"이 같은 문자열이 되어 버린다.
+  assert.ok(!sameAddress("서울 강남구 테헤란로 1 23", "서울 강남구 테헤란로 12 3"));
+});
+
+test("숫자와 숫자 사이가 아닌 공백은 있든 없든 같은 주소로 본다", () => {
+  // 도로명과 건물번호 사이 공백, 구와 도로명 사이 공백은 표기 차이일 뿐 다른 주소가 아니다.
+  assert.ok(sameAddress("서울 강남구 테헤란로123", "서울 강남구 테헤란로 123"));
+  assert.ok(sameAddress("서울 강남구테헤란로 123", "서울 강남구 테헤란로 123"));
+});
+
+test("중첩 괄호가 있어도 참고항목을 떼어 낸다", () => {
+  const { base, reference } = splitReference("서울 강남구 테헤란로 123 (역삼동, 아무(가)빌딩)");
+  assert.equal(base, "서울 강남구 테헤란로 123");
+  assert.equal(reference, "역삼동, 아무(가)빌딩");
+});
+
+// ── 자모 분해와 조사 ────────────────────────────────────────
+
+test("decompose와 initialOf는 빈 문자열에 null을 돌려준다", () => {
+  assert.equal(decompose(""), null);
+  assert.equal(initialOf(""), null);
+});
+
+test("NFD로 들어온 말에도 받침에 맞는 조사를 고른다", () => {
+  assert.equal(particleFor("서울".normalize("NFD"), "으로/로"), "로");
+});
+
+// ── 초성 검색: 겹받침이 다음 음절로 나뉜 경우 ────────────────
+
+test("겹받침을 다 친 질의가 다음 음절로 나뉜 대상도 찾는다", () => {
+  // "닭"을 질의로 치면 "달"(종성 ㄹ) + "걀"(초성 ㄱ)로 나뉜 "달걀"도 찾아야 한다.
+  assert.ok(matches("달걀", "닭"));
+  assert.ok(matches("일거리", "읽"));
+  assert.ok(matches("안자", "앉"));
+  assert.ok(matches("갑시다", "값"));
+});
+
+// ── 표 형식 자료: 지수 표기 판정 ─────────────────────────────
+
+test("지수 표기 판정은 폭을 맞춘 뒤 값 전체를 본다", () => {
+  // 전각 E·플러스가 그대로면 지수 표기를 못 찾았고, 문장에 섞인 e는 지수로 오판했다.
+  const fullwidth = checkDigitCount("1.23457Ｅ＋09", 10);
+  assert.equal(fullwidth.ok, false);
+  assert.match(fullwidth.reason, /지수 표기/);
+
+  const negativeExponent = checkDigitCount("1.2E-05", 10);
+  assert.equal(negativeExponent.ok, false);
+  assert.match(negativeExponent.reason, /지수 표기/);
+
+  const sentence = checkDigitCount("서울 e1 12345", 10);
+  assert.doesNotMatch(sentence.reason ?? "", /지수 표기/, "문장에 섞인 e는 지수 표기가 아니다");
+});

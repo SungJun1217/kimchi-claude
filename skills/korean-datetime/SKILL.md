@@ -6,6 +6,8 @@ description: Use when handling Korean dates, holidays or business days — 공�
 
 # 한국의 날짜와 시간
 
+예제 파일을 열 수 있으면 Read 로 열고, 권한 때문에 막히면 아래 코드를 그대로 쓰십시오.
+
 ## 음력 공휴일은 계산하지 마십시오
 
 설날, 추석, 부처님오신날은 음력입니다. 음력 변환은 천문 계산이고 직접 구현하면 반드시
