@@ -85,7 +85,7 @@ test("저장소의 한국어 문서가 규칙을 어기지 않는다", () => {
 test("설계 문서의 파일 목록이 실물과 맞는다", () => {
   // 문서가 틀리면 읽는 사람을 속인다. README 의 숫자는 --check 가 검증하는데
   // 설계 문서의 파일 목록은 아무도 보지 않아 네 기능이 지나가도록 낡아 있었다.
-  const spec = readFileSync(join(ROOT, "docs/superpowers/specs/2026-09-22-natural-korean-plugin-design.md"), "utf8");
+  const spec = readFileSync(join(ROOT, "docs/design.md"), "utf8");
   const structure = spec.slice(spec.indexOf("## 구조"), spec.indexOf("### 왜 출력 스타일인가"));
 
   // 런타임 코드는 모두 적혀 있어야 한다.

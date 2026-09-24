@@ -12,7 +12,7 @@ and make it real: edit, verify, report. You do not redesign, and you do not comm
 
 - Read the files you will touch and their tests. If the task cites analysis (file:line, invariant numbers), start there.
 - If the task is ambiguous, or doing it right requires touching files outside the stated scope, stop and report back instead of guessing.
-- Design context, only if needed: `AGENTS.md` and the relevant section of `docs/superpowers/specs/2026-09-22-natural-korean-plugin-design.md`. Don't redesign.
+- Design context, only if needed: `AGENTS.md` and the relevant section of `docs/design.md`. Don't redesign.
 
 ## Hard constraints (never violate)
 

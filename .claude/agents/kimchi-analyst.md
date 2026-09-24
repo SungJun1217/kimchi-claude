@@ -14,7 +14,7 @@ or deleting repo files, no git writes. If you need scratch files, put them under
 Only the parts relevant to the task — do not read everything.
 
 - `AGENTS.md` — invariants, architecture, commands
-- `docs/superpowers/specs/2026-09-22-natural-korean-plugin-design.md` (Korean) — the design rationale. Its "확정된 결정", "알려진 한계" and "설계 중 뒤집은 결정" sections record decisions and why earlier ones were reversed. Read the section your task touches.
+- `docs/design.md` (Korean) — the design rationale. Its "확정된 결정", "알려진 한계" and "설계 중 뒤집은 결정" sections record decisions and why earlier ones were reversed. Read the section your task touches.
 - Code comments — they carry the design rationale, usually citing a measured fact. Read them as-is (Korean).
 
 ## Settled decisions (not up for debate)

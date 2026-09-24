@@ -374,7 +374,7 @@ npm test        # 생성물이 최신인지 확인하고 시험을 돈다
 | blast radius | 블라스트 레디우스 | 여파가 미치는 범위 | 영향 범위 |
 <!-- kimchi-ignore-end -->
 
-설계 판단과 근거는 [설계 문서](docs/superpowers/specs/2026-09-22-natural-korean-plugin-design.md)에
+설계 판단과 근거는 [설계 문서](docs/design.md)에
 정리해 뒀습니다.
 
 ## 개발
