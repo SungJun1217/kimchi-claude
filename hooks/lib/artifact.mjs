@@ -28,6 +28,8 @@ const DOC_EXTENSIONS = new Set([".md", ".mdx", ".markdown", ".txt", ".rst", ".ad
  */
 function declaresIgnore(filePath) {
   try {
+    // 일반 파일만 읽는다. FIFO 나 소켓은 stat 은 끝나도 읽기가 끝나지 않을 수 있다.
+    if (!statSync(filePath).isFile()) return false;
     return isIgnoredFile(readFileSync(filePath, "utf8"));
   } catch {
     return false;
@@ -48,7 +50,9 @@ const MAX_CONTEXT_FILE_BYTES = 1_000_000;
 
 function readDocForContext(filePath) {
   try {
-    if (statSync(filePath).size > MAX_CONTEXT_FILE_BYTES) return null;
+    // 일반 파일만, 크기 상한 안에서만 읽는다. FIFO 같은 대상은 isFile() 이 걸러 준다.
+    const stat = statSync(filePath);
+    if (!stat.isFile() || stat.size > MAX_CONTEXT_FILE_BYTES) return null;
     return readFileSync(filePath, "utf8");
   } catch {
     return null;

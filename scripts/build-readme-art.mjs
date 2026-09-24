@@ -169,8 +169,11 @@ function hookMessages(rules) {
   expect(tone, "말투 경고가 나오지 않는다");
   const notice = describeRepoLanguage({ commit: "영어", doc: "알 수 없음" })
     .split("\n")
-    .find((line) => line.startsWith("- 커밋"));
-  expect(notice, "저장소 언어 안내에 커밋 줄이 없다");
+    .find((line) => line.startsWith("If the user is writing in Korean"));
+  expect(notice, "저장소 언어 안내 문장을 찾지 못했다");
+  // 그림 칸이 좁아 문장 전체는 못 싣는다. 핵심 대상만 뽑는다.
+  const noticeTarget = notice.match(/but write (.+?) in English/);
+  expect(noticeTarget, "저장소 언어 안내에서 대상을 뽑지 못했다");
 
   const sentences = leak[0].split(". ");
   expect(sentences.length === 2, "주민등록번호 안내 첫 줄이 두 문장이 아니다");
@@ -189,7 +192,7 @@ function hookMessages(rules) {
   expect(/^\S.*\d+건/.test(tone[0]), "말투 경고 첫 줄에 건수가 없다");
 
   return {
-    notice: notice.replace(/^- /, "").replaceAll("**", ""),
+    notice: `Write ${noticeTarget[1]} in English`,
     leakHead: `${leakHead}.`,
     leakDetail: `${position.slice(2)}  —  ${leakTail.replace(/니다\.$/, "니다")}`,
     toneHead: tone[0],
