@@ -61,6 +61,28 @@ test("가운데 물결표가 사이를 건너뛴다", () => {
   assert.equal(findings.length, 1);
 });
 
+test("쓰지 말 것 칸의 / 로 가른 대안을 각각 잡는다", () => {
+  const findings = lint("난간을 잡고 계단을 올랐습니다.", [rule({ bad: "난간 / 차선 방호벽", good: "안전장치" })]);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].matched, "난간");
+
+  const findings2 = lint("차선 방호벽이 설치됐습니다.", [rule({ bad: "난간 / 차선 방호벽", good: "안전장치" })]);
+  assert.equal(findings2.length, 1);
+  assert.equal(findings2[0].matched, "차선 방호벽");
+});
+
+test("NFD(자모 분해형) 한글도 NFC와 같은 개수만큼 잡는다", () => {
+  const nfc = "컨텐츠 메세지를 리팩토링했습니다.";
+  const nfd = nfc.normalize("NFD");
+  const rules = [
+    rule({ bad: "컨텐츠", good: "콘텐츠" }),
+    rule({ bad: "메세지", good: "메시지" }),
+    rule({ bad: "리팩토링", good: "리팩터링" }),
+  ];
+  assert.equal(lint(nfd, rules).length, lint(nfc, rules).length);
+  assert.equal(lint(nfd, rules).length, 3);
+});
+
 test("정규식 특수문자를 문자 그대로 다룬다", () => {
   const findings = lint("점(.)과 별표(*)입니다.", [rule({ bad: "(.)과 별표(*)", good: "기호" })]);
   assert.equal(findings.length, 1);

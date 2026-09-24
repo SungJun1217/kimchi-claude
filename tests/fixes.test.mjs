@@ -193,6 +193,11 @@ test("실제 규칙표: '루즈 커플링'과 '커플링'이 각각 옳게 고�
   assert.equal(applyFixes("커플링 문제입니다.", rules).text, "결합도 문제입니다.");
 });
 
+test("실제 규칙표: '타이트 커플링'도 '커플링'에 먼저 삼켜지지 않고 옳게 고쳐진다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.equal(applyFixes("타이트 커플링을 풀었습니다.", rules).text, "강한 결합을 풀었습니다.");
+});
+
 test("실제 규칙표: '데드락'은 지적만 하고 고치지 않는다", () => {
   const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
   assert.equal(lint("데드락 발생", rules).some((f) => f.bad === "데드락"), true);
@@ -206,12 +211,12 @@ test("실제 규칙표: '레더 로직입니다'는 손대지 않고 지적하�
 });
 
 test("실제 규칙표: 문장 패턴 폭 안의 낱말 규칙도 따로 고쳐진다", () => {
-  // "만약 ~라면, 그러면"은 정규식(경고만)이라 그대로 남고, 그 폭 안의 "임시 저장소"는
-  // 치환이라 "캐시"로 바뀐다. 두 규칙은 서로 다른 구간을 가리키는 게 아니라 겹쳐 있을
+  // "만약 ~라면, 그러면"은 정규식(경고만)이라 그대로 남고, 그 폭 안의 "쓰레드"는
+  // 치환이라 "스레드"로 바뀐다. 두 규칙은 서로 다른 구간을 가리키는 게 아니라 겹쳐 있을
   // 뿐이므로 긴 쪽이 짧은 쪽의 교정을 막아서는 안 된다.
   const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
-  const s1 = applyFixes("만약 임시 저장소라면, 그러면 다시 채웁니다.", rules);
-  assert.equal(s1.text, "만약 캐시라면, 그러면 다시 채웁니다.");
+  const s1 = applyFixes("만약 쓰레드라면, 그러면 다시 만듭니다.", rules);
+  assert.equal(s1.text, "만약 스레드라면, 그러면 다시 만듭니다.");
 
   const s2 = applyFixes("그것은 루즈 커플링 구조를 택하기 때문입니다.", rules);
   assert.equal(s2.text, "그것은 느슨한 결합 구조를 택하기 때문입니다.");

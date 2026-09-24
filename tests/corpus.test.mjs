@@ -84,6 +84,39 @@ test("치환 규칙은 실제로 치환할 수 있다", () => {
   assert.deepEqual(broken, [], `\n${broken.join("\n")}`);
 });
 
+test("치환 규칙의 자동 교정 결과가 그 규칙 자신의 쓸 것과 같다", () => {
+  // 표층 복사 → 깊은 복사처럼, 한 규칙 안의 매치가 다른 대안의 쓸 것을 꽂는 사고가
+  // 실제로 있었다. 규칙 하나만 떼어 시험하면 못 잡는다 — 전체 규칙표를 상대로 돌려서,
+  // 적용된 교정이 정말 그 규칙 자신의 autoFixReplacement 값과 같은지 봐야 한다.
+  const mismatched = [];
+  for (const rule of rules) {
+    if (rule.check !== CHECK_SUBSTITUTE) continue;
+    if (toPattern(rule.bad) === null) continue;
+    const expected = autoFixReplacement(rule);
+    if (expected === null) continue; // 다른 시험(치환 규칙은 그대로 꽂을 수 있는...)이 잡는다
+
+    const sample = `앞말 ${rule.bad} 뒷말`;
+    const { applied } = applyFixes(sample, rules);
+    const hit = applied.find((a) => a.bad === rule.bad);
+    if (!hit) {
+      mismatched.push(`"${rule.bad}" 전체 규칙표에서는 자동 교정이 적용되지 않는다`);
+    } else if (hit.replacement !== expected) {
+      mismatched.push(`"${rule.bad}" → "${hit.replacement}" (기대: "${expected}")`);
+    }
+  }
+  assert.deepEqual(mismatched, [], `\n${mismatched.join("\n")}`);
+});
+
+test("치환 규칙의 쓰지 말 것에는 / 로 가른 대안이 없다", () => {
+  // " / "가 있는 셀은 한 대안만 매치돼도 다른 대안의 쓸 것을 꽂을 위험이 있다
+  // (autoFixReplacement가 이런 규칙을 스스로 막지만, 애초에 자료에 남기지 않는다).
+  // 대안이 필요하면 행을 나눠 대안마다 정확한 쓸 것을 짝짓는다.
+  const withSlash = rules
+    .filter((rule) => rule.check === CHECK_SUBSTITUTE && rule.bad.includes(" / "))
+    .map((rule) => rule.bad);
+  assert.deepEqual(withSlash, []);
+});
+
 test("치환 규칙은 자기 자신을 다시 잡지 않는다", () => {
   // 고친 결과가 같은 규칙에 또 걸리면 무한히 지적하게 된다.
   const looping = [];
