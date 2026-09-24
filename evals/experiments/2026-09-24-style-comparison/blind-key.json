@@ -1,0 +1,26 @@
+{
+ "P1": {
+  "A": "kimchi",
+  "B": "merged",
+  "C": "fluent",
+  "D": "none"
+ },
+ "P2": {
+  "A": "merged",
+  "B": "fluent",
+  "C": "kimchi",
+  "D": "none"
+ },
+ "P3": {
+  "A": "none",
+  "B": "kimchi",
+  "C": "merged",
+  "D": "fluent"
+ },
+ "P4": {
+  "A": "none",
+  "B": "merged",
+  "C": "kimchi",
+  "D": "fluent"
+ }
+}
