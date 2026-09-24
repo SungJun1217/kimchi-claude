@@ -262,13 +262,15 @@ claude --plugin-dir ./kimchi-claude
 
 ## 규칙 추가
 
-`rules/` 안의 마크다운 표에 한 줄을 넣고 다시 생성하면 됩니다.
+`rules/` 안의 마크다운 표에 한 줄을 넣고 다시 생성하면 됩니다. 한 줄은 이렇게 생겼습니다.
 
-```markdown
+<!-- kimchi-ignore-start -->
 | 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |
 |---|---|---|---|---|---|
 | thin contract | 얇은 계약 | 낮은 결합도 | 은유를 직역해 뜻이 사라졌다 | 치환 | 핵심 |
-```
+<!-- kimchi-ignore-end -->
+
+이유 칸은 규칙 파일의 관례대로 한다체로 씁니다.
 
 ```bash
 npm run build   # output-styles/natural-korean.md 를 다시 만든다
