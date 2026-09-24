@@ -30,12 +30,18 @@ const THEMES = {
     text: "#2B2320", muted: "#9A8A7E", red: "#C8372D", redBg: "#FCE4DF", green: "#2F8A45",
     greenBg: "#DFF2E3", amber: "#B8660F", amberBg: "#FCEBD5", blue: "#2F6DB5", blueBg: "#E0ECF9",
     accent: "#D9532B", glow: "#F4B39C",
+    logoJar: "#9A5B3A", logoJarDark: "#7A4329", logoJarLight: "#B97550", logoRim: "#6E3B23", logoShadow: "#2B232022",
+    logoFace: "#2B2320", logoBlush: "#F08A7E", logoTag: "#FFFBF5", logoTagText: "#2B2320", logoLeaf: "#F4EEC9",
+    logoLeafEdge: "#DCCF94", logoGreen: "#6FAE45", logoGreenDark: "#4E8A2E", logoRed: "#D9532B", logoRedDeep: "#B8391C",
   },
   dark: {
     bg: "#1A1513", chrome: "#241D1A", border: "#3A2F2A", card: "#211B18", cardBorder: "#3A2F2A",
     text: "#EFE5DC", muted: "#9C8B7F", red: "#FF7B6B", redBg: "#4A231F", green: "#7FD18F",
     greenBg: "#1D3A25", amber: "#F2B05E", amberBg: "#45300F", blue: "#8DB8F0", blueBg: "#1B2C45",
     accent: "#FF8A5B", glow: "#7A3322",
+    logoJar: "#B06A45", logoJarDark: "#8A4E31", logoJarLight: "#CC8760", logoRim: "#7E4529", logoShadow: "#00000055",
+    logoFace: "#1A1513", logoBlush: "#FF9A8C", logoTag: "#241D1A", logoTagText: "#EFE5DC", logoLeaf: "#F1E9C0",
+    logoLeafEdge: "#CFC088", logoGreen: "#7FC455", logoGreenDark: "#5A9C38", logoRed: "#E8663D", logoRedDeep: "#C4492A",
   },
 };
 
@@ -301,6 +307,59 @@ function guard(c, data) {
     chrome(c, W, H, "~/shop-api — claude  ·  kimchi-claude hooks") + body + legend);
 }
 
+// ─── 0. 로고: 배추김치 모자를 쓴 김치 항아리 ──────────────────────────────────
+// 이 플러그인만의 캐릭터다. Claude 로고는 Anthropic 상표라 고쳐 쓰지 않는다.
+function logo(c) {
+  // 고춧가루 점. 자리는 고정해서 생성 결과가 늘 같다.
+  const flakes = [[66,70],[70,82],[84,52],[88,76],[90,40],[110,44],[114,68],[118,82],[132,62],[136,76],[140,56],[80,62]]
+    .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 === 0 ? 2.2 : 1.6}" fill="${c.logoRedDeep}" opacity=".75"/>`).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -10 200 210" width="160" height="160" role="img" aria-label="배추김치 모자를 쓴 김치 항아리 캐릭터입니다">
+<defs>
+  <radialGradient id="jarShade" cx="38%" cy="35%" r="75%">
+    <stop offset="0" stop-color="${c.logoJarLight}"/><stop offset=".55" stop-color="${c.logoJar}"/><stop offset="1" stop-color="${c.logoJarDark}"/>
+  </radialGradient>
+  <linearGradient id="kimchi" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${c.logoRed}"/><stop offset="1" stop-color="${c.logoRedDeep}"/>
+  </linearGradient>
+</defs>
+<ellipse cx="100" cy="186" rx="52" ry="7" fill="${c.logoShadow}"/>
+<!-- 항아리 몸통 -->
+<path d="M68 92 C40 104 34 150 58 172 C72 184 128 184 142 172 C166 150 160 104 132 92 Z" fill="url(#jarShade)"/>
+<!-- 항아리 입 -->
+<rect x="64" y="84" width="72" height="14" rx="7" fill="${c.logoRim}"/>
+<rect x="68" y="86" width="64" height="5" rx="2.5" fill="${c.logoJarLight}" opacity=".45"/>
+<!-- 얼굴 -->
+<ellipse cx="84" cy="124" rx="5.2" ry="6.4" fill="${c.logoFace}"/><circle cx="85.8" cy="121.6" r="1.8" fill="#fff"/>
+<ellipse cx="116" cy="124" rx="5.2" ry="6.4" fill="${c.logoFace}"/><circle cx="117.8" cy="121.6" r="1.8" fill="#fff"/>
+<ellipse cx="74" cy="138" rx="7" ry="4" fill="${c.logoBlush}" opacity=".7"/>
+<ellipse cx="126" cy="138" rx="7" ry="4" fill="${c.logoBlush}" opacity=".7"/>
+<path d="M93 136 Q100 143 107 136" stroke="${c.logoFace}" stroke-width="3" fill="none" stroke-linecap="round"/>
+<!-- 이름표 -->
+<rect x="82" y="152" width="36" height="17" rx="5" fill="${c.logoTag}" opacity=".95"/>
+<text x="100" y="165" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="${c.logoTagText}">&gt;_</text>
+<!-- 배추김치 모자: 잎 세 장이 베레모처럼 오른쪽으로 기운다. 흰 줄기 위에 양념, 끝은 초록 -->
+<g transform="rotate(-8 100 90)">
+  <!-- 왼쪽 잎 -->
+  <path d="M60 92 C50 74 52 52 66 40 C74 52 80 72 82 92 Z" fill="${c.logoLeaf}" stroke="${c.logoLeafEdge}" stroke-width="1.2"/>
+  <path d="M61 90 C54 76 55 60 64 50 C70 60 74 76 76 90 Z" fill="url(#kimchi)" opacity=".92"/>
+  <path d="M66 40 C60 34 58 26 62 20 C64 26 68 24 70 30 C73 26 76 30 74 36 C72 40 70 42 66 40 Z" fill="${c.logoGreen}"/>
+  <!-- 오른쪽 잎 -->
+  <path d="M140 92 C150 74 150 50 134 36 C126 50 120 72 118 92 Z" fill="${c.logoLeaf}" stroke="${c.logoLeafEdge}" stroke-width="1.2"/>
+  <path d="M139 90 C146 76 146 58 136 46 C130 58 126 76 124 90 Z" fill="url(#kimchi)" opacity=".92"/>
+  <path d="M134 36 C140 30 144 22 140 14 C137 20 133 18 131 24 C128 20 124 25 126 31 C128 36 130 38 134 36 Z" fill="${c.logoGreen}"/>
+  <!-- 가운데 잎: 가장 크고 앞에 온다 -->
+  <path d="M74 94 C66 66 76 32 100 18 C124 32 134 66 126 94 Z" fill="${c.logoLeaf}" stroke="${c.logoLeafEdge}" stroke-width="1.4"/>
+  <path d="M77 92 C72 70 78 44 96 30 C88 50 88 74 94 92 Z M106 92 C112 74 112 50 104 30 C122 44 128 70 123 92 Z" fill="url(#kimchi)" opacity=".95"/>
+  <path d="M100 22 C96 44 96 70 100 94" stroke="${c.logoLeaf}" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M100 22 C96 44 96 70 100 94" stroke="${c.logoLeafEdge}" stroke-width="1" fill="none" opacity=".8"/>
+  <path d="M100 18 C92 12 90 2 96 -4 C98 2 102 0 103 6 C106 0 112 2 110 10 C114 8 118 14 112 20 C108 24 104 22 100 18 Z" fill="${c.logoGreen}"/>
+  <path d="M100 16 C101 10 103 6 105 2" stroke="${c.logoGreenDark}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+</g>
+${flakes}
+</svg>
+`;
+}
+
 // ─── 3. 구조: 항상 켜진 층과 필요할 때 여는 층 ────────────────────────────────
 function layers(c) {
   const W = 1040, H = 420;
@@ -377,7 +436,7 @@ export function renderAll() {
     hook: hookMessages(rules),
   };
   const files = {};
-  for (const [name, draw] of Object.entries({ hero, guard, layers })) {
+  for (const [name, draw] of Object.entries({ logo, hero, guard, layers })) {
     for (const [theme, colors] of Object.entries(THEMES)) {
       files[`${name}-${theme}.svg`] = draw(colors, data);
     }

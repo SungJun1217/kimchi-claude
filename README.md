@@ -1,6 +1,11 @@
 <div align="center">
 
-# 🌶️ kimchi-claude
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+  <img src="assets/logo-light.svg" width="140" alt="배추김치 모자를 쓴 김치 항아리 캐릭터입니다">
+</picture>
+
+# kimchi-claude
 
 **한국어로 물으면 한국 개발자가 실제로 쓰는 말투로 답합니다.**
 
