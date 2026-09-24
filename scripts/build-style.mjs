@@ -8,7 +8,7 @@
 //   node scripts/build-style.mjs           생성해서 파일에 쓴다
 //   node scripts/build-style.mjs --check   커밋된 파일이 최신인지 확인한다 (다르면 종료 코드 1)
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -200,7 +200,7 @@ export function buildBody(rules, maxChars = MAX_CHARS) {
 /**
  * README 의 표시 구간에 규칙 수를 써 넣은 문서를 돌려준다.
  */
-export function renderReadme(readme, rules, included) {
+export function renderReadme(readme, rules, included, skillDescriptions = []) {
   const count = (check) => rules.filter((rule) => rule.check === check).length;
   const block = [
     COUNTS_OPEN,
@@ -210,6 +210,8 @@ export function renderReadme(readme, rules, included) {
     `| 정규식 | ${count(CHECK_REGEX)} | 린터가 잡아서 알려 줍니다 |`,
     `| 프롬프트 | ${count(CHECK_PROMPT)} | 문자열로는 못 잡아서 출력 스타일로만 막습니다 |`,
     `| **합계** | **${rules.length}** | 그중 ${included}개가 출력 스타일 본문에 들어갑니다 |`,
+    "",
+    `스킬은 설명 ${skillDescriptions.length}개, 모두 ${skillDescriptions.reduce((sum, text) => sum + text.length, 0)}자만 늘 컨텍스트에 있습니다. 본문은 그 일을 할 때만 열립니다.`,
     COUNTS_CLOSE,
   ].join("\n");
 
@@ -217,6 +219,20 @@ export function renderReadme(readme, rules, included) {
   const end = readme.indexOf(COUNTS_CLOSE);
   if (start === -1 || end === -1) return readme;
   return readme.slice(0, start) + block + readme.slice(end + COUNTS_CLOSE.length);
+}
+
+/**
+ * 스킬마다 frontmatter 의 description 을 읽는다. 늘 컨텍스트에 있는 것은 이 설명뿐이다.
+ * 손으로 적은 토큰 수는 스킬이 늘면서 조용히 낡았다. 그래서 글자 수를 세어 써 넣는다.
+ */
+function readSkillDescriptions() {
+  const dir = join(ROOT, "skills");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .map((name) => join(dir, name, "SKILL.md"))
+    .filter((path) => existsSync(path))
+    .map((path) => readFileSync(path, "utf8").match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? "")
+    .filter(Boolean);
 }
 
 function main() {
@@ -231,7 +247,7 @@ function main() {
   const { body, included, dropped } = buildBody(rules);
 
   const readme = existsSync(README_PATH) ? readFileSync(README_PATH, "utf8") : "";
-  const nextReadme = renderReadme(readme, rules, included);
+  const nextReadme = renderReadme(readme, rules, included, readSkillDescriptions());
 
   if (check) {
     if (!existsSync(OUT_PATH)) {
