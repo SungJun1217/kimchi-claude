@@ -224,3 +224,18 @@ test("조사 첫 글자 집합이 짝 표에서 유도된다", () => {
     assert.ok(heads.has(particle[0]), `${particle} 의 첫 글자가 빠졌다`);
   }
 });
+
+test("실제 규칙표: 계사·랑의 축약형이 깨지면 자동 교정을 건너뛴다", () => {
+  // "디펜던시였습니다" → "의존성였습니다"처럼, 짝 표에 없던 계사 활용형이 자동 교정을
+  // 지나쳐서 깨진 문장을 냈다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const cases = [
+    "원인은 디펜던시였습니다.",
+    "아이덤포턴트여야 합니다.",
+    "컨커런시예요.",
+    "디펜던시랑 얽혀 있습니다.",
+  ];
+  for (const sentence of cases) {
+    assert.equal(applyFixes(sentence, rules).text, sentence, sentence);
+  }
+});

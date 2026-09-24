@@ -241,3 +241,71 @@ test("문서가 스스로를 예외로 선언하면 아무것도 보고하지 �
   assert.deepEqual(findParticleErrors(guide), []);
   assert.equal(fixParticles(guide).text, guide);
 });
+
+// ── 계사·조사의 축약형 ────────────────────────────────────
+//
+// 였/이었, 예요/이에요, 여/이어, 랑/이랑도 앞말 받침이 형태를 가른다. 이 짝이 짝 표에
+// 없어서 자동 교정이 "디펜던시였습니다" 같은 깨진 문장을 만들었다.
+
+test("계사의 활용형도 받침에 맞춰 바로잡는다", () => {
+  assert.equal(correctParticle("commit", "였"), "이었", "커밋 — ㅅ");
+  assert.equal(correctParticle("cache", "이었"), "였", "캐시");
+  assert.equal(correctParticle("commit", "예요"), "이에요");
+  assert.equal(correctParticle("cache", "이에요"), "예요");
+  assert.equal(correctParticle("commit", "이랑"), null, "받침 있음 — 이랑이 맞다");
+  assert.equal(correctParticle("cache", "이랑"), "랑");
+  assert.equal(correctParticle("commit", "여야"), "이어야");
+  assert.equal(correctParticle("cache", "이어야"), "여야");
+});
+
+test("모르는 낱말 뒤 계사 활용형은 손대지 않는다", () => {
+  assert.deepEqual(findParticleErrors("디펜던시였습니다."), []);
+  assert.deepEqual(findParticleErrors("아이덤포턴트여야 합니다."), []);
+  assert.deepEqual(findParticleErrors("컨커런시예요."), []);
+  assert.deepEqual(findParticleErrors("디펜던시랑 얽혀 있습니다."), []);
+});
+
+// ── 대문자 두음자어: 글자로 읽는 것과 낱말로 읽는 것 ────────
+//
+// GET·PUT·DROP처럼 명령어로 읽는 두음자어를 API·SQL과 똑같이 "글자로 읽는다"고
+// 판정해 "GET을"을 "GET를"로 잘못 고쳤다.
+
+test("낱말로 읽히는 두음자어는 판정하지 않는다", () => {
+  for (const word of ["GET", "PUT", "DROP", "LOCK", "STOP", "MAP", "JAR"]) {
+    assert.equal(finalSoundOf(word), null, `${word} 는 낱말로 읽힐 수도 있어 판정할 수 없다`);
+  }
+});
+
+test("모음이 없는 두음자어는 글자로 읽을 수밖에 없다", () => {
+  assert.equal(hasFinalSound("HTTP"), false, "에이치티티피");
+});
+
+test("알려진 두음자어는 모음이 있어도 글자로 읽는다", () => {
+  assert.equal(hasFinalSound("API"), false, "에이피아이");
+  assert.equal(hasFinalSound("SQL"), true, "에스큐엘 — ㄹ");
+});
+
+test("실제 문장에서 GET/PUT/DROP 뒤 조사를 건드리지 않는다", () => {
+  for (const sentence of ["GET을 호출합니다.", "PUT을 호출합니다.", "DROP을 실행합니다.", "MAP을 씁니다."]) {
+    assert.deepEqual(findParticleErrors(sentence), [], sentence);
+  }
+});
+
+// ── 숫자 뒤의 "여"(남짓)는 계사가 아니다 ──────────────────────
+//
+// "10여 개"의 "여"를 계사 짝으로 보고 "10이어 개"로 고친 적이 있다. 숫자 뒤에 붙는
+// 한자 접미사(南짓)와 계사 활용형이 형태로 겹친다.
+
+test("숫자 뒤의 여(남짓)는 계사로 판정하지 않는다", () => {
+  for (const sentence of ["테스트 10여 개를 정리했습니다.", "100여 건을 처리했습니다."]) {
+    assert.deepEqual(findParticleErrors(sentence), [], sentence);
+    assert.equal(fixParticles(sentence).text, sentence, sentence);
+  }
+});
+
+test("여야/여서도 숫자 뒤에서는 판정하지 않는다", () => {
+  assert.equal(correctParticle("10", "여야"), null);
+  assert.equal(correctParticle("10", "여서"), null);
+  // 숫자가 아닌 낱말 뒤에서는 그대로 판정한다.
+  assert.equal(correctParticle("commit", "여야"), "이어야");
+});

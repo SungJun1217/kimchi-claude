@@ -17,7 +17,23 @@ export const NO_FINAL = "";
 export const RIEUL = "ㄹ";
 export const OTHER_FINAL = "other";
 
-/** 받침에 따라 갈리는 조사 짝. 받침 있을 때 쓰는 것을 먼저 적는다. */
+/**
+ * 받침에 따라 갈리는 조사 짝. 받침 있을 때 쓰는 것을 먼저 적는다.
+ *
+ * 계사(이다)의 활용형도 여기 속한다 — "디펜던시였습니다"(받침 없음이라 였이 맞다)처럼
+ * 겉보기엔 조사가 아니지만 앞말 받침이 형태를 가른다는 점은 같다. 순서는 긴 것을
+ * 먼저 적는다: "이어야"/"이어서"를 "이어" 뒤에 두면 "이어"가 먼저 매치해 "야"/"서"가
+ * 덜렁 남는다.
+ *
+ * 뺀 것도 있다. "다/이다"는 계사가 아니라 거의 모든 동사·형용사 종결형에도 쓰여
+ * (간다, 좋다) 이 표만 보고서는 앞말이 명사인지조차 알 수 없다 — 조사 목록에 넣으면
+ * 관계없는 문장 끝마다 걸린다. "야/이야"도 마찬가지로 호격 조사 "아/야"(철수야)와
+ * 형태가 겹쳐 계사인지 호격인지 이 표만으로는 가릴 수 없다. "여/이어"도 뺐다 —
+ * "10여 개"·"100여 건"의 "여"(남짓)는 계사가 아니라 숫자 뒤에 붙는 한자 접미사라
+ * 형태가 겹친다. "여야"·"여서"처럼 뒤에 어미가 더 붙는 긴 형태는 접미사 "여"와
+ * 겹치지 않아 남겨 두되, correctParticle 이 순수 숫자 앞에서는 그마저도 판정하지
+ * 않는다(아래 참고). 셋 다 판정하지 않는다 — 불변식 5.
+ */
 const PAIRS = [
   ["으로서", "로서"],
   ["으로써", "로써"],
@@ -27,11 +43,21 @@ const PAIRS = [
   ["이라", "라"],
   ["이며", "며"],
   ["이든", "든"],
+  ["이어야", "여야"],
+  ["이어서", "여서"],
+  ["이었", "였"],
+  ["이에요", "예요"],
+  ["이랑", "랑"],
   ["을", "를"],
   ["이", "가"],
   ["은", "는"],
   ["과", "와"],
 ];
+
+// "여야"/"여서"의 "여"도 "10여 개"의 "여"(남짓)와 자리가 겹칠 수 있다 — "10여야"처럼
+// 실제로 쓰이지는 않지만, 숫자 뒤에서는 아예 이 계사 활용형을 판정하지 않는다.
+const DIGIT_TOKEN = /^\d+$/;
+const NUMERAL_SUFFIX_COLLISION = new Set(["이어야", "여야", "이어서", "여서"]);
 
 /**
  * 조사들의 첫 글자 집합. 짝 표에서 유도한다.
@@ -78,6 +104,21 @@ const DIGIT_ENGLISH = [
 // 받침이 있는 것만 적는다. L 엘(ㄹ), R 알(ㄹ), M 엠(ㅁ), N 엔(ㄴ).
 const LETTER_FINAL = { l: RIEUL, r: RIEUL, m: OTHER_FINAL, n: OTHER_FINAL };
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+// 두음자어를 "글자로 읽는다"고 판단해도 되는 경우만 가린다.
+//
+// 모음이 없으면(HTTP, SQL, TCP) 낱말로 읽을 방법이 없어 무조건 글자로 읽는다.
+// 모음이 있으면 낱말처럼 읽힐 수도 있다 — GET·PUT·DROP·LOCK·STOP·MAP은 명령어라
+// 낱말로 읽고(GET을, DROP을), API·URL·SQL은 자리에 모음이 있어도 관용적으로 글자로
+// 읽는다(API를, 에이피아이). 철자만으로는 못 가르므로, 모음이 있는 두음자어는 실제로
+// 글자로 읽는다고 알려진 것만 이 목록에 올린다. 없는 것은 판정하지 않는다 — 불변식 5.
+const SPELLED_ACRONYMS = new Set([
+  "API", "URL", "SQL", "CPU", "GPU", "UI", "UX", "ID", "OS", "DB", "PR", "CI", "CD", "QA",
+  "AWS", "GCP", "SDK", "CLI", "IDE", "JWT", "XML", "HTML", "CSS", "DNS", "TCP", "UDP", "IP",
+  "SSH", "SSL", "TLS", "HTTP", "HTTPS", "RAM", "SSD", "USB", "PDF", "CSV", "UUID", "ORM",
+  "MVC", "DOM", "NPM", "VM",
+]);
+const VOWEL_LETTERS = new Set(["A", "E", "I", "O", "U"]);
 
 // 읽는 법을 아는 낱말. **여기가 유일한 원본이다.** 값은 끝소리에 받침이 있는지다.
 //
@@ -263,9 +304,12 @@ export function finalSoundOf(word) {
     return digits.length === 1 ? DIGIT_ENGLISH[lastDigit] : null;
   }
 
-  // 대문자만으로 된 짧은 두음자어는 글자로 읽는다.
-  // 목록에 없는 긴 것은 낱말로 읽힐 수 있어 판정하지 않는다.
+  // 대문자만으로 된 짧은 두음자어는 흔히 글자로 읽지만, GET·PUT·DROP처럼 낱말로 읽는
+  // 것도 있다. 모음이 없으면 낱말로 읽을 방법이 없으니 글자로 읽고, 모음이 있으면
+  // 글자로 읽는다고 확인된 것(SPELLED_ACRONYMS)만 판정한다. 나머지는 판정하지 않는다.
   if (/^[A-Z]{2,4}$/.test(token)) {
+    const hasVowel = [...token].some((ch) => VOWEL_LETTERS.has(ch));
+    if (hasVowel && !SPELLED_ACRONYMS.has(token)) return null;
     const last = token.at(-1).toLowerCase();
     if (!LETTERS.includes(last)) return null;
     return LETTER_FINAL[last] ?? NO_FINAL;
@@ -295,6 +339,9 @@ export function hasFinalSound(word) {
 export function correctParticle(word, particle) {
   const pair = PAIRS.find(([withFinal, without]) => particle === withFinal || particle === without);
   if (pair === undefined) return null;
+  // "10여 개"의 "여"는 계사가 아니라 숫자 접미사(남짓)다. 순수 숫자 뒤에서는 겹치는
+  // 계사 활용형을 판정하지 않는다.
+  if (DIGIT_TOKEN.test(word) && NUMERAL_SUFFIX_COLLISION.has(particle)) return null;
 
   const final = finalSoundOf(word);
   if (final === null) return null;
@@ -307,6 +354,14 @@ export function correctParticle(word, particle) {
 
 // 긴 조사를 먼저 시도해야 한다. `으로서` 를 `으로` 로 자르면 남은 `서` 때문에 어긋난다.
 // PAIRS 가 이미 긴 것부터 적혀 있으므로 그 순서를 그대로 쓴다.
+//
+// (?![가-힣]) 는 "commit은행"의 "은"을 조사로 잘라내지 않으려는 방어다. 그 대가로
+// "이었"·"이에요"·"이랑"처럼 여러 음절인 계사 활용형은 뒤에 어미가 이어지는 실제 문장
+// (예: "commit이었습니다"의 "이었" 뒤에 "습")에서 이 함수로는 거의 못 잡는다 — 항상
+// 한글이 이어지기 때문이다. 일부러 손대지 않는다: 이 짝들의 진짜 쓸모는 lint.mjs의
+// particleRisk 가 규칙 치환 뒤에 오는 이 조사들을 보고 자동 교정을 건너뛰는 것이고,
+// 그건 첫 글자만 필요해 이 문제와 무관하다. 조사를 더 너그럽게 자르면 "state가"처럼
+// 무관한 한글이 뒤에 오는 자리에서 오탐이 날 위험이 있다 — 불변식 5.
 const PARTICLE_ALTERNATION = [...new Set(PAIRS.flat())].join("|");
 const TOKEN_WITH_PARTICLE = new RegExp(
   `([A-Za-z][A-Za-z0-9]*|\\d+)(${PARTICLE_ALTERNATION})(?![가-힣])`,
