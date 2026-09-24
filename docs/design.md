@@ -101,6 +101,7 @@ kimchi-claude/
 │       ├── particle.mjs           영어 낱말 뒤 조사를 발음으로 판정
 │       ├── pii.mjs                주민등록번호 탐지
 │       ├── artifact.mjs           말투 판정. 훅 입출력은 다루지 않는다
+│       ├── bash-commit.mjs        git commit 명령에서 메시지 구간만 정확한 위치로 추출
 │       ├── repo-language.mjs      커밋 이력과 문서로 산출물 언어를 추론
 │       └── entrypoint.mjs         공백·한글·심볼릭 링크 섞인 경로에서도 직접 실행을 판정
 │

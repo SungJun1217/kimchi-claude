@@ -324,14 +324,16 @@ function capPerRule(findings) {
  *
  * @param {string} text
  * @param {object[]} rules
+ * @param {string} [ext] 문서 확장자(점 없이, 소문자). 블록형 가리개(들여쓰기 코드, rST, AsciiDoc)의
+ *   범위를 정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
  * @returns {object[]}
  */
-export function lint(text, rules) {
+export function lint(text, rules, ext) {
   if (typeof text !== "string" || text.length === 0) return [];
   if (!Array.isArray(rules)) return [];
   if (isIgnoredFile(text)) return [];
 
-  const masked = maskProtected(text);
+  const masked = maskProtected(text, ext);
   const findings = [];
 
   for (const rule of rules) {
@@ -371,9 +373,10 @@ export function lint(text, rules) {
  *
  * @param {string} text
  * @param {object[]} rules
+ * @param {string} [ext] lint() 에 그대로 전달한다.
  * @returns {{text: string, applied: object[], skipped: object[]}}
  */
-export function applyFixes(text, rules) {
+export function applyFixes(text, rules, ext) {
   const applied = [];
   const skipped = [];
 
@@ -383,7 +386,7 @@ export function applyFixes(text, rules) {
 
   // `검사` 칸이 치환인 것은 규칙을 쓴 사람의 의사 표시이고, 실제로 꽂을 수 있는지는
   // autoFixReplacement 가 따로 판정한다. 둘을 모두 만족해야 고친다.
-  const candidates = lint(text, rules).filter((finding) => finding.check === CHECK_SUBSTITUTE);
+  const candidates = lint(text, rules, ext).filter((finding) => finding.check === CHECK_SUBSTITUTE);
 
   // 뒤에서부터 고친다. 앞쪽을 먼저 고치면 뒤쪽 위치가 어긋난다.
   const ordered = [...candidates].sort((a, b) => b.index - a.index);
