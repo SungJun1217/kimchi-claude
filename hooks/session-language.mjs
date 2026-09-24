@@ -12,8 +12,14 @@
 //   KIMCHI_DISABLE=1      플러그인 훅 전체를 끈다
 
 import { readFileSync } from "node:fs";
-import { isEntrypoint } from "./lib/entrypoint.mjs";
-import { detectRepoLanguage, describeRepoLanguage } from "./lib/repo-language.mjs";
+
+// 프로세스가 시작된 시점. 안전 타이머(아래 writeAndExit)를 여기서부터 재서, 도구
+// 로딩에 시간이 걸려도 전체 실행이 훅 제한 시간(5초) 안에 들도록 한다.
+const PROCESS_START = Date.now();
+
+// lib/ 안의 파일은 정적 import 를 쓰지 않는다. guard.mjs 와 같은 이유다 — 설치가 깨져
+// 그중 하나라도 없거나 문법 오류가 있으면 정적 import 는 아래 try/catch 를 거치지 못하고
+// 스택 트레이스와 함께 종료 코드 1로 끝난다(불변식 1 위반).
 
 function readStdin() {
   try {
@@ -23,9 +29,12 @@ function readStdin() {
   }
 }
 
-function main() {
-  if (process.env.KIMCHI_DISABLE === "1") return;
-  if (process.env.KIMCHI_REPO_LANG === "off") return;
+/**
+ * @returns {string|undefined} 내보낼 JSON 문자열. 낼 것이 없으면 undefined.
+ */
+async function main() {
+  if (process.env.KIMCHI_DISABLE === "1") return undefined;
+  if (process.env.KIMCHI_REPO_LANG === "off") return undefined;
 
   // 훅 입력에 작업 디렉터리가 들어온다. 없으면 프로세스의 것을 쓴다.
   let cwd = process.cwd();
@@ -38,22 +47,67 @@ function main() {
     }
   }
 
+  const { detectRepoLanguage, describeRepoLanguage } = await import("./lib/repo-language.mjs");
   const context = describeRepoLanguage(detectRepoLanguage(cwd));
-  if (context === "") return;
+  if (context === "") return undefined;
 
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context },
-    })
-  );
+  return JSON.stringify({
+    hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context },
+  });
 }
 
-// 직접 실행될 때만 돈다.
-if (isEntrypoint(import.meta.url)) {
+/**
+ * stdout 이 파이프일 때 macOS/Linux 는 쓰기가 비동기다. guard.mjs 의 writeAndExit 와
+ * 같은 이유로 콜백을 받은 뒤에만 종료한다. 안전 타이머는 PROCESS_START 부터 재서
+ * 훅 제한 시간(5초) 안에 들게 하고, 리더가 멈춰 타이머가 먼저 울리면 그때까지 파이프에
+ * 들어간 만큼만 나간다 — Claude Code 쪽이 멈춰야만 일어나는 일이라 받아들인다.
+ */
+function writeAndExit(json) {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    process.exit(0);
+  };
+
+  const remaining = Math.max(0, 4000 - (Date.now() - PROCESS_START));
+  const timer = setTimeout(finish, remaining);
+  timer.unref?.();
+
   try {
-    main();
+    process.stdout.write(json, () => {
+      clearTimeout(timer);
+      finish();
+    });
+  } catch {
+    clearTimeout(timer);
+    finish();
+  }
+}
+
+async function run() {
+  // 직접 실행될 때만 돈다. entrypoint.mjs 도 동적으로 불러온다 — 설치가 깨져
+  // 이 파일조차 없으면 아무 일도 하지 않고 조용히 끝나야 한다.
+  try {
+    const { isEntrypoint } = await import("./lib/entrypoint.mjs");
+    if (!isEntrypoint(import.meta.url)) return;
+  } catch {
+    return;
+  }
+
+  let output;
+  try {
+    output = await main();
   } catch {
     // 조용히 넘어간다. 말투를 돕는 부가 기능이 세션 시작을 막아서는 안 된다.
+    output = undefined;
   }
-  process.exit(0);
+
+  if (!output) {
+    process.exit(0);
+    return;
+  }
+  writeAndExit(output);
 }
+
+run();

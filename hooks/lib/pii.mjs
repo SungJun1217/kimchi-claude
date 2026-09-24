@@ -79,6 +79,11 @@ export function redact(value) {
   return `${digits.slice(0, 6)}-*******`;
 }
 
+// 한 건에 줄 40바이트 안팎이다. 한도 없이 다 나열하면 메시지가 유출 건수에 비례해
+// 커진다 — 2000건짜리 CSV 하나로 훅 출력이 수십 KB 가 된다. 목록은 앞쪽 몇 건만
+// 보여 주고 나머지는 건수로만 말한다. 첫 문장의 전체 건수는 그대로 정확하다.
+const MAX_LISTED = 20;
+
 /**
  * 사람이 읽을 경고를 만든다.
  *
@@ -90,10 +95,13 @@ export function formatLeak(found, label = "") {
   if (found.length === 0) return "";
 
   const where = label ? `${label}에서 ` : "";
+  const listed = found.slice(0, MAX_LISTED);
+  const rest = found.length - listed.length;
   const lines = [
     `${where}주민등록번호로 보이는 값 ${found.length}건을 찾았습니다. 저장소에 남으면 커밋을 지워도 사라지지 않습니다.`,
     "",
-    ...found.map((hit) => `- ${hit.line}번째 줄 ${hit.column}칸: ${redact(hit.matched)}`),
+    ...listed.map((hit) => `- ${hit.line}번째 줄 ${hit.column}칸: ${redact(hit.matched)}`),
+    ...(rest > 0 ? [`- 외 ${rest}건`] : []),
     "",
     "할 일:",
     "- 시험 자료라면 형식만 맞는 가짜 번호를 쓰고, 그 줄에 kimchi-allow-rrn 주석을 붙이십시오.",

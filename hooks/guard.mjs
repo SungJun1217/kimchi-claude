@@ -20,17 +20,19 @@
 //   KIMCHI_BLOCK=1     말투 위반이 있으면 막는다
 
 import { readFileSync } from "node:fs";
-import { isEntrypoint } from "./lib/entrypoint.mjs";
-import { looksKorean } from "./lib/detect.mjs";
-import { findResidentNumbers, formatLeak, extractPiiTargets } from "./lib/pii.mjs";
-import {
-  extractTargets,
-  autofixEnabled,
-  blockEnabled,
-  loadToneRules,
-  autofixOrBlock,
-  warnAboutTone,
-} from "./lib/artifact.mjs";
+
+// 프로세스가 시작된 시점. 안전 타이머(아래 writeAndExit)를 여기서부터 재서, 도구
+// 로딩에 시간이 걸려도 전체 실행이 훅 제한 시간(5초) 안에 들도록 한다.
+const PROCESS_START = Date.now();
+
+// lib/ 안의 파일은 정적 import 를 쓰지 않는다. 설치가 깨져 그중 하나라도
+// 없거나 문법 오류가 있으면, 정적 import 는 이 파일을 불러오는 시점에 바로
+// 던져서 아래 try/catch 를 거치지 못하고 스택 트레이스와 함께 종료 코드 1로
+// 끝난다(불변식 1 위반). 동적 import 로 감싸 try/catch 안에서만 실패하게 한다.
+//
+// pii.mjs 는 따로, 가장 먼저 불러온다. 말투 쪽(artifact.mjs → particle/lint/rules/segment)이
+// 깨져도 주민등록번호 차단(불변식 2)은 살아있어야 한다 — 개인정보 검사가 말투 검사의
+// 성공에 기대면 안 된다.
 
 function readStdin() {
   try {
@@ -45,95 +47,158 @@ function readStdin() {
  *
  * @returns {{message: string, block: boolean}|null}
  */
-function checkPii(toolName, toolInput) {
+function checkPii(pii, toolName, toolInput) {
   const mode = process.env.KIMCHI_PII ?? "block";
   if (mode === "off") return null;
 
-  const targets = extractPiiTargets(toolName, toolInput);
+  const targets = pii.extractPiiTargets(toolName, toolInput);
   const found = targets.flatMap((target) =>
-    findResidentNumbers(target.text).map((hit) => ({ ...hit, label: target.label }))
+    pii.findResidentNumbers(target.text).map((hit) => ({ ...hit, label: target.label }))
   );
   if (found.length === 0) return null;
 
-  return { message: formatLeak(found, found[0].label), block: mode !== "warn" };
+  return { message: pii.formatLeak(found, found[0].label), block: mode !== "warn" };
 }
 
 /**
  * 말투 검사. 이 훅 단계에서 할 일이 없으면 null.
  */
-function checkTone(event, toolName, toolInput) {
+function checkTone(libs, event, toolName, toolInput) {
+  const { looksKorean, artifact } = libs;
   // 기본 설정에서 PreToolUse 는 아무 일도 하지 않는다. 규칙을 읽기 전에 빠져나간다.
-  if (event === "PreToolUse" && !autofixEnabled() && !blockEnabled()) return null;
+  if (event === "PreToolUse" && !artifact.autofixEnabled() && !artifact.blockEnabled()) return null;
 
-  const targets = extractTargets(toolName, toolInput).filter((target) => looksKorean(target.text));
+  const targets = artifact.extractTargets(toolName, toolInput).filter((target) => looksKorean(target.text));
   if (targets.length === 0) return null;
 
-  const rules = loadToneRules();
+  const rules = artifact.loadToneRules();
   if (rules.length === 0) return null;
 
   return event === "PreToolUse"
-    ? autofixOrBlock(toolName, toolInput, targets, rules)
-    : warnAboutTone(targets, rules);
+    ? artifact.autofixOrBlock(toolName, toolInput, targets, rules)
+    : artifact.warnAboutTone(targets, rules);
 }
 
-function main() {
-  if (process.env.KIMCHI_DISABLE === "1") return;
+/**
+ * @returns {string|undefined} 내보낼 JSON 문자열. 낼 것이 없으면 undefined.
+ */
+async function main() {
+  if (process.env.KIMCHI_DISABLE === "1") return undefined;
 
   const raw = readStdin();
-  if (!raw.trim()) return;
+  if (!raw.trim()) return undefined;
 
   let payload;
   try {
     payload = JSON.parse(raw);
   } catch {
-    return;
+    return undefined;
   }
 
   const { tool_name: toolName, hook_event_name: event, tool_input: toolInput } = payload ?? {};
-  if (!toolName || !event) return;
+  if (!toolName || !event) return undefined;
 
-  const pii = event === "PreToolUse" ? checkPii(toolName, toolInput) : null;
+  // 개인정보 검사는 그 자체로 완결돼야 한다. pii.mjs 만 불러온다 — 여기서 던지면(모듈이
+  // 없거나 깨졌으면) main() 전체가 던지고 run() 이 조용히 종료한다. 그 이상은 못 한다.
+  const pii = await import("./lib/pii.mjs");
+  const piiResult = event === "PreToolUse" ? checkPii(pii, toolName, toolInput) : null;
 
   // 차단이 이긴다. 주민등록번호가 들어 있으면 말투는 따질 일이 아니다.
-  if (pii?.block) {
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: pii.message,
-        },
-      })
-    );
-    return;
+  if (piiResult?.block) {
+    return JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: piiResult.message,
+      },
+    });
   }
 
-  const tone = checkTone(event, toolName, toolInput);
+  // 말투 검사는 따로 불러온다. 이 체인이 깨져도(예: particle.mjs 문법 오류) 이미 정해진
+  // 개인정보 결과는 그대로 살려서 내보낸다 — 말투 부가 기능 하나 때문에 경고까지 잃지 않는다.
+  let tone = null;
+  try {
+    const [{ looksKorean }, artifact] = await Promise.all([
+      import("./lib/detect.mjs"),
+      import("./lib/artifact.mjs"),
+    ]);
+    tone = checkTone({ looksKorean, artifact }, event, toolName, toolInput);
+  } catch {
+    tone = null;
+  }
 
   // 막지 않는 개인정보 경고는 말투 결과에 얹어 함께 내보낸다. 훅은 한 번만 답할 수 있다.
-  if (pii !== null && tone === null) {
-    process.stdout.write(
-      JSON.stringify({
-        systemMessage: pii.message,
-        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
-      })
-    );
+  if (piiResult !== null && tone === null) {
+    return JSON.stringify({
+      systemMessage: piiResult.message,
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
+    });
+  }
+  if (tone === null) return undefined;
+
+  if (piiResult !== null) {
+    tone.systemMessage = [piiResult.message, tone.systemMessage].filter(Boolean).join("\n\n");
+  }
+  return JSON.stringify(tone);
+}
+
+/**
+ * stdout 이 파이프일 때 macOS/Linux 는 쓰기가 비동기다. write() 를 fire-and-forget 으로
+ * 부르고 바로 exit(0) 하면 OS 파이프 버퍼(64KiB)를 넘는 출력이 잘린다. 콜백을 받아
+ * 실제로 다 나간 뒤에만 종료한다.
+ *
+ * 느린 리더나 막힌 파이프에서 무한히 기다리지 않도록 안전 타이머로 상한을 둔다. 프로세스
+ * 시작 시각(PROCESS_START)부터 재서, 그 앞의 동적 import 나 검사에 걸린 시간까지 합쳐
+ * 훅 제한 시간(5초)보다 한참 짧게 끝나도록 한다. 타이머가 먼저 울리면 그때까지 파이프에
+ * 실제로 들어간 만큼만 나가고 나머지는 버려진다 — 이미 쓴 바이트는 물릴 수 없으니 받아들인다.
+ * Claude Code 쪽이 멈춰야만 일어나는 일이고, 그때는 훅이 뭘 하든 5초 뒤 강제 종료된다.
+ */
+function writeAndExit(json) {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    process.exit(0);
+  };
+
+  const remaining = Math.max(0, 4000 - (Date.now() - PROCESS_START));
+  const timer = setTimeout(finish, remaining);
+  timer.unref?.();
+
+  try {
+    process.stdout.write(json, () => {
+      clearTimeout(timer);
+      finish();
+    });
+  } catch {
+    clearTimeout(timer);
+    finish();
+  }
+}
+
+async function run() {
+  // 직접 실행될 때만 돈다. entrypoint.mjs 도 동적으로 불러온다 — 설치가
+  // 깨져 이 파일조차 없으면 아무 일도 하지 않고 조용히 끝나야 한다.
+  try {
+    const { isEntrypoint } = await import("./lib/entrypoint.mjs");
+    if (!isEntrypoint(import.meta.url)) return;
+  } catch {
     return;
   }
-  if (tone === null) return;
 
-  if (pii !== null) {
-    tone.systemMessage = [pii.message, tone.systemMessage].filter(Boolean).join("\n\n");
-  }
-  process.stdout.write(JSON.stringify(tone));
-}
-
-// 직접 실행될 때만 돈다.
-if (isEntrypoint(import.meta.url)) {
+  let output;
   try {
-    main();
+    output = await main();
   } catch {
     // 조용히 넘어간다. 훅이 깨져서 작업이 막히면 그것이 더 큰 실패다.
+    output = undefined;
   }
-  process.exit(0);
+
+  if (!output) {
+    process.exit(0);
+    return;
+  }
+  writeAndExit(output);
 }
+
+run();
