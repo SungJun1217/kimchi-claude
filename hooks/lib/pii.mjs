@@ -6,8 +6,6 @@
 // 오탐을 줄이는 것이 이 파일의 절반이다. 13자리 숫자는 주문번호일 수도 있다.
 // 패턴만으로 막으면 정상 작업을 방해하고, 그러면 사람들이 훅을 끈다.
 
-import { readFileSync } from "node:fs";
-
 // 눈에 안 보이는 서식 문자. ZWSP·ZWNJ·ZWJ·단어 결합자·소프트 하이픈·BOM 이 숫자
 // 사이에 끼어도 번호가 끊긴 것으로 보면 안 된다 — 붙여넣기·복사 과정에서 흔히 섞인다.
 const ZERO_WIDTH = new Set([0x200b, 0x200c, 0x200d, 0x2060, 0x00ad, 0xfeff]);
@@ -344,14 +342,6 @@ export function formatLeak(found, label = "") {
 
 // 이 확장자는 검사하지 않는다. 사람이 쓴 것이 아니거나 통째로 생성된 것들이다.
 const SKIP_EXTENSIONS = /\.(png|jpe?g|gif|webp|ico|svg|pdf|zip|gz|tar|woff2?|ttf|eot|mp[34]|mov|wasm|lock)$/i;
-
-function readStdin() {
-  try {
-    return readFileSync(0, "utf8");
-  } catch {
-    return "";
-  }
-}
 
 /**
  * 검사할 글을 뽑는다. 말투 린터와 달리 확장자를 가리지 않는다.

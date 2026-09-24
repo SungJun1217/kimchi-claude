@@ -189,7 +189,7 @@ function hookMessages(rules) {
     // 이유는 첫 구절만 싣는다. 그림 폭이 모자라다.
     .map(([, bad, good, why]) => [bad, good, why.split(",")[0].replace(/이다$/, "")]);
   expect(fixes.length > 0 && fixes.length === items.length, `말투 경고 항목 ${items.length}줄 중 ${fixes.length}줄만 읽었다`);
-  expect(/^\S.*\d+건/.test(tone[0]), "말투 경고 첫 줄에 건수가 없다");
+  expect(/^\S.*\d+가지/.test(tone[0]), "말투 경고 첫 줄에 건수가 없다");
 
   return {
     notice: `Write ${noticeTarget[1]} in English`,

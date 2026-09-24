@@ -19,6 +19,7 @@ import {
   detectRepoLanguage,
   describeRepoLanguage,
 } from "../hooks/lib/repo-language.mjs";
+import { fastestMs } from "./helpers.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "session-language.mjs");
@@ -379,9 +380,9 @@ test("병적인 입력에도 문서 판정이 빠르게 끝난다", () => {
   // 않으면 위치마다 문서 끝까지 훑는 이차 시간이 걸린다.
   const pathological = "a<".repeat(128 * 1024) + "\n" + KOREAN_DOC;
   withRepo(["init"], pathological, (dir) => {
-    const start = Date.now();
-    docLanguage(dir);
-    const elapsed = Date.now() - start;
+    // 병렬로 도는 다른 시험 때문에 한 번 잰 값이 튈 수 있다. 최솟값이 실제 비용에
+    // 가깝고, 이차 비용 회귀는 최솟값에도 그대로 남는다(helpers.mjs 의 fastestMs 참고).
+    const elapsed = fastestMs(() => docLanguage(dir));
     assert.ok(elapsed < 500, `너무 오래 걸렸다: ${elapsed}ms`);
   });
 });
