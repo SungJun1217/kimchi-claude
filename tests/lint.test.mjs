@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rule as base } from "./helpers.mjs";
 import { lint, toPattern, formatFindings } from "../hooks/lib/lint.mjs";
+import { loadRules } from "../hooks/lib/rules.mjs";
 
 // 이 시험 묶음의 기본값만 여기서 정하고, 규칙 객체 모양은 helpers 가 갖는다.
 const rule = (overrides = {}) => base({ check: "정규식", good: "결합도", source: "test.md", ...overrides });
@@ -103,4 +104,15 @@ test("위반이 없으면 빈 메시지를 돌려준다", () => {
 test("문서 전체 예외 표시가 있으면 검사하지 않는다", () => {
   const text = "<!-- kimchi-ignore-file -->\n얇은 계약을 인용합니다.";
   assert.deepEqual(lint(text, [rule()]), []);
+});
+
+test("'~지 여부'는 동사 어미 뒤만 잡고 '지'로 끝나는 명사는 두고 본다", () => {
+  // 한 줄짜리 '~지 여부' 규칙이 유지·금지·방지 여부까지 잡고 틀린 교정을 권했다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const hits = (text) => lint(text, rules).filter((finding) => finding.bad.endsWith("여부"));
+  assert.equal(hits("캐시가 필요한지 여부를 확인했습니다.").length, 1);
+  assert.equal(hits("쿠폰을 먼저 적용할지 여부는 정해야 합니다.").length, 1);
+  for (const clean of ["세션 유지 여부를 설정합니다.", "캐시 삭제 금지 여부", "중복 방지 여부를 옵션으로 둡니다.", "배포 중지 여부", "사용자 인지 여부", "성공 여부를 기록합니다."]) {
+    assert.deepEqual(hits(clean), [], clean);
+  }
 });
