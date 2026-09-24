@@ -21,11 +21,29 @@ const MAX_HITS_PER_RULE = 3;
 
 // 정규식 실행 자체가 오래 걸리는 것을 막는 안전 상한. 겹침 해소 전 원본 매치에 적용하므로
 // 최종 보고 개수(MAX_HITS_PER_RULE)보다 넉넉해야 겹쳐서 버려질 매치도 해소 단계까지 살아남는다.
+//
+// 낱말 경계에 걸려 버려지는 매치는 이 수에 넣지 않는다. "디커플링 커패시터."를 50번
+// 반복한 문서에서 진짜 "커플링이 높습니다."가 뒤에 와도, 경계에 막힌 50번이 이 상한을
+// 먼저 채워 버리면 진짜 지적을 하나도 못 잡는다. 대신 정규식이 도는 횟수 자체는
+// MAX_PATTERN_ITERATIONS 로 따로 막는다.
 const MAX_RAW_HITS_PER_RULE = 50;
+
+// 경계에 막혀 버려지는 매치까지 포함한, 정규식이 한 규칙당 돌 수 있는 총 횟수의 상한.
+// MAX_RAW_HITS_PER_RULE 보다 넉넉해야 "경계에 막힌 매치가 많은 문서"에서도 진짜 매치를
+// 찾을 때까지 계속 돈다.
+const MAX_PATTERN_ITERATIONS = 1000;
 
 const HANGUL_START = 0xac00;
 const HANGUL_END = 0xd7a3;
 const JAMO_COUNT = 28;
+
+// 완성형 음절과 낱자(자모) 모두 "한글이 이어진다"로 본다. 완성형만 보면 "ㄱ"으로 시작하는
+// 드문 표기를 경계로 오판한다.
+const HANGUL_CHAR = /[가-힣ㄱ-ㅎㅏ-ㅣ]/;
+
+function isHangulChar(ch) {
+  return typeof ch === "string" && ch.length > 0 && HANGUL_CHAR.test(ch);
+}
 
 // 조사 지식은 particle.mjs 의 짝 표가 원본이다. 여기서는 첫 글자만 유도해 쓴다.
 // 두 곳에 적으면 한쪽만 고치게 된다.
@@ -245,6 +263,183 @@ function hasInteriorWildcard(bad) {
 }
 
 /**
+ * 낱말 경계 판정.
+ *
+ * "쓰지 말 것"이 다른 낱말 속에 우연히 들어 있으면 안 된다. "디커플링"의 "커플링",
+ * "뒷문장"의 "뒷문"이 그런 오탐이다. 판정은 두 방향이다.
+ *
+ * - 왼쪽: 금칙어가 한글 음절로 시작하면, 매치 바로 앞이 한글이면 다른 낱말 속이다.
+ *   앞에 물결표를 선언한 규칙("~에 대한 ~를 진행")은 애초에 앞을 아무거나 물겠다고
+ *   선언한 것이므로 이 검사에서 뺀다. 표기·띄어쓰기 규칙(isOrthographyRule)도 뺀다 —
+ *   "수정해야합니다"의 "해야합니다"처럼 앞말이 무엇이든 띄어쓰기·맞춤법 자체가 틀렸다.
+ * - 오른쪽: 금칙어가 한글 음절로 끝나면, 뒤에 한글이 이어질 때 그것이 이 낱말에 자연스럽게
+ *   붙는 조사·계사·어미·접미사(FOLLOWER_TOKENS)인지 본다. 아니면 "뒷문"+"장"처럼 다른
+ *   낱말 속이다. 길이로 검사 여부를 가르지 않는다 — "커플링"(3음절)처럼 긴 낱말로 끝나는
+ *   규칙만 통째로 빼면 "기록부"+"터"("이 기록부터 봅시다")처럼 진짜 오탐도 함께 빠진다.
+ *   대신 FOLLOWER_TOKENS 를 넉넉히 채워 "커플링시켜"·"디펜던시가" 같은 실제 활용·파생은
+ *   목록으로 받는다. 표기 규칙도 오른쪽 검사에서 빼지 않는다 — "어떻게 할 지"가 "지침"
+ *   속까지 파고들면 안 된다(불변식 4). "궁굼한데"처럼 정당한 활용은 FOLLOWER_TOKENS 의
+ *   "데"가 받는다. 예외는 외래어 표기 규칙(isLoanwordSpellingRule)뿐이다 —
+ *   "메세지"+"큐"처럼 뒤에 오는 것이 조사가 아니라 또 다른 외래어라 목록으로 셀 수 없다.
+ *
+ *   단, "계약이 얇"(→"결합도가 낮")처럼 목적어·주어 뒤에 용언 어간만 남긴 규칙은 뒤에
+ *   습니다·다·아서 같은 활용형이 무한히 올 수 있어 이 목록으로 다 덮을 수 없다.
+ *   "하/되/시키"로 끝나는 규칙(픽스하다 류)과 절 조각(endsInsideClauseFragment)이 그
+ *   경우이고, 오른쪽 검사를 하지 않는다 — 규칙을 쓴 사람이 이미 어간만 남겨 활용을
+ *   받아들이겠다고 표시한 것으로 본다.
+ */
+
+// 명사 뒤에 자연스럽게 붙는 조사·계사·어미·접미사. 긴 것이 짧은 것의 접두라도 순서는
+// 상관없다 — 어느 하나라도 시작에 걸리면 통과다(대체가 아니라 존재 확인).
+//
+// 자/서/용/다/지/니 같은 한 글자는 일부러 뺐다. "제출자를"(자)·"제출서류"(서)·
+// "제출용"(용)·"통나무다리"(다)·"칸막이벽지"(지)·"니즈니"(니)처럼 실제로 다른 낱말의
+// 시작과 겹쳐 오탐을 냈다. 그 대가로 놓치는 활용형(예: "짓다")은 endsWithVerbStem·
+// endsInsideClauseFragment 가 이미 검사 자체를 꺼서 따로 받는다. "적"은 통째로 빼지
+// 않고 allowJeok 로 따로 다룬다(아래 JEOK_ALLOWED_MIN_SYLLABLES 참고) — 한자어 3음절
+// 이상 뒤의 "-적"(효과적, 기술적)은 흔한 파생이라 무작정 빼면 손해가 더 크다.
+const FOLLOWER_TOKENS = [
+  // 조사
+  "이에요", "예요", "입니다", "입니까", "이나마", "이었", "이랑", "까지", "부터", "처럼",
+  "이나", "이며", "이라", "이면", "이", "가", "을", "를", "은", "는", "의", "에서", "에게",
+  "께", "에", "으로", "로", "와", "과", "랑", "도", "만", "보다", "나", "요", "였", "여",
+  "며", "라", "란", "냐", "인", "면", "들", "뿐", "마다", "밖에", "조차", "마저", "쯤",
+  "대로", "끼리", "씩", "엔", "치고", "고", "야", "므로", "거나", "일", "임", "없이", "님",
+  "데",
+  // 명사에 붙는 접미사·파생. "됩"은 됩니다를 한 글자로 묶는다. "시키/시켜/시켰/시킨/시킬"은
+  // 통째로 적는다 — 한 글자 "시"만 받으면 "일시"("맡은 일시 중단")까지 걸린다.
+  "하", "해", "했", "한", "할", "함", "합",
+  "되", "된", "될", "됨", "돼", "됐", "됩",
+  "시키", "시켜", "시켰", "시킨", "시킬", "받", "상", "화", "형", "별", "중", "성", "감",
+  "력", "률", "율",
+  // 용언 활용형의 흔한 시작 — "계약이 얇"처럼 어간만 남긴 규칙이 습니다/았다 따위로
+  // 이어질 때를 받아 준다. 어간 자체가 뒤에 뭐가 오는지 목록으로 다 셀 수 없으니
+  // 여기서는 "다른 낱말 속이 아니다"만 넉넉하게 인정한다.
+  "습", "았", "었", "겠", "으", "게", "죠", "네", "든", "려",
+];
+const FOLLOWER_PATTERN = new RegExp(
+  `^(?:${[...FOLLOWER_TOKENS].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`
+);
+const JEOK_PATTERN = /^적/;
+
+// 마지막 낱말이 한자어·외래어 명사로 세 음절 이상일 때만 "-적"을 받는다. "효과적"·
+// "기술적"류의 흔한 파생은 살리되, "접속면적"·"연결면적"처럼 "면적"이 우연히 뒤에
+// 붙어 다른 낱말(넓이)이 되는 자리는 명시적으로 막는다 — 세 음절 조건만으로는
+// 이 둘을 가를 수 없어서다.
+const JEOK_ALLOWED_MIN_SYLLABLES = 3;
+const JEOK_DENYLIST = new Set(["접속면", "연결면"]);
+
+function isAllowedFollower(rest, allowJeok) {
+  if (rest.length === 0) return true;
+  if (!isHangulChar(rest[0])) return true;
+  if (FOLLOWER_PATTERN.test(rest)) return true;
+  return allowJeok && JEOK_PATTERN.test(rest);
+}
+
+// 어간으로 끝나는 규칙("픽스하", "계약이 얇"처럼 다다르지 못한 서술어)은 활용형이 무한해
+// 오른쪽 경계를 문자열로 셀 수 없다. 동사·형용사·"하다" 파생을 만드는 흔한 어미 앞
+// 음절만 신호로 삼는다 — 정밀한 품사 판정이 아니라, 오른쪽 경계 검사를 하지 않아도
+// 안전하다는 표시다.
+const VERB_STEM_SUFFIXES = ["시키", "하", "되"];
+function endsWithVerbStem(core) {
+  return VERB_STEM_SUFFIXES.some((stem) => core.endsWith(stem));
+}
+
+// "계약이 얇", "싱크를 맞"처럼 여러 낱말로 된 규칙은 끝 낱말 하나만으로 어간인지 알 수
+// 없다. 대신 그 앞 낱말이 이/가/을/를로 끝나는지, 마지막 낱말이 -게로 끝나는 부사형인지
+// 본다("얇게 만들"의 "만들"도 뒤에 어/고/기 따위가 무한히 붙는다) — 그러면 마지막 낱말은
+// 서술어이고, 서술어는 어미가 무한히 붙을 수 있어 문자열로는 오른쪽 경계를 셀 수 없다.
+// 은/는은 빼 둔다 — "맡은"처럼 관형형 어미 "-은"과 글자가 같아 주제 조사인지 구별할 수
+// 없다(불변식 5).
+const CLAUSE_PREDICATE_MARKER = /[을를이가게]$/;
+function endsInsideClauseFragment(core) {
+  const words = core.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;
+  return CLAUSE_PREDICATE_MARKER.test(words[words.length - 2]);
+}
+
+// 규칙의 마지막 낱말과 그 한글 음절 수. allowJeok 판정에 쓴다.
+function finalWord(core) {
+  const words = core.split(/\s+/).filter(Boolean);
+  return words[words.length - 1] ?? "";
+}
+function hangulSyllableCount(word) {
+  return [...word].filter((ch) => ch >= "가" && ch <= "힣").length;
+}
+
+// 표기·띄어쓰기·맞춤법 규칙은 왼쪽 경계를 보지 않는다. "해야합니다"(→"해야 합니다")는
+// 앞에 어떤 동사가 오든 붙여 쓴 것 자체가 틀렸고, "데이타"(→"데이터")는 "메타데이타"처럼
+// 다른 낱말에 붙어 있어도 표기가 틀린 건 마찬가지다 — 오탐의 성격이 다른 규칙과 다르다.
+//
+// register.md 의 이유 칸에 표기 계열 낱말이 있으면 이 부류로 본다. "함으로서"→"함으로써"는
+// 이유 칸이 "수단·자격" 설명이라 낱말 매칭에 안 걸려 따로 적어 둔다.
+const ORTHOGRAPHY_WHY_PATTERN = /표기|맞춤법|띄어|의존명사|외래어/;
+const ORTHOGRAPHY_EXTRA_BAD = new Set(["함으로서"]);
+function isOrthographyRule(rule) {
+  if (rule?.source !== "register.md") return false;
+  if (ORTHOGRAPHY_EXTRA_BAD.has(rule.bad)) return true;
+  return ORTHOGRAPHY_WHY_PATTERN.test(rule.why ?? "");
+}
+
+// 오른쪽 경계는 원칙대로 본다 — "어떻게 할 지"(띄어쓰기 규칙)를 오른쪽까지 빼면
+// "어떻게 할 지침이"의 "지침"까지 "할지침이"로 잘못 고친다. 표기가 틀렸다는 사실이 뒤에
+// 다른 낱말이 와도 된다는 뜻은 아니다.
+//
+// 예외는 외래어 표기법 규칙 하나뿐이다. "메세지"+"큐", "데이타"+"베이스", "쓰레드"+"풀"
+// 처럼 한국어 개발 현장은 외래어 명사 둘을 조사 없이 그대로 붙여 쓴다 — 뒤에 오는 것도
+// 한글 조사가 아니라 또 다른 외래어라서 FOLLOWER_TOKENS 로는 절대 다 셀 수 없다. 이
+// 부류만 오른쪽도 뺀다. "어떻게 할 지"·"하는것"·"궁굼한" 같은 띄어쓰기·맞춤법 규칙은
+// 뒤에 오는 것이 보통 조사·어미라 FOLLOWER_TOKENS 로 이미 받는다 — 그쪽은 오른쪽
+// 검사를 켜 둬도 손해가 없다.
+const LOANWORD_SPELLING_WHY_PATTERN = /외래어/;
+function isLoanwordSpellingRule(rule) {
+  return rule?.source === "register.md" && LOANWORD_SPELLING_WHY_PATTERN.test(rule.why ?? "");
+}
+
+// bad 문자열이 아니라 규칙 객체를 열쇠로 쓴다. why·source 도 판정에 들어가기 때문이다.
+// 규칙 배열은 loadRules 가 한 번 읽어 재사용하므로, 같은 규칙 객체는 호출마다 같다.
+const boundaryCache = new WeakMap();
+
+function boundaryRequirement(rule) {
+  if (boundaryCache.has(rule)) return boundaryCache.get(rule);
+  const bad = rule.bad;
+  const core = stripWildcardEdges(bad);
+  const leadsWithWildcard = typeof bad === "string" && bad.trim().startsWith(WILDCARD);
+  const trailsWithWildcard = typeof bad === "string" && bad.trim().endsWith(WILDCARD);
+  const orthography = isOrthographyRule(rule);
+  const last = finalWord(core);
+  const requirement = {
+    left: !orthography && !leadsWithWildcard && isHangulChar(core[0]),
+    right:
+      !isLoanwordSpellingRule(rule) &&
+      !trailsWithWildcard &&
+      !endsWithVerbStem(core) &&
+      !endsInsideClauseFragment(core) &&
+      isHangulChar(core[core.length - 1]),
+    allowJeok: hangulSyllableCount(last) >= JEOK_ALLOWED_MIN_SYLLABLES && !JEOK_DENYLIST.has(last),
+  };
+  boundaryCache.set(rule, requirement);
+  return requirement;
+}
+
+/**
+ * 매치가 낱말 경계에서 일어났는지 본다. masked 는 lint() 가 이미 만든 문자열이라
+ * 그대로 받는다 — 다시 만들면 그만큼 비용이다.
+ *
+ * @param {object} rule
+ * @param {string} masked
+ * @param {number} index
+ * @param {number} length
+ * @returns {boolean}
+ */
+function isWordBoundaryMatch(rule, masked, index, length) {
+  const { left, right, allowJeok } = boundaryRequirement(rule);
+  if (left && isHangulChar(masked[index - 1] ?? "")) return false;
+  if (right && !isAllowedFollower(masked.slice(index + length), allowJeok)) return false;
+  return true;
+}
+
+/**
  * 정렬된 배열에서 index가 target 이상인 첫 자리를 찾는다.
  * @param {object[]} sorted index 오름차순, 서로 겹치지 않음
  * @param {number} target
@@ -344,12 +539,20 @@ export function lint(text, rules, ext) {
 
     pattern.lastIndex = 0;
     let hits = 0;
+    let iterations = 0;
     let match;
-    while ((match = pattern.exec(masked)) !== null && hits < MAX_RAW_HITS_PER_RULE) {
+    while (
+      hits < MAX_RAW_HITS_PER_RULE &&
+      iterations < MAX_PATTERN_ITERATIONS &&
+      (match = pattern.exec(masked)) !== null
+    ) {
+      iterations += 1;
       if (match[0].length === 0) {
         pattern.lastIndex += 1;
         continue;
       }
+      if (!isWordBoundaryMatch(rule, masked, match.index, match[0].length)) continue;
+      hits += 1;
       findings.push({
         bad: rule.bad,
         good: rule.good,
@@ -361,7 +564,6 @@ export function lint(text, rules, ext) {
         priority: rule.priority,
         source: rule.source,
       });
-      hits += 1;
     }
   }
 

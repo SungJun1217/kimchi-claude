@@ -131,11 +131,12 @@ test("따로 떨어진 매치는 둘 다 남는다", () => {
 });
 
 test("맞닿기만 하고 겹치지 않는 두 구간은 둘 다 남는다", () => {
-  // 앞 구간의 끝(index+length)이 뒤 구간의 시작과 같으면 겹친 게 아니다.
-  const first = rule({ bad: "가나", good: "다름1" });
-  const second = rule({ bad: "다라", good: "다름2" });
-  const findings = lint("가나다라", [first, second]);
-  assert.deepEqual(findings.map((f) => f.bad), ["가나", "다라"]);
+  // 앞 구간의 끝(index+length)이 뒤 구간의 시작과 같으면 겹친 게 아니다. 한글로 하면
+  // 새로 생긴 낱말 경계 검사에 걸리므로(다른 낱말 속인지 판정), 경계와 무관한 로마자로 시험한다.
+  const first = rule({ bad: "ab", good: "다름1" });
+  const second = rule({ bad: "cd", good: "다름2" });
+  const findings = lint("abcd", [first, second]);
+  assert.deepEqual(findings.map((f) => f.bad), ["ab", "cd"]);
 });
 
 test("'~지 여부'는 동사 어미 뒤만 잡고 '지'로 끝나는 명사는 두고 본다", () => {
@@ -182,5 +183,211 @@ test("규칙별 상한은 겹침 해소 뒤에 적용된다", () => {
   assert.deepEqual(
     findings.map((f) => f.bad),
     ["루즈 커플링", "루즈 커플링", "루즈 커플링", "커플링", "커플링"]
+  );
+});
+
+// ── 낱말 경계 ─────────────────────────────────────────────
+//
+// 규칙이 다른 낱말 속에 우연히 들어 있으면 잡으면 안 된다. "디커플링"의 "커플링",
+// "뒷문장"의 "뒷문"이 실제로 배포됐던 오탐이다.
+
+test("다른 낱말 속에 갇힌 금칙어는 잡지 않는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+
+  // 왼쪽 경계: "디커플링" 안의 "커플링".
+  assert.deepEqual(
+    lint("디커플링 커패시터를 추가했습니다.", rules).filter((f) => f.bad === "커플링"),
+    []
+  );
+  // 오른쪽 경계: "뒷문장" 안의 "뒷문".
+  assert.deepEqual(
+    lint("뒷문장을 다시 썼습니다.", rules).filter((f) => f.bad === "뒷문"),
+    []
+  );
+  // 오른쪽 경계: "일정대로" 안의 "맡은 일".
+  assert.deepEqual(
+    lint("제가 맡은 일정대로 진행하겠습니다.", rules).filter((f) => f.bad === "맡은 일"),
+    []
+  );
+  // 왼쪽 경계: "결론짓기" 안의 "짓기".
+  assert.deepEqual(
+    lint("아직 결론짓기 어렵습니다.", rules).filter((f) => f.bad === "짓기"),
+    []
+  );
+});
+
+test("낱말 경계 안에서는 여전히 잡는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+
+  assert.ok(lint("커플링이 높습니다.", rules).some((f) => f.bad === "커플링"));
+  assert.ok(lint("커플링 문제입니다.", rules).some((f) => f.bad === "커플링"));
+  assert.ok(lint("뒷문을 열어 두었습니다.", rules).some((f) => f.bad === "뒷문"));
+  assert.ok(lint("제가 맡은 일을 끝냈습니다.", rules).some((f) => f.bad === "맡은 일"));
+});
+
+test("낱말 여러 개로 된 규칙은 활용형이 붙어도 여전히 잡는다", () => {
+  // "계약이 얇"·"싱크를 맞"처럼 목적어·주어 뒤에 어간만 남긴 규칙은 활용형이 무한히
+  // 이어질 수 있어 오른쪽 경계를 문자열로 셀 수 없다 — 검사를 하지 않는다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+
+  assert.ok(lint("계약이 얇습니다.", rules).some((f) => f.bad === "계약이 얇"));
+  assert.ok(lint("팀과 싱크를 맞춘 뒤 진행하겠습니다.", rules).some((f) => f.bad === "싱크를 맞"));
+});
+
+test("-게로 끝나는 부사형 규칙도 활용형이 붙어도 잡는다", () => {
+  // "얇게 만들"(observed.md)의 마지막 낱말 "만들"은 어/고/기 따위가 무한히 붙는 서술어다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.ok(lint("얇게 만들어 두었습니다.", rules).some((f) => f.bad === "얇게 만들"));
+  assert.ok(lint("얇게 만들고 있습니다.", rules).some((f) => f.bad === "얇게 만들"));
+});
+
+// ── 표기·띄어쓰기 규칙은 경계를 보지 않는다 ──────────────────
+//
+// "수정해야합니다"의 "해야합니다", "메타데이타를"의 "데이타"처럼 앞뒤에 무엇이 오든
+// 표기·띄어쓰기 자체가 틀렸다. 낱말 경계 검사가 이런 규칙까지 막으면 안 된다.
+
+test("표기·띄어쓰기 규칙은 다른 낱말에 붙어 있어도 잡는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const cases = [
+    ["수정해야합니다.", "해야합니다"],
+    ["처리하는것이 늦었습니다.", "하는것"],
+    ["사용함으로서 문제를 해결했습니다.", "함으로서"],
+    ["변경됬습니다.", "됬습니다"],
+    ["메타데이타를 읽습니다.", "데이타"],
+    ["서버랜더링을 켰습니다.", "랜더링"],
+    ["궁굼한데 여쭤봐도 될까요?", "궁굼한"],
+    ["메세지큐에 넣었습니다.", "메세지"],
+    ["쓰레드풀을 늘렸습니다.", "쓰레드"],
+    ["엑세스토큰을 발급했습니다.", "엑세스"],
+    ["컨텐츠팀에서 정리했습니다.", "컨텐츠"],
+  ];
+  for (const [text, bad] of cases) {
+    assert.ok(lint(text, rules).some((f) => f.bad === bad), `${text} 에서 "${bad}" 를 놓쳤다`);
+  }
+});
+
+// ── 짧은 낱말로 끝나는 규칙만 오른쪽 경계를 본다 ──────────────
+//
+// 실제 오탐(뒷문+장, 맡은 일+정)은 마지막 낱말이 짧았다. "커플링"·"핸들링"처럼 세 음절
+// 이상으로 끝나는 규칙까지 검사하면 흔한 활용·파생이 대량으로 걸러졌다.
+
+test("긴 낱말로 끝나는 규칙은 활용·파생이 붙어도 잡는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const cases = [
+    ["컨펌받았습니다.", "컨펌"],
+    ["디플로이됩니다.", "디플로이"],
+    ["커플링시켜 문제가 생겼습니다.", "커플링"],
+    ["핸들링마다 다릅니다.", "핸들링"],
+    ["니즈대로 진행합니다.", "니즈"],
+    ["커플링일 때 문제가 생깁니다.", "커플링"],
+  ];
+  for (const [text, bad] of cases) {
+    assert.ok(lint(text, rules).some((f) => f.bad === bad), `${text} 에서 "${bad}" 를 놓쳤다`);
+  }
+});
+
+test("한 글자 접미사 제거는 실제 합성어 오탐도 여전히 막는다", () => {
+  // "제출"+"자"(제출자를), "제출"+"서"(제출서류), "제출"+"용"(제출용), "니즈"+"니"(니즈니)
+  // 처럼 짧은 규칙 뒤에 다른 낱말이 붙어 오탐을 낸 사례다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.deepEqual(
+    lint("제출자를 확인해 주세요.", rules).filter((f) => f.bad === "제출"),
+    []
+  );
+  assert.deepEqual(
+    lint("니즈니 노브고로드에 갔습니다.", rules).filter((f) => f.bad === "니즈"),
+    []
+  );
+});
+
+test("경계에 막혀 버려지는 매치는 규칙별 보고 상한에 넣지 않는다", () => {
+  // "디커플링 커패시터."를 50번 반복해도 뒤에 나오는 진짜 "커플링이 높습니다."는 잡아야 한다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const text = "디커플링 커패시터. ".repeat(50) + "커플링이 높습니다.";
+  assert.ok(lint(text, rules).some((f) => f.bad === "커플링"));
+});
+
+// ── 길이로 오른쪽 검사를 통째로 빼지 않는다 ──────────────────
+//
+// 긴 낱말로 끝나는 규칙을 통째로 안 본 적이 있다. 그러면 "이 기록부터"의 "기록부",
+// "쿠버네티스 디플로이먼트"의 "디플로이"처럼 우연히 다른 낱말 속에 낀 매치까지 다시
+// 새어 나갔다. 길이와 무관하게 FOLLOWER_TOKENS 로만 판정한다.
+
+test("긴 낱말로 끝나는 규칙도 다른 낱말 속에 갇히면 잡지 않는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const cases = [
+    ["이 기록부터 봅시다.", "기록부"],
+    ["쿠버네티스 디플로이먼트를 늘렸습니다.", "디플로이"],
+    ["디펜던시즈를 정리했습니다.", "디펜던시"],
+    ["통나무집을 지었습니다.", "통나무"],
+  ];
+  for (const [text, bad] of cases) {
+    assert.deepEqual(
+      lint(text, rules).filter((f) => f.bad === bad),
+      [],
+      `${text} 에서 "${bad}" 가 다른 낱말 속에서 잘못 잡혔다`
+    );
+  }
+});
+
+test("일시처럼 시로 시작하되 시키지 않는 낱말은 시키/시켜류로 보지 않는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.deepEqual(
+    lint("맡은 일시 중단했습니다.", rules).filter((f) => f.bad === "맡은 일"),
+    []
+  );
+});
+
+// ── 표기 규칙은 왼쪽만 뺀다 ───────────────────────────────────
+//
+// 양쪽을 다 빼면 "어떻게 할 지"가 "지침"·"지원" 속까지 파고든다. 오른쪽 검사는 켜 두되,
+// 외래어 명사를 그대로 이어 붙이는 표기 규칙(메세지·데이타 등)만 예외로 오른쪽도 뺀다.
+
+test("띄어쓰기 규칙은 오른쪽 경계를 그대로 지킨다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.deepEqual(
+    lint("어떻게 할 지침이 필요합니다.", rules).filter((f) => f.bad === "어떻게 할 지"),
+    []
+  );
+  assert.deepEqual(
+    lint("어떻게 할 지원이 필요합니다.", rules).filter((f) => f.bad === "어떻게 할 지"),
+    []
+  );
+  // 정당한 쓰임은 여전히 잡는다.
+  assert.ok(lint("어떻게 할 지 모르겠습니다.", rules).some((f) => f.bad === "어떻게 할 지"));
+});
+
+test("외래어 표기 규칙은 다른 외래어에 그대로 붙어 있어도 잡는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const cases = [
+    ["메세지큐에 넣었습니다.", "메세지"],
+    ["쓰레드풀을 늘렸습니다.", "쓰레드"],
+    ["데이타베이스를 손봤습니다.", "데이타"],
+    ["엑세스토큰을 발급했습니다.", "엑세스"],
+    ["컨텐츠팀에서 정리했습니다.", "컨텐츠"],
+    ["스케쥴러를 손봤습니다.", "스케쥴러"],
+  ];
+  for (const [text, bad] of cases) {
+    assert.ok(lint(text, rules).some((f) => f.bad === bad), `${text} 에서 "${bad}" 를 놓쳤다`);
+  }
+});
+
+// ── -적 은 세 음절 이상 뒤에서만, 알려진 충돌은 막는다 ─────────
+
+test("세 음절 이상 뒤의 -적은 흔한 파생이라 잡는다", () => {
+  // 접속면·연결면 같은 충돌 사례가 없는, 세 음절 한자어 뒤의 흔한 "-적" 파생이다.
+  const threeSyllable = rule({ bad: "가용성", good: "가용도" });
+  assert.ok(lint("가용성적인 측면에서 낫습니다.", [threeSyllable]).some((f) => f.bad === "가용성"));
+});
+
+test("접속면적·연결면적처럼 -적이 다른 낱말을 만드는 자리는 막는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.deepEqual(
+    lint("접속면적이 넓습니다.", rules).filter((f) => f.bad === "접속면"),
+    []
+  );
+  assert.deepEqual(
+    lint("연결면적이 넓습니다.", rules).filter((f) => f.bad === "연결면"),
+    []
   );
 });
