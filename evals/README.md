@@ -36,6 +36,33 @@ claude plugin eval . --runs 2 -j 4
 
 가능하면 `regex`를 먼저 쓴다. 판정이 흔들리지 않고 비용이 들지 않는다.
 
+## 호스트 설정과 섞이지 않게 하기
+
+`claude -p --plugin-dir` 로 띄운 세션에는 이 플러그인만 올라오지 않는다. 사용자 설정의
+`enabledPlugins`, 사용자 훅, `~/.claude/skills` 의 스킬, 사용자 MCP 서버가 함께 올라온다.
+실측해 보니 섞여 드는 주범은 플러그인보다 사용자 훅이었다. 모든 이벤트에서 돈다.
+
+손으로 말투를 잴 때는 사용자 설정을 뺀다.
+
+```bash
+claude -p "<질문>" --plugin-dir "<플러그인 절대 경로>" --setting-sources project,local \
+  --output-format stream-json --verbose --include-hook-events --no-session-persistence \
+  --debug-file run.debug.log < /dev/null
+```
+
+- 인증(OAuth)과 모델은 그대로 남는다. 사용자 설정의 추론 수준(`effortLevel`)은 빠지므로
+  대화형 환경과 견주려면 `--effort` 를 직접 준다.
+- 빈 임시 저장소에서 띄운다. 현재 디렉터리의 `.claude/` 설정은 여전히 읽힌다.
+- `--bare` 는 OAuth 를 읽지 않아 인증이 막히고, `--safe-mode` 는 `--plugin-dir` 로 넣은
+  플러그인까지 끈다. 둘 다 쓰지 않는다.
+- 격리됐는지는 디버그 로그로 확인한다. `Registered 3 hooks from 3 plugins` 와
+  `Using forced plugin output style: kimchi-claude:자연스러운 한국어` 가 있어야 한다.
+  stream-json 의 `init` 은 증거가 아니다. 출력 스타일이 강제로 적용돼도 `output_style` 에는
+  설정값인 `"default"` 가 찍힌다.
+
+`claude plugin eval` 이 사용자 설정을 떼어 내는지는 아직 확인하지 않았다. 도움말에 그런
+옵션이 없다. 다음에 돌릴 때 자식 세션에 올라온 훅 수부터 확인한다.
+
 ## 알려진 제약
 
 평가는 자식 `claude` 프로세스를 띄운다. 그 프로세스가 자격 증명을 물려받지 못하는 환경에서는

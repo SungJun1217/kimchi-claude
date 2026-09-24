@@ -37,8 +37,19 @@ not fix anything.
    (`KIMCHI_DISABLE`, `KIMCHI_PII`, `KIMCHI_AUTOFIX`, `KIMCHI_BLOCK`, `KIMCHI_REPO_LANG`) the
    change touches.
 2. **Real headless sessions (cost tokens).** `claude -p "<prompt>" --plugin-dir "$REPO"
-   --output-format stream-json --verbose --include-hook-events --no-session-persistence
-   --max-budget-usd 0.5`, run from the scratch repo. Bound each to 180 s — macOS has no
+   --setting-sources project,local --output-format stream-json --verbose
+   --include-hook-events --no-session-persistence --max-budget-usd 0.5
+   --debug-file "$SB/run.debug.log"`, run from the scratch repo.
+   `--setting-sources project,local` is what isolates the session: without it the host's user
+   settings load too — their `enabledPlugins`, user hooks (which fire on every event), user
+   skills and MCP servers — and contaminate the result. It keeps OAuth auth and the model, and
+   drops user `effortLevel` (pass `--effort`/`--model` if comparability matters). Do not use
+   `--bare` (OAuth is never read) or `--safe-mode` (it disables the `--plugin-dir` plugin too).
+   Confirm isolation per run from the debug log: `Registered 3 hooks from 3 plugins` and
+   `Using forced plugin output style: kimchi-claude:자연스러운 한국어`. The stream-json `init`
+   event is not evidence: its `output_style` shows only the settings value (`"default"`) even
+   when the forced style is applied, and under `--safe-mode` its `plugins` list includes
+   disabled plugins. Bound each to 180 s — macOS has no
    `timeout`; use `perl -e 'alarm 180; exec @ARGV' -- <cmd…>` — and close stdin (`< /dev/null`).
    Check `claude --help` for the real flags rather than guessing. Keep prompts tiny and
    harmless. Budget: **at most 6 launches per run**; plan scenarios so each one answers something.
