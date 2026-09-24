@@ -20,6 +20,7 @@
 //   KIMCHI_BLOCK=1     말투 위반이 있으면 막는다
 
 import { readFileSync } from "node:fs";
+import { isEntrypoint } from "./lib/entrypoint.mjs";
 import { looksKorean } from "./lib/detect.mjs";
 import { findResidentNumbers, formatLeak, extractPiiTargets } from "./lib/pii.mjs";
 import {
@@ -128,7 +129,7 @@ function main() {
 }
 
 // 직접 실행될 때만 돈다.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntrypoint(import.meta.url)) {
   try {
     main();
   } catch {

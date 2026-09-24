@@ -33,6 +33,7 @@ import {
   autoFixReplacement,
 } from "../hooks/lib/lint.mjs";
 import { loadRules, parseTable, PRIORITIES, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
+import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RULES_DIR = join(ROOT, "rules");
@@ -297,4 +298,4 @@ function main() {
 }
 
 // 직접 실행될 때만 돈다. 시험과 다른 스크립트가 decideCheck 를 불러 쓸 수 있어야 한다.
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (isEntrypoint(import.meta.url)) main();
