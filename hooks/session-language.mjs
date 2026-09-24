@@ -34,7 +34,10 @@ function readStdin() {
  */
 async function main() {
   if (process.env.KIMCHI_DISABLE === "1") return undefined;
-  if (process.env.KIMCHI_REPO_LANG === "off") return undefined;
+  // off/0/false 를 대소문자 가리지 않고 받는다. 소문자 "off"만 받으면 KIMCHI_REPO_LANG=OFF
+  // 처럼 흔히 쓰는 표기가 안 먹혀서 끄려던 사용자가 계속 안내를 받는다.
+  const repoLangEnv = String(process.env.KIMCHI_REPO_LANG ?? "").toLowerCase();
+  if (["off", "0", "false"].includes(repoLangEnv)) return undefined;
 
   // 훅 입력에 작업 디렉터리가 들어온다. 없으면 프로세스의 것을 쓴다.
   let cwd = process.cwd();
