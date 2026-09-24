@@ -87,20 +87,68 @@ export function toPattern(bad) {
   return pattern;
 }
 
-function compilePattern(bad) {
+// "쓰지 말 것" 칸의 " / "는 사람에게는 "이 중 아무거나"로 읽히지만, 그동안은 한 칸을
+// 통째로 리터럴로 컴파일해 "A / B"라는 문자열 그대로만 찾았다 — 즉 절대 매치되지 않았다.
+// 대안마다 따로 정규식을 만들어 교대(|)로 묶어야 실제로 A도, B도 잡는다.
+const ALTERNATIVE_SEPARATOR = " / ";
+
+// bad 문자열 하나를 대안 목록으로 쪼갠다. 대안이 하나뿐이면 그 하나만 담은 배열이다.
+// compilePattern(매치용)과 boundaryRequirement(경계 판정용)·autoFixReplacement(자동
+// 교정 금지 판정용)가 모두 같은 쪼갬을 써야 한다. 따로 쪼개면 셋이 어긋난다.
+const alternativeCache = new Map();
+export function alternativesOf(bad) {
+  if (typeof bad !== "string") return [];
+  if (alternativeCache.has(bad)) return alternativeCache.get(bad);
   const core = stripWildcardEdges(bad);
-  if (core.length === 0) return null;
+  const alts = core.length === 0 ? [] : core.split(ALTERNATIVE_SEPARATOR).map((alt) => alt.trim()).filter(Boolean);
+  const result = alts.length > 0 ? alts : core.length > 0 ? [core] : [];
+  alternativeCache.set(bad, result);
+  return result;
+}
 
-  const parts = core.split(WILDCARD);
-  const literalLength = parts.join("").replace(/\s+/g, "").length;
-  if (literalLength < MIN_LITERAL_LENGTH) return null;
+function compilePattern(bad) {
+  const alternatives = alternativesOf(bad);
+  if (alternatives.length === 0) return null;
 
-  const source = parts.map(escapeRegExp).join(WILDCARD_PATTERN);
+  const sources = [];
+  for (const alt of alternatives) {
+    const parts = alt.split(WILDCARD);
+    const literalLength = parts.join("").replace(/\s+/g, "").length;
+    if (literalLength < MIN_LITERAL_LENGTH) continue;
+    sources.push(parts.map(escapeRegExp).join(WILDCARD_PATTERN));
+  }
+  if (sources.length === 0) return null;
+
+  const source = sources.length === 1 ? sources[0] : `(?:${sources.join("|")})`;
   try {
     return new RegExp(source, "g");
   } catch {
     return null;
   }
+}
+
+/**
+ * 매치된 문자열이 대안 중 어느 것인지 찾는다. 경계 판정(boundaryRequirement)이
+ * 대안마다 달라야 하기 때문이다 — "물결 효과"(명사)와 "파문이 퍼집니다"(절)가 한
+ * 규칙 안에 있으면 오른쪽 경계 요구가 서로 다르다.
+ *
+ * @param {string} bad
+ * @param {string} matchedText
+ * @returns {string} 못 찾으면 첫 대안(호출부의 안전한 기본값)
+ */
+function matchedAlternative(bad, matchedText) {
+  const alts = alternativesOf(bad);
+  if (alts.length <= 1) return alts[0] ?? "";
+  for (const alt of alts) {
+    const parts = alt.split(WILDCARD);
+    const source = `^(?:${parts.map(escapeRegExp).join(WILDCARD_PATTERN)})$`;
+    try {
+      if (new RegExp(source).test(matchedText)) return alt;
+    } catch {
+      continue;
+    }
+  }
+  return alts[0];
 }
 
 /**
@@ -191,6 +239,10 @@ export function autoFixReplacement(rule) {
   if (NOT_A_REPLACEMENT.test(good)) return null;
   // 금칙어 가운데에 물결표가 있으면 무엇을 남기고 무엇을 바꿀지 정할 수 없다.
   if (stripWildcardEdges(rule.bad ?? "").includes(WILDCARD)) return null;
+  // 대안이 둘 이상이면 매치된 대안에 따라 꽂을 말도 달라져야 하는데, 치환 하나로는
+  // 그 대응을 표현할 수 없다("표층 복사"에 "깊은 복사"를 꽂는 식의 오배정이 실제로
+  // 있었다). 자료가 대안마다 행을 나누지 않는 한 자동 교정은 하지 않는다.
+  if (alternativesOf(rule.bad).length > 1) return null;
 
   const replacement = primaryGood(good);
   if (replacement.length === 0) return null;
@@ -398,27 +450,40 @@ function isLoanwordSpellingRule(rule) {
 
 // bad 문자열이 아니라 규칙 객체를 열쇠로 쓴다. why·source 도 판정에 들어가기 때문이다.
 // 규칙 배열은 loadRules 가 한 번 읽어 재사용하므로, 같은 규칙 객체는 호출마다 같다.
+//
+// 대안(" / ")마다 요구가 다를 수 있어 rule 하나에 대안별 결과를 담은 Map을 매단다.
+// "물결 효과 / 파문이 퍼집니다"처럼 명사와 절이 한 규칙에 섞이면, 절 쪽은 어미가 무한히
+// 붙어 오른쪽 경계를 셀 수 없지만 명사 쪽은 셀 수 있다 — 규칙 전체가 아니라 실제로
+// 매치된 대안 기준으로 판정해야 한다.
 const boundaryCache = new WeakMap();
 
-function boundaryRequirement(rule) {
-  if (boundaryCache.has(rule)) return boundaryCache.get(rule);
+function boundaryRequirement(rule, alt) {
+  let perRule = boundaryCache.get(rule);
+  if (perRule === undefined) {
+    perRule = new Map();
+    boundaryCache.set(rule, perRule);
+  }
+  if (perRule.has(alt)) return perRule.get(alt);
+
   const bad = rule.bad;
-  const core = stripWildcardEdges(bad);
-  const leadsWithWildcard = typeof bad === "string" && bad.trim().startsWith(WILDCARD);
-  const trailsWithWildcard = typeof bad === "string" && bad.trim().endsWith(WILDCARD);
+  const alts = alternativesOf(bad);
+  const isFirstAlt = alts[0] === alt;
+  const isLastAlt = alts[alts.length - 1] === alt;
+  const leadsWithWildcard = typeof bad === "string" && bad.trim().startsWith(WILDCARD) && isFirstAlt;
+  const trailsWithWildcard = typeof bad === "string" && bad.trim().endsWith(WILDCARD) && isLastAlt;
   const orthography = isOrthographyRule(rule);
-  const last = finalWord(core);
+  const last = finalWord(alt);
   const requirement = {
-    left: !orthography && !leadsWithWildcard && isHangulChar(core[0]),
+    left: !orthography && !leadsWithWildcard && isHangulChar(alt[0]),
     right:
       !isLoanwordSpellingRule(rule) &&
       !trailsWithWildcard &&
-      !endsWithVerbStem(core) &&
-      !endsInsideClauseFragment(core) &&
-      isHangulChar(core[core.length - 1]),
+      !endsWithVerbStem(alt) &&
+      !endsInsideClauseFragment(alt) &&
+      isHangulChar(alt[alt.length - 1]),
     allowJeok: hangulSyllableCount(last) >= JEOK_ALLOWED_MIN_SYLLABLES && !JEOK_DENYLIST.has(last),
   };
-  boundaryCache.set(rule, requirement);
+  perRule.set(alt, requirement);
   return requirement;
 }
 
@@ -433,7 +498,9 @@ function boundaryRequirement(rule) {
  * @returns {boolean}
  */
 function isWordBoundaryMatch(rule, masked, index, length) {
-  const { left, right, allowJeok } = boundaryRequirement(rule);
+  const matchedText = masked.slice(index, index + length);
+  const alt = matchedAlternative(rule.bad, matchedText);
+  const { left, right, allowJeok } = boundaryRequirement(rule, alt);
   if (left && isHangulChar(masked[index - 1] ?? "")) return false;
   if (right && !isAllowedFollower(masked.slice(index + length), allowJeok)) return false;
   return true;
@@ -528,7 +595,12 @@ export function lint(text, rules, ext) {
   if (!Array.isArray(rules)) return [];
   if (isIgnoredFile(text)) return [];
 
-  const masked = maskProtected(text, ext);
+  // 한글은 NFC(완성형)와 NFD(자모 분해형) 두 가지로 인코딩될 수 있다. macOS 파일시스템이
+  // 만든 텍스트는 NFD로 온다. 규칙표의 리터럴은 전부 NFC로 적혀 있어서, NFD 그대로
+  // 매치하면 하나도 안 잡힌다. 정규화한 사본으로 찾아야 두 형태 모두에서 같은 결과가
+  // 나온다. text가 이미 NFC면 normalized === text라 아래 로직에 변화가 없다.
+  const normalized = text.normalize("NFC");
+  const masked = maskProtected(normalized, ext);
   const findings = [];
 
   for (const rule of rules) {
@@ -560,7 +632,7 @@ export function lint(text, rules, ext) {
         check: rule.check,
         index: match.index,
         length: match[0].length,
-        matched: text.slice(match.index, match.index + match[0].length),
+        matched: normalized.slice(match.index, match.index + match[0].length),
         priority: rule.priority,
         source: rule.source,
       });
@@ -589,6 +661,22 @@ export function applyFixes(text, rules, ext) {
   // `검사` 칸이 치환인 것은 규칙을 쓴 사람의 의사 표시이고, 실제로 꽂을 수 있는지는
   // autoFixReplacement 가 따로 판정한다. 둘을 모두 만족해야 고친다.
   const candidates = lint(text, rules, ext).filter((finding) => finding.check === CHECK_SUBSTITUTE);
+
+  // lint() 는 매치를 NFC로 정규화한 사본에서 찾으므로, 찾은 index는 그 사본 기준이다.
+  // text가 이미 NFC면 사본과 원본이 같아 인덱스가 그대로 맞는다. NFD로 들어온 텍스트를
+  // 그 인덱스로 그대로 잘라 쓰면 엉뚱한 자리를 자르거나, 고치지 않은 나머지 글자까지
+  // 통째로 NFC로 재정규화되어 버린다 — 사용자가 바꾸지 않은 글자까지 조용히 바뀐다.
+  // 그래서 NFD 입력은 경고만 하고 고치지 않는다.
+  if (text.normalize("NFC") !== text) {
+    return {
+      text,
+      applied,
+      skipped: candidates.map((finding) => ({
+        ...finding,
+        reason: "NFC로 정규화되지 않은 입력이라 자동 교정하지 않습니다",
+      })),
+    };
+  }
 
   // 뒤에서부터 고친다. 앞쪽을 먼저 고치면 뒤쪽 위치가 어긋난다.
   const ordered = [...candidates].sort((a, b) => b.index - a.index);
