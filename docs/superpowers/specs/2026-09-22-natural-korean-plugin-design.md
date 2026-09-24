@@ -106,9 +106,11 @@ kimchi-claude/
 │
 ├── scripts/
 │   ├── build-style.mjs            rules/ → output-styles/ 생성. README 숫자도 써 넣는다
+│   ├── build-readme-art.mjs       README 그림 생성. 문구는 훅과 린터에서 그 자리에서 뽑는다
 │   ├── import-corpus.mjs          조사 결과(JSON) → rules/*.md. 개발용, 일회성
 │   └── score-response.mjs         한국어 글을 채점한다. --fix 로 교정도 한다
 │
+├── assets/                        README 그림. 생성물이다. 라이트·다크 두 벌
 ├── corpus/                        처음 들여온 규칙 자료. 출처 추적용
 ├── evals/                         claude plugin eval 세트
 └── tests/                         스킬 예시 코드까지 검증한다
