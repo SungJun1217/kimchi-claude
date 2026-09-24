@@ -234,12 +234,20 @@ Claude라는 한계가 있습니다. 답변 원문과 채점 방법은
 
 ## 설치
 
-클로드 코드에서 마켓플레이스를 추가하고 플러그인을 설치합니다.
+클로드 코드에서 아래 두 명령을 **한 줄씩 따로** 입력합니다. 두 줄을 한꺼번에 붙여 넣으면 한 명령으로
+합쳐져서 "not a valid GitHub owner/repo shorthand" 오류가 납니다.
 
-```text
-/plugin marketplace add SungJun1217/kimchi-claude
-/plugin install kimchi-claude@kimchi-claude-marketplace
-```
+1. 마켓플레이스를 추가합니다.
+
+   ```text
+   /plugin marketplace add SungJun1217/kimchi-claude
+   ```
+
+2. 플러그인을 설치합니다.
+
+   ```text
+   /plugin install kimchi-claude@kimchi-claude-marketplace
+   ```
 
 켜면 바로 적용됩니다. 출력 스타일을 따로 고를 필요는 없습니다.
 
