@@ -195,8 +195,32 @@ test("깨끗한 파일은 통과시킨다", () => {
 
 test("KIMCHI_PII=warn 은 막지 않고 알려만 준다", () => {
   const output = runHook(write('const seed = "900101-1234567";'), { KIMCHI_PII: "warn" });
-  assert.equal(output.hookSpecificOutput.permissionDecision, "allow");
+  assert.equal(output.hookSpecificOutput.permissionDecision, undefined, "경고는 권한 프롬프트를 건너뛰면 안 된다");
   assert.match(output.systemMessage, /주민등록번호로 보이는 값/);
+  assert.match(output.hookSpecificOutput.additionalContext, /주민등록번호로 보이는 값/, "모델에게도 경고가 닿아야 한다");
+});
+
+test("KIMCHI_PII=warn 과 KIMCHI_AUTOFIX=1 이 겹치면 결정 없이 두 메시지가 모두 additionalContext 에 실린다", () => {
+  const output = runHook(write("주민번호 900101-1234567, 리팩토링 후 컨텐츠 정리", "notes.md"), {
+    KIMCHI_PII: "warn",
+    KIMCHI_AUTOFIX: "1",
+  });
+  assert.equal(output.hookSpecificOutput.permissionDecision, undefined, "경고+교정이 겹쳐도 결정을 실으면 안 된다");
+  assert.match(output.systemMessage, /주민등록번호로 보이는 값/);
+  assert.match(output.hookSpecificOutput.additionalContext, /주민등록번호로 보이는 값/);
+  assert.match(output.hookSpecificOutput.additionalContext, /입력을 고쳤습니다/);
+});
+
+test("KIMCHI_PII=warn 과 KIMCHI_BLOCK=1 이 겹치면 차단은 그대로고, 개인정보 경고도 additionalContext 에 실린다", () => {
+  // 말투 쪽이 deny 를 낼 때는 원래 additionalContext 가 없다 — 개인정보 경고를 "이미 있으면
+  // 덧붙인다"로만 처리하면 이 조합에서 모델에게 경고가 전달되지 않는 회귀가 난다.
+  const output = runHook(write("주민번호 900101-1234567, 리팩토링 후 컨텐츠 정리", "notes.md"), {
+    KIMCHI_PII: "warn",
+    KIMCHI_BLOCK: "1",
+  });
+  assert.equal(output.hookSpecificOutput.permissionDecision, "deny", "말투 차단은 개인정보 경고와 무관하게 그대로다");
+  assert.match(output.systemMessage, /주민등록번호로 보이는 값/);
+  assert.match(output.hookSpecificOutput.additionalContext, /주민등록번호로 보이는 값/, "차단 응답에도 모델용 경고가 있어야 한다");
 });
 
 test("KIMCHI_PII=off 와 KIMCHI_DISABLE=1 은 아무것도 하지 않는다", () => {
