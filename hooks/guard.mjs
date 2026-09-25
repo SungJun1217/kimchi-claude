@@ -137,16 +137,30 @@ async function main() {
   }
 
   // 막지 않는 개인정보 경고는 말투 결과에 얹어 함께 내보낸다. 훅은 한 번만 답할 수 있다.
+  //
+  // 여기서 permissionDecision 을 싣지 않는다. 경고는 "막지 않는다"는 뜻이지 "숨긴다"는
+  // 뜻이 아닌데, "allow" 를 실으면 Claude Code 가 사용자의 권한 프롬프트를 건너뛴다
+  // ("Hook approved tool use ... bypassing permission prompt", 2.1.282 실측). 결정은 정상
+  // 권한 파이프라인에 맡기고, systemMessage(사용자)와 additionalContext(모델) 로만 알린다.
   if (piiResult !== null && tone === null) {
     return JSON.stringify({
       systemMessage: piiResult.message,
-      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
+      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: piiResult.message },
     });
   }
   if (tone === null) return undefined;
 
   if (piiResult !== null) {
     tone.systemMessage = [piiResult.message, tone.systemMessage].filter(Boolean).join("\n\n");
+    // 말투 쪽 결과(차단이든 자동 교정이든)에도 개인정보 경고를 꽂는다. additionalContext 는
+    // 결정이 deny 여도 모델에게 전달되므로(2.1.282 실측), 이미 있으면 앞에 붙이고 없으면
+    // 새로 만든다 — deny 응답에는 원래 additionalContext 가 없어서 없으면 건너뛰던 것이
+    // 차단 + 경고 조합에서 경고를 모델에게서 감추는 버그였다.
+    if (tone.hookSpecificOutput) {
+      tone.hookSpecificOutput.additionalContext = [piiResult.message, tone.hookSpecificOutput.additionalContext]
+        .filter(Boolean)
+        .join("\n\n");
+    }
   }
   return JSON.stringify(tone);
 }

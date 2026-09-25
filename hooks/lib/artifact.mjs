@@ -190,9 +190,12 @@ function extractTargets(toolName, toolInput) {
   return [];
 }
 
+function formatFixList(applied) {
+  return applied.map((item) => `- "${item.matched}" → "${item.replacement}"`).join("\n");
+}
+
 function describeFixes(applied) {
-  const lines = applied.map((item) => `- "${item.matched}" → "${item.replacement}"`);
-  return [`한국어 표현 ${applied.length}건을 고쳤습니다.`, ...lines].join("\n");
+  return [`한국어 표현 ${applied.length}건을 고쳤습니다.`, formatFixList(applied)].join("\n");
 }
 
 export function autofixOrBlock(toolName, toolInput, targets, rules) {
@@ -271,12 +274,24 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
 
   if (!changed || applied.length === 0) return null;
 
+  // permissionDecision 에 "allow" 를 실으면 Claude Code 가 사용자의 권한 프롬프트를
+  // 건너뛴다("Hook approved tool use ... bypassing permission prompt", 2.1.282 실측). 여기서
+  // 결정할 일은 자동 교정뿐이지 실행 승인이 아니므로 결정 없이 updatedInput 만 돌려주고,
+  // 뒤이어 정상 권한 파이프라인이 이 rewritten input 을 보고 사용자에게 물어보게 둔다.
+  //
+  // systemMessage 는 사용자에게만 보이고 모델에게는 전달되지 않는다. 모델이 무엇이 바뀌었는지
+  // 모르면 나중에 커밋/저장된 내용을 잘못 보고하거나 되돌려 버릴 수 있어, 모델에게 닿는
+  // hookSpecificOutput.additionalContext 에도 같은 내용을 싣는다.
   return {
     systemMessage: describeFixes(applied),
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
-      permissionDecision: "allow",
       updatedInput,
+      additionalContext: [
+        "kimchi-claude 가 KIMCHI_AUTOFIX 설정에 따라 이 도구를 실행하기 전에 입력을 고쳤습니다.",
+        "실제로 실행되거나 저장되는 내용은 아래처럼 바뀐 것입니다. 이 교정을 되돌리지 말고, 사용자에게도 이렇게 바뀌었다고 알려 주십시오.",
+        formatFixList(applied),
+      ].join("\n"),
     },
   };
 }

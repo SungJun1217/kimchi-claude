@@ -65,7 +65,7 @@ test("KIMCHI_AUTOFIX=1 로 200KB 문서를 고쳐도 updatedInput 이 잘리지 
   );
 
   assert.ok(output, "출력이 잘려서 자동 교정 결과가 안 나왔다");
-  assert.equal(output.hookSpecificOutput.permissionDecision, "allow");
+  assert.equal(output.hookSpecificOutput.permissionDecision, undefined, "자동 교정은 권한 프롬프트를 건너뛰면 안 된다");
   const updated = output.hookSpecificOutput.updatedInput.content;
   assert.equal(typeof updated, "string");
   // 원문 꼬리(필러 반복 뒤에 붙인 표시)가 온전히 남아 있어야 한다 — 잘렸다면 여기서 사라진다.
@@ -115,7 +115,7 @@ test("느린 리더에게도 64KiB 를 넘는 출력이 완전하게 도착한�
 
   assert.ok(out.length > 65536, `표본이 OS 파이프 버퍼보다 커야 한다 (실제 ${out.length}바이트)`);
   const parsed = JSON.parse(out); // 잘렸으면 여기서 던진다
-  assert.equal(parsed.hookSpecificOutput.permissionDecision, "allow");
+  assert.equal(parsed.hookSpecificOutput.permissionDecision, undefined);
   assert.match(parsed.hookSpecificOutput.updatedInput.content, /결합도가 낮습니다\.\s*$/, "출력 꼬리가 잘렸다");
 });
 

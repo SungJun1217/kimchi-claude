@@ -89,9 +89,46 @@ test("기본값에서는 PreToolUse가 아무것도 하지 않는다", () => {
 test("KIMCHI_AUTOFIX가 켜지면 입력을 고쳐 준다", () => {
   const payload = { ...commit("리팩토링 후 컨텐츠 정리"), hook_event_name: "PreToolUse" };
   const output = runHook(payload, { KIMCHI_AUTOFIX: "1" });
-  assert.equal(output.hookSpecificOutput.permissionDecision, "allow");
+  assert.equal(output.hookSpecificOutput.permissionDecision, undefined, "자동 교정은 권한 프롬프트를 건너뛰면 안 된다");
   assert.match(output.hookSpecificOutput.updatedInput.command, /리팩터링 후 콘텐츠 정리/);
   assert.match(output.systemMessage, /2건을 고쳤습니다/);
+  assert.match(output.hookSpecificOutput.additionalContext, /입력을 고쳤습니다/);
+  assert.match(output.hookSpecificOutput.additionalContext, /"리팩토링" → "리팩터링"/);
+  assert.match(output.hookSpecificOutput.additionalContext, /"컨텐츠" → "콘텐츠"/);
+});
+
+test("자동 교정 additionalContext 는 systemMessage 와 같은 교정 목록을 담는다", () => {
+  // 모델에게는 additionalContext 로만 닿는다(systemMessage 는 사용자 전용). 둘이 갈라지면
+  // 모델이 실제로 반영된 내용을 모른 채 보고하거나 되돌릴 수 있다.
+  const payload = { ...commit("리팩토링 후 컨텐츠 정리"), hook_event_name: "PreToolUse" };
+  const output = runHook(payload, { KIMCHI_AUTOFIX: "1" });
+  const fixLines = (text) => text.split("\n").filter((line) => line.startsWith("- "));
+  assert.deepEqual(
+    fixLines(output.hookSpecificOutput.additionalContext),
+    fixLines(output.systemMessage),
+    "모델에게 닿는 교정 목록이 사용자에게 보이는 목록과 달라졌다"
+  );
+});
+
+test("KIMCHI_AUTOFIX/KIMCHI_BLOCK/KIMCHI_PII 조합 어디에서도 permissionDecision 이 allow 나 ask 로는 나오지 않는다", () => {
+  const combos = [
+    {},
+    { KIMCHI_AUTOFIX: "1" },
+    { KIMCHI_BLOCK: "1" },
+    { KIMCHI_AUTOFIX: "1", KIMCHI_BLOCK: "1" },
+    { KIMCHI_PII: "warn" },
+    { KIMCHI_AUTOFIX: "1", KIMCHI_PII: "warn" },
+    { KIMCHI_BLOCK: "1", KIMCHI_PII: "warn" },
+  ];
+  const payload = { ...commit("리팩토링 후 컨텐츠 정리"), hook_event_name: "PreToolUse" };
+  for (const env of combos) {
+    const output = runHook(payload, env);
+    const decision = output?.hookSpecificOutput?.permissionDecision;
+    assert.ok(
+      decision === undefined || decision === "deny",
+      `${JSON.stringify(env)} 에서 permissionDecision 이 "${decision}" 이었다 — 권한 프롬프트를 건너뛸 수 있다`
+    );
+  }
 });
 
 test("KIMCHI_BLOCK이 켜지면 막는다", () => {

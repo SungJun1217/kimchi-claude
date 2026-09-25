@@ -286,7 +286,7 @@ Explanatory를 쓸 수 없다. "설치만 하면 켜진다"가 요구사항이�
 | 환경변수 | 기본값 | 훅 | 동작 |
 |---|---|---|---|
 | (없음) | — | PostToolUse | 위반을 `additionalContext`로 알린다. 클로드가 직접 고친다 |
-| `KIMCHI_AUTOFIX=1` | 꺼짐 | PreToolUse | `updatedInput`으로 치환 규칙을 자동 교정한다 |
+| `KIMCHI_AUTOFIX=1` | 꺼짐 | PreToolUse | `updatedInput`으로 치환 규칙을 자동 교정한다. 권한 검사는 그대로 거친다 |
 | `KIMCHI_BLOCK=1` | 꺼짐 | PreToolUse | `permissionDecision: deny`로 막는다 |
 | `KIMCHI_DISABLE=1` | 꺼짐 | — | 아무것도 하지 않는다 |
 
@@ -311,6 +311,25 @@ Explanatory를 쓸 수 없다. "설치만 하면 켜진다"가 요구사항이�
 그래서 `hooks/lib/lint.mjs`의 `applyFixes`는 바꾸기 전에 **마지막 음절의 받침 유무가 같은지**
 확인하고, 다르면서 뒤에 조사가 붙어 있으면 건너뛴다. 한글 음절은 `(코드 - 0xAC00) % 28`이
 0이면 받침이 없으므로 이 판정이 몇 줄로 끝난다. 건너뛴 항목은 경고로 알린다.
+
+### 자동 교정이 permissionDecision을 싣지 않는 이유
+
+`updatedInput`을 돌려줄 때 `permissionDecision: "allow"`를 함께 실었더니 클로드 코드
+2.1.282에서 사용자의 권한 프롬프트가 통째로 사라졌다(디버그 로그: "Hook approved tool use for
+Bash, bypassing permission prompt"). `git commit -m "타겟 추가" && touch x`가 승인 없이
+그대로 실행됐다 — 값이 `"allow"`이기만 해도 사전 승인으로 취급되기 때문이다. `"ask"`도 대안이
+아니다. 이미 승인된 도구까지 강제로 다시 묻게 만들어 자동 교정과 무관한 프롬프트를 늘린다.
+
+지금은 `updatedInput`만 돌려주고 `permissionDecision`은 아예 넣지 않는다. 그러면 클로드 코드가
+고쳐 쓴 입력을 정상 권한 파이프라인에 그대로 넘기고, 원래 그 도구 호출에 필요했던 승인 절차를
+그대로 거친다. 자동 교정이 결정할 일은 "무엇을 바꿀지"이지 "실행을 허가할지"가 아니다.
+
+`systemMessage`는 사용자에게만 보이고 모델에게는 전달되지 않는다는 것도 같은 조사에서 확인했다.
+모델이 무엇이 바뀌었는지 모르면 실제로 실행·저장된 내용을 잘못 보고하거나, 되돌리려는 시도로
+자동 교정을 무효화할 수 있다. 그래서 `hookSpecificOutput.additionalContext`에도 같은 교정
+목록을 실어 모델에게 직접 알린다. `KIMCHI_PII=warn`의 개인정보 경고도 같은 이유로
+`additionalContext`를 함께 쓴다 — 경고는 "막지 않는다"는 뜻이지 "모델에게 숨긴다"는 뜻이
+아니다.
 
 ### 오탐 방어
 
@@ -775,6 +794,17 @@ workshop→워크숍, 위 표기 용례와 다듬은 말 목록이 일치한 경
 그런데 치환에는 한국어 고유의 함정이 있었다. 조사다. 위의 "자동 교정의 조사 문제" 참조.
 이 함정 때문에 `치환` 여부를 사람이 손으로 정하면 안 된다는 결론이 나왔고, `import-corpus.mjs`가
 실제 치환을 해 보고 계산하도록 만들었다.
+
+### 자동 교정·경고에 permissionDecision을 실었던 것
+
+`updatedInput`이나 `KIMCHI_PII=warn` 경로 모두 처음에는 `permissionDecision: "allow"`를
+함께 돌려줬다. "이미 검사를 통과했으니 명시적으로 허용해 준다"는 생각이었다. 실제 세션에서
+확인해 보니 틀린 생각이었다 — 클로드 코드 2.1.282는 `"allow"`를 받으면 사용자의 권한 프롬프트
+자체를 건너뛴다. 자동 교정을 켠 상태에서 `git commit`이 사용자 승인 없이 실행됐다.
+
+지금은 두 경로 모두 `permissionDecision`을 아예 넣지 않는다. 결정은 정상 권한 파이프라인에
+맡기고, 훅은 `updatedInput`(무엇이 바뀌었는지)과 `additionalContext`(모델에게 알리는 채널)로만
+말한다. 자세한 내용은 위 "자동 교정이 permissionDecision을 싣지 않는 이유" 참조.
 
 ### 규칙 자료를 손으로 쓰려던 계획 → 조사로 모으고 검증하기
 

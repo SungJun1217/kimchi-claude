@@ -262,7 +262,7 @@ claude --plugin-dir ./kimchi-claude
 | 환경변수 | 기본값 | 동작 |
 |---|---|---|
 | `KIMCHI_DISABLE=1` | 꺼짐 | 훅을 모두 끕니다 |
-| `KIMCHI_AUTOFIX=1` | 꺼짐 | 커밋 메시지와 문서의 표기 오류를 자동으로 고칩니다 |
+| `KIMCHI_AUTOFIX=1` | 꺼짐 | 커밋 메시지와 문서의 표기 오류를 자동으로 고칩니다. 권한 확인 절차는 그대로 거칩니다 |
 | `KIMCHI_BLOCK=1` | 꺼짐 | 말투 위반이 있으면 커밋과 문서 쓰기를 막습니다 |
 | `KIMCHI_PII=warn` | 차단 | 주민등록번호를 찾아도 막지 않고 알려만 줍니다 |
 | `KIMCHI_PII=off` | 차단 | 주민등록번호 검사를 끕니다 |
