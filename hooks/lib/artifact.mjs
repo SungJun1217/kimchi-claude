@@ -220,9 +220,9 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
 
   /** 조사를 먼저 고치고, 그다음 용어를 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있어 한 번 더 돈다. */
   function fixOne(text, ext) {
-    const withParticles = fixParticles(text);
+    const withParticles = fixParticles(text, ext);
     const result = applyFixes(withParticles.text, rules, ext);
-    const fixedText = fixParticles(result.text).text;
+    const fixedText = fixParticles(result.text, ext).text;
     return {
       text: fixedText,
       applied: [
@@ -300,7 +300,7 @@ export function warnAboutTone(targets, rules) {
   const findings = targets.flatMap((target) =>
     lint(target.text, rules, target.ext).map((finding) => ({ ...finding, label: target.label }))
   );
-  const particles = targets.flatMap((target) => findParticleErrors(target.text));
+  const particles = targets.flatMap((target) => findParticleErrors(target.text, target.ext));
   if (findings.length === 0 && particles.length === 0) return null;
 
   const label = targets[0]?.label || "";

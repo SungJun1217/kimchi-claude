@@ -224,12 +224,85 @@ test("실제 규칙표: 문장 패턴 폭 안의 낱말 규칙도 따로 고쳐�
   assert.equal(s2.text, "그것은 느슨한 결합 구조를 택하기 때문입니다.");
 });
 
+test("실제 규칙표: 앞자리 숫자가 같은 숫자 선행 규칙은 더 긴 숫자 속에서도 자동 교정된다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.equal(applyFixes("성능이 150 % 늘었습니다.", rules).text, "성능이 150% 늘었습니다.");
+  assert.equal(applyFixes("비율이 130퍼센트입니다.", rules).text, "비율이 130%입니다.");
+  assert.equal(applyFixes("시간은 3.10 밀리세컨드입니다.", rules).text, "시간은 3.10ms입니다.");
+  // 숫자 자체가 사라지거나 자리를 옮기는 규칙("3개의 파일"→"파일 3개", 정규식)은
+  // 여전히 더 긴 숫자 속에서는 손대지 않는다.
+  assert.equal(applyFixes("13개의 파일을 수정했습니다.", rules).text, "13개의 파일을 수정했습니다.");
+});
+
+test("실제 규칙표: 낱말 전체가 이/가로 끝나 절 조각 오탐 목록에 오른 낱말도 자동 교정은 그대로 된다", () => {
+  // endsInsideClauseFragment 의 CLAUSE_MARKER_DENYLIST는 오른쪽 경계 판정에만 쓴다.
+  // "판박이 코드"·"눈송이 서버"는 규칙의 마지막 낱말이 아니라 그 앞 낱말("판박이",
+  // "눈송이")이 우연히 이/가로 끝나 오탐 목록에 오른 것뿐이고, 규칙 자체의 매치·치환은
+  // 이 목록과 무관하게 그대로 동작해야 한다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.equal(
+    applyFixes("판박이 코드를 줄였습니다.", rules).text,
+    "보일러플레이트를 줄였습니다.",
+    "판박이 코드 치환이 깨졌다"
+  );
+  // 뒤에 다른 낱말이 더 붙어도(코드베이스) 오른쪽 경계가 살아 있어 그 낱말까지 삼키지
+  // 않는다. CLAUSE_MARKER_DENYLIST 가 없던 때는 "판박이 코드베이스를"이 "보일러플레이트베이스를"로
+  // 잘못 바뀌었다.
+  assert.equal(
+    applyFixes("판박이 코드베이스를 정리했습니다.", rules).text,
+    "판박이 코드베이스를 정리했습니다.",
+    "판박이 코드베이스까지 삼켰다"
+  );
+  assert.equal(
+    applyFixes("눈송이 서버리스 함수를 늘렸습니다.", rules).text,
+    "눈송이 서버리스 함수를 늘렸습니다.",
+    "눈송이 서버리스까지 삼켰다"
+  );
+});
+
 test("조사 첫 글자 집합이 짝 표에서 유도된다", () => {
   // 조사 지식을 두 곳에 적으면 한쪽만 고치게 된다.
   const heads = particleHeads();
   for (const particle of ["을", "를", "이", "가", "은", "는", "과", "와", "으", "로"]) {
     assert.ok(heads.has(particle[0]), `${particle} 의 첫 글자가 빠졌다`);
   }
+});
+
+test("으로/로 조사는 bad가 아니라 실제로 뒤에 온 조사와 good을 직접 맞춰 본다", () => {
+  // bad(원문 낱말)와 good을 서로 비교하지 않는다 — 원문 자체가 이미 조사를 틀렸을 수
+  // 있어서다("포함률으로"는 포함률이 ㄹ받침이라 원래 "포함률로"가 맞다). bad 기준으로
+  // "같은 무리인가"만 보면 그 원문 오류가 good에 그대로 옮겨 붙는다("커버리지으로").
+  // "으"가 왔으면 good은 ㄹ이 아닌 받침이 있어야 하고, "로"만 왔으면 good은 받침이
+  // 없거나 ㄹ받침이어야 한다 — 이 판정에 bad의 받침은 들어가지 않는다.
+  assert.ok(isParticleSafe("일", "책임", "으"), "책임은 으로 앞에 실제로 안전한데 위험하다고 봤다");
+  assert.ok(isParticleSafe("책임", "일", "로"), "일은 로 앞에 실제로 안전한데 위험하다고 봤다");
+  assert.ok(!isParticleSafe("포함률", "커버리지", "으"), "커버리지는 으로 앞에 위험한데 안전하다고 봤다");
+  // ㄹ받침과 받침 없음은 둘 다 "로"를 쓰므로 서로 바뀌어도 안전하다.
+  assert.ok(isParticleSafe("일", "나무", "로"));
+  assert.ok(isParticleSafe("나무", "일", "로"));
+  // 다른 받침끼리는 으로 앞에서 안전하다.
+  assert.ok(isParticleSafe("책임", "권한", "으"));
+});
+
+test("실제 규칙표: 문지기 구문으로 → 가드 절으로처럼 ㄹ받침이 깨지는 치환은 건너뛴다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const s1 = applyFixes("문지기 구문으로 처리합니다.", rules);
+  assert.equal(s1.text, "문지기 구문으로 처리합니다.", "가드 절으로 로 깨졌다");
+  assert.equal(s1.applied.length, 0);
+
+  const s2 = applyFixes("여러 모습 성질로 구현했습니다.", rules);
+  assert.equal(s2.text, "여러 모습 성질로 구현했습니다.", "다형성로 로 깨졌다");
+
+  const s3 = applyFixes("이뮤터블로 만들었습니다.", rules);
+  assert.equal(s3.text, "이뮤터블로 만들었습니다.", "불변로 로 깨졌다");
+
+  // 원문이 이미 조사를 틀린 경우("포함률으로"는 포함률이 ㄹ받침이라 "포함률로"가 맞다).
+  // bad·good을 서로 비교하면 "둘 다 '으로 쪽' 받침이 아니다"로 오판해 그대로 옮겨
+  // "커버리지으로"를 만든다. 실제 조사(으)와 good(커버리지, 받침 없음)을 직접 맞춰야
+  // "으"가 받침 있는 다른 낱말에만 온다는 걸 보고 건너뛴다.
+  const s4 = applyFixes("코드 포함률으로 본다.", rules);
+  assert.equal(s4.text, "코드 포함률으로 본다.", "커버리지으로 로 깨졌다");
+  assert.equal(s4.applied.length, 0);
 });
 
 test("실제 규칙표: 계사·랑의 축약형이 깨지면 자동 교정을 건너뛴다", () => {

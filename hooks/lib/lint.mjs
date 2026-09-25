@@ -4,7 +4,7 @@
 // 코드나 경로 안에서는 애초에 매치가 일어나지 않는다. 위치 비교를 따로 할 필요가 없다.
 
 import { maskProtected, isIgnoredFile } from "./segment.mjs";
-import { particleHeads } from "./particle.mjs";
+import { particleHeads, RIEUL, OTHER_FINAL, NO_FINAL } from "./particle.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
 
 // 규칙의 "쓰지 말 것" 칸에서 ~ 는 "앞뒤에 무엇이 붙든"을 뜻한다.
@@ -172,6 +172,36 @@ export function hasFinalConsonant(text) {
   return null;
 }
 
+// 한글 음절 코드에서 종성(받침) 색인. 8이 ㄹ이다 — (코드 - 0xAC00) % 28 의 나머지가
+// 그대로 국립국어원 종성 순서(ㄱㄲㄳㄴㄵㄶㄷㄹ…)의 색인이다.
+const RIEUL_FINAL_INDEX = 8;
+
+/**
+ * 마지막 한글 음절의 받침을 받침 없음/ㄹ/그 밖 셋으로 가른다. 판정할 수 없으면 null.
+ *
+ * 으로/로 조사만 받침 유무 두 가지로 못 가른다 — ㄹ 받침 뒤에도 "로"를 쓴다(일로,
+ * 책임으로가 아니라 "책임으로"는 ㅁ받침이라 "으로"가 맞고, "일로"는 ㄹ받침이라 "로"가
+ * 맞다). particle.mjs 의 RIEUL/OTHER_FINAL/NO_FINAL 과 값을 맞춰, 영어 낱말(particle.mjs)과
+ * 한글 낱말(여기) 두 판정기가 같은 세 값을 쓰게 한다.
+ *
+ * @param {string} text
+ * @returns {""|"ㄹ"|"other"|null}
+ */
+export function finalConsonantClass(text) {
+  if (typeof text !== "string") return null;
+  for (let i = text.length - 1; i >= 0; i -= 1) {
+    const code = text.charCodeAt(i);
+    if (code >= HANGUL_START && code <= HANGUL_END) {
+      const finalIndex = (code - HANGUL_START) % JAMO_COUNT;
+      if (finalIndex === 0) return NO_FINAL;
+      if (finalIndex === RIEUL_FINAL_INDEX) return RIEUL;
+      return OTHER_FINAL;
+    }
+    if (!/\s/.test(text[i])) return null;
+  }
+  return null;
+}
+
 /**
  * 대체 표현이 조사로 시작하는지 본다.
  *
@@ -279,6 +309,26 @@ export function particleRisk(bad, good, nextChar, prevChar = "") {
   }
 
   if (!nextChar || !PARTICLE_HEADS.has(nextChar)) return null;
+
+  // 으로/로는 받침 유무만으로 못 가른다 — ㄹ받침은 받침 없음과 같은 무리로 "로"를 쓴다
+  // ("일로", "나무로"는 되지만 "책임으로"는 다른 받침이라 "으로"다). bad와 good을 서로
+  // 비교하지 않는다 — bad(원문의 낱말)와 실제로 문장에 쓰인 조사가 이미 어긋나 있을 수
+  // 있어서다("코드 포함률으로"는 원문부터 틀렸다. 포함률은 ㄹ받침이라 "포함률로"가 맞다).
+  // bad 기준으로 "같은 무리인가"만 보면 이런 원문 오류가 그대로 good에 옮겨 붙는다
+  // ("커버리지으로"). 대신 실제로 뒤에 온 조사(nextChar)가 요구하는 받침과 good이
+  // 맞는지 직접 본다 — "으"가 왔으면 good은 ㄹ이 아닌 받침이 있어야 하고, "로"만
+  // 왔으면(으 없이) good은 받침이 없거나 ㄹ받침이어야 한다.
+  if (nextChar === "로" || nextChar === "으") {
+    const after = finalConsonantClass(good);
+    if (after === null) {
+      return `받침을 판정할 수 없어 뒤따르는 로/으로 조사를 지킬 수 없습니다`;
+    }
+    const requiresOtherFinal = nextChar === "으";
+    if (requiresOtherFinal !== (after === OTHER_FINAL)) {
+      return `뒤따르는 로/으로 조사가 깨집니다`;
+    }
+    return null;
+  }
 
   const before = hasFinalConsonant(bad);
   const after = hasFinalConsonant(good);
@@ -404,10 +454,19 @@ function endsWithVerbStem(core) {
 // 은/는은 빼 둔다 — "맡은"처럼 관형형 어미 "-은"과 글자가 같아 주제 조사인지 구별할 수
 // 없다(불변식 5).
 const CLAUSE_PREDICATE_MARKER = /[을를이가게]$/;
+
+// CLAUSE_PREDICATE_MARKER는 글자만 보므로 "허가"(허락하다)·"판박이"·"욕심쟁이"·"눈송이"·
+// "알갱이"처럼 낱말 전체가 우연히 이/가로 끝나는 명사를 "낱말+조사"로 오판한다 —
+// "허가 내주기"가 "허가 내주기표를"까지 삼킨 것이 실제 사례다(0.14.11). 형태소
+// 분석 없이는 일반화할 수 없으니, 실제로 오탐이 확인된 낱말만 JEOK_DENYLIST와 같은
+// 방식으로 막는다.
+const CLAUSE_MARKER_DENYLIST = new Set(["허가", "판박이", "욕심쟁이", "눈송이", "알갱이"]);
 function endsInsideClauseFragment(core) {
   const words = core.split(/\s+/).filter(Boolean);
   if (words.length < 2) return false;
-  return CLAUSE_PREDICATE_MARKER.test(words[words.length - 2]);
+  const marker = words[words.length - 2];
+  if (CLAUSE_MARKER_DENYLIST.has(marker)) return false;
+  return CLAUSE_PREDICATE_MARKER.test(marker);
 }
 
 // 규칙의 마지막 낱말과 그 한글 음절 수. allowJeok 판정에 쓴다.
@@ -450,6 +509,12 @@ function isLoanwordSpellingRule(rule) {
   return rule?.kind === "loanword";
 }
 
+// 숫자로 시작하는 규칙의 왼쪽 경계 판정에 쓴다. 선행 숫자만 뽑는다.
+function leadingDigits(text) {
+  const match = /^[0-9]+/.exec(typeof text === "string" ? text.trim() : "");
+  return match ? match[0] : null;
+}
+
 // bad 문자열이 아니라 규칙 객체를 열쇠로 쓴다. why·source 도 판정에 들어가기 때문이다.
 // 규칙 배열은 loadRules 가 한 번 읽어 재사용하므로, 같은 규칙 객체는 호출마다 같다.
 //
@@ -475,8 +540,19 @@ function boundaryRequirement(rule, alt) {
   const trailsWithWildcard = typeof bad === "string" && bad.trim().endsWith(WILDCARD) && isLastAlt;
   const orthography = isOrthographyRule(rule);
   const last = finalWord(alt);
+  // 숫자로 시작하는 규칙("3개의 파일")은 한글 왼쪽 경계가 없어 위 left가 항상 꺼진다.
+  // 그대로 두면 "13개의 파일"의 "3개의 파일"처럼 더 긴 숫자 속에서도 매치한다 — 이건 막아야
+  // 한다. 하지만 "50 %"→"50%", "30퍼센트"→"30%"처럼 쓸 것도 같은 자리 숫자로 시작하는
+  // 규칙은 반대다: "150 %"의 "50 %"를 그대로 잡아 "150%"를 만드는 것이 의도한 동작이다
+  // (앞자리 숫자 "1"은 그대로 남고 뒷부분만 바뀐다). 두 경우를 가르는 신호는 쓸 것이 같은
+  // 숫자로 시작하는지다 — 치환 규칙은 이미 corpus.test.mjs 골든 시험이 "숫자로 시작하면
+  // 쓸 것도 같은 숫자로 시작한다"를 강제하므로, 그 규칙들은 이 조건에서 항상 leftDigit이
+  // 꺼진다. 숫자 자체가 바뀌거나 사라지는 규칙("3개의 파일"→"파일 3개")만 leftDigit을 켠다.
+  const badDigits = leadingDigits(alt);
+  const goodDigits = leadingDigits(primaryGood(rule.good));
   const requirement = {
     left: !orthography && !leadsWithWildcard && isHangulChar(alt[0]),
+    leftDigit: !leadsWithWildcard && badDigits !== null && badDigits !== goodDigits,
     right:
       !isLoanwordSpellingRule(rule) &&
       !trailsWithWildcard &&
@@ -502,8 +578,9 @@ function boundaryRequirement(rule, alt) {
 function isWordBoundaryMatch(rule, masked, index, length) {
   const matchedText = masked.slice(index, index + length);
   const alt = matchedAlternative(rule.bad, matchedText);
-  const { left, right, allowJeok } = boundaryRequirement(rule, alt);
+  const { left, leftDigit, right, allowJeok } = boundaryRequirement(rule, alt);
   if (left && isHangulChar(masked[index - 1] ?? "")) return false;
+  if (leftDigit && /[0-9.]/.test(masked[index - 1] ?? "")) return false;
   if (right && !isAllowedFollower(masked.slice(index + length), allowJeok)) return false;
   return true;
 }
