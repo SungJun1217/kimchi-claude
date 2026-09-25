@@ -394,6 +394,23 @@ test("항목A: 들여쓰기·AsciiDoc 가리개가 커밋 메시지 지적까지
   assert.match(heredoc.hookSpecificOutput.additionalContext, /콘텐츠/);
 });
 
+test("항목B: 문서의 들여쓰기 코드·<pre> 안 조사는 PostToolUse도, KIMCHI_AUTOFIX도 건드리지 않는다", () => {
+  // fixOne/warnAboutTone 이 findParticleErrors·fixParticles 에 ext 를 안 넘기면 이 두 블록형
+  // 가리개가 빠져 코드 예시의 "commit를"·"json를" 까지 고치거나 지적한다(0.14.11 이전 버그).
+  const payload = {
+    hook_event_name: "PostToolUse",
+    tool_name: "Write",
+    tool_input: {
+      file_path: "/tmp/kimchi-ext-test.md",
+      content: "빈 줄 뒤:\n\n    git commit를 실행한다\n\n<pre>json를 출력</pre>",
+    },
+  };
+  assert.equal(runHook(payload), null, "코드 예시 안의 조사까지 경고했다");
+
+  const autofixPayload = { ...payload, hook_event_name: "PreToolUse" };
+  assert.equal(runHook(autofixPayload, { KIMCHI_AUTOFIX: "1" }), null, "코드 예시 안의 조사까지 고쳤다");
+});
+
 test("이 저장소의 생성물과 규칙 자료는 선언으로 걸러진다", () => {
   const content = "리팩토링과 컨텐츠를 고쳐야 합니다.";
   for (const file of ["output-styles/natural-korean.md", "rules/terms.md", "rules/observed.md"]) {

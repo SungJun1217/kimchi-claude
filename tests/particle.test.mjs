@@ -128,6 +128,21 @@ test("코드와 경로 안은 건드리지 않는다", () => {
   assert.equal(findParticleErrors("https://example.com/commit를").length, 0);
 });
 
+test("ext를 넘기면 문서 전용 가리개(들여쓰기 코드·<pre>/<code>)도 건드리지 않는다", () => {
+  // maskProtected(text) 를 ext 없이 부르면 이 블록형 가리개가 하나도 안 걸린다 —
+  // ext 를 그대로 전달해야 lint() 와 같은 범위로 코드를 가려낸다.
+  const indented = "빈 줄 뒤:\n\n    git commit를 실행한다\n\n그 뒤 문장입니다.";
+  assert.equal(findParticleErrors(indented, "md").length, 0);
+  assert.equal(findParticleErrors(indented).length, 1, "ext 없이는 여전히 잡아야(하위 호환)");
+
+  const pre = "<pre>json를 출력</pre>";
+  assert.equal(findParticleErrors(pre, "md").length, 0);
+
+  const { text, applied } = fixParticles(indented, "md");
+  assert.equal(text, indented);
+  assert.equal(applied.length, 0);
+});
+
 test("뒤에 한글이 이어지면 조사로 보지 않는다", () => {
   // "commit은행" 같은 자리에서 은을 조사로 잘라내면 안 된다.
   assert.equal(findParticleErrors("commit은행 이야기").length, 0);

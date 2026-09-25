@@ -467,3 +467,47 @@ test("접속면적·연결면적처럼 -적이 다른 낱말을 만드는 자리
     []
   );
 });
+
+// ── 숫자로 시작하는 규칙은 더 긴 숫자 속에서 잡지 않는다 ─────────
+
+test("숫자로 시작하는 규칙은 더 긴 숫자 속에서는 잡지 않는다", () => {
+  const digitLed = rule({ bad: "3개의 파일", good: "세 개의 파일" });
+  assert.deepEqual(lint("13개의 파일을 수정했습니다.", [digitLed]), []);
+});
+
+test("숫자로 시작하는 규칙은 숫자가 그 앞에서 끝나면 그대로 잡는다", () => {
+  const digitLed = rule({ bad: "3개의 파일", good: "세 개의 파일" });
+  assert.ok(lint("총 3개의 파일을 수정했습니다.", [digitLed]).some((f) => f.bad === "3개의 파일"));
+});
+
+test("실제 규칙표: 숫자로 시작하는 기존 규칙은 여전히 잡힌다", () => {
+  // 50 %, 30퍼센트, 10 밀리세컨드 같은 숫자 선행 규칙이 이 변경으로 죽지 않았는지 본다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.ok(lint("응답이 50 % 느려졌습니다.", rules).some((f) => f.bad === "50 %"));
+  assert.ok(lint("지연이 30퍼센트 줄었습니다.", rules).some((f) => f.bad === "30퍼센트"));
+  assert.ok(lint("지연이 10 밀리세컨드 늘었습니다.", rules).some((f) => f.bad === "10 밀리세컨드"));
+});
+
+test("숫자로 시작하는 규칙도 쓸 것이 같은 앞자리 숫자로 시작하면 더 긴 숫자 속에서도 잡는다", () => {
+  // "50 %"→"50%"는 앞자리 숫자 "50"이 good에도 그대로 남는다 — "150 %"의 "50 %"를
+  // 잡아 "150%"를 만드는 것이 의도한 동작이다("3개의 파일"→"파일 3개"처럼 숫자 자체가
+  // 사라지거나 자리를 옮기는 규칙과는 다르다). leftDigit을 무조건 켜면 이 자동 교정이
+  // 통째로 죽는다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  assert.ok(lint("성능이 150 % 늘었습니다.", rules).some((f) => f.bad === "50 %"));
+  assert.ok(lint("비율이 130퍼센트입니다.", rules).some((f) => f.bad === "30퍼센트"));
+  assert.ok(lint("시간은 3.10 밀리세컨드입니다.", rules).some((f) => f.bad === "10 밀리세컨드"));
+});
+
+// ── "허가"처럼 우연히 이/가로 끝나는 낱말은 절 조각으로 보지 않는다 ─────────
+
+test("허가처럼 낱말 전체가 이/가로 끝나면 오른쪽 경계를 그대로 지킨다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  // "허가 내주기표를"의 "표"는 FOLLOWER_TOKENS에 없으니 오른쪽 경계가 살아 있어야 잡히지 않는다.
+  assert.deepEqual(
+    lint("그는 허가 내주기표를 만들었다.", rules).filter((f) => f.bad === "허가 내주기"),
+    []
+  );
+  // 정상적인 자리에서는 여전히 잡는다.
+  assert.ok(lint("허가 내주기 절차를 손봤습니다.", rules).some((f) => f.bad === "허가 내주기"));
+});
