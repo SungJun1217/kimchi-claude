@@ -415,23 +415,58 @@ export function fixParticles(text, ext, extraDefs) {
   const found = findParticleErrors(text, ext, extraDefs);
   if (found.length === 0) return { text: typeof text === "string" ? text : "", applied: [] };
 
-  let result = text;
-  for (const hit of [...found].reverse()) {
-    const end = hit.index + hit.matched.length;
-    result = `${result.slice(0, hit.index)}${hit.word}${hit.correct}${result.slice(end)}`;
+  // found는 TOKEN_WITH_PARTICLE이 왼쪽에서 오른쪽으로 훑어 찾은 순서라 index 오름차순이고
+  // 서로 겹치지 않는다. 교정마다 전체 문자열을 slice + concat 하면 교정 건수 × 문서
+  // 길이에 비례해 느려진다 — 실측: 1.2MB 문서, 교정 수만 건에서 10초 넘게 걸렸다(이차
+  // 비용). 조각을 모아 한 번만 이어 붙인다.
+  const pieces = [];
+  let cursor = 0;
+  for (const hit of found) {
+    pieces.push(text.slice(cursor, hit.index), hit.word, hit.correct);
+    cursor = hit.index + hit.matched.length;
   }
+  pieces.push(text.slice(cursor));
 
-  return { text: result, applied: found };
+  return { text: pieces.join(""), applied: found };
 }
 
+// 같은 오류가 문서에 수천 번 반복될 수 있다("commit를" × 1000). 종류별로 묶어 세지
+// 않으면 같은 줄이 그만큼 나열되어 메시지가 건수에 비례해 커진다(lint.mjs의
+// formatFindings와 같은 문제, 같은 해법). 목록은 종류 몇 가지만 보여 주고 나머지는
+// 개수로만 말한다 — pii.mjs의 MAX_LISTED와 같은 관례다.
+const MAX_LISTED_PARTICLES = 20;
+
 /**
- * 사람이 읽을 메시지로 만든다.
+ * 사람이 읽을 메시지로 만든다. 같은 교정(같은 낱말 → 같은 고침)은 한 줄로 묶고 건수를
+ * 덧붙인다.
  *
  * @param {object[]} found
  * @returns {string}
  */
 export function formatParticleErrors(found) {
   if (found.length === 0) return "";
-  const lines = found.map((hit) => `- "${hit.matched}" → "${hit.word}${hit.correct}"`);
-  return [`영어 낱말 뒤 조사가 발음과 맞지 않는 곳 ${found.length}건입니다.`, "", ...lines].join("\n");
+
+  const groups = new Map();
+  for (const hit of found) {
+    const key = `${hit.word}${hit.particle}\u0000${hit.correct}`;
+    const entry = groups.get(key);
+    if (entry) entry.count += 1;
+    else groups.set(key, { hit, count: 1 });
+  }
+  const entries = [...groups.values()];
+  const listed = entries.slice(0, MAX_LISTED_PARTICLES);
+  const rest = entries.length - listed.length;
+
+  const header =
+    entries.length === found.length
+      ? `영어 낱말 뒤 조사가 발음과 맞지 않는 곳 ${found.length}건입니다.`
+      : `영어 낱말 뒤 조사가 발음과 맞지 않는 곳 ${entries.length}가지(총 ${found.length}건)입니다.`;
+
+  const lines = listed.map(
+    ({ hit, count }) =>
+      `- "${hit.matched}" → "${hit.word}${hit.correct}"${count > 1 ? ` (총 ${count}곳)` : ""}`
+  );
+  if (rest > 0) lines.push(`- 외 ${rest}가지 더`);
+
+  return [header, "", ...lines].join("\n");
 }

@@ -94,8 +94,11 @@ function buildClean(line) {
 // 그 복잡도를 감수할 만큼 이 세 구분자가 실제 유출 경로로 관찰되지 않았다. 대시와
 // 공백만 남긴다.
 const SEP = "(?: ?- ?| {1,2})";
+// 숫자 뒤의 '.' 만 소수점으로 보고 거른다("1.900101-1234567"). 글자 뒤의 '.' 는
+// 문장부호일 뿐이라("주민번호 No.900101-1234567", "…번호.900101-1234567") 앞자리
+// 숫자를 막지 않는다 — 실측된 오탐 경로(숫자.숫자)만 막고 실측된 미탐(글자.숫자)은 살린다.
 const CANDIDATE_SEPARATED = new RegExp(
-  `(?<![0-9.])([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`,
+  `(?<![0-9])(?<![0-9]\\.)([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`,
   "g"
 );
 
@@ -138,19 +141,44 @@ const ALLOW_LINE = /kimchi-allow-rrn/;
 // 통째로 생성되는 파일. 확장자가 .json 이라 확장자 목록으로는 걸러지지 않는다.
 export const GENERATED_FILES = /(^|[\\/])(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock|go\.sum)$/;
 
+// 뒷자리 맨 앞 숫자(성별·세기 표시)가 가리키는 출생 세기. 1/2 는 1900년대 내국인,
+// 3/4 는 2000년대 내국인, 5/6 은 1900년대 외국인, 7/8 은 2000년대 외국인,
+// 9/0 은 1800년대다(9/0 은 CANDIDATE_* 정규식이 [1-8]만 받으므로 현재 입력에는
+// 나오지 않지만, 함수 자체는 실제 부여 규칙을 그대로 옮겨 둔다).
+const CENTURY_BASE = { 1: 1900, 2: 1900, 3: 2000, 4: 2000, 5: 1900, 6: 1900, 7: 2000, 8: 2000, 9: 1800, 0: 1800 };
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function daysInMonth(year, month) {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return DAYS_IN_MONTH[month - 1];
+}
+
 /**
- * 뒷자리가 임의 발급이라 검증은 못 한다. 앞자리의 생년월일이 말이 되는지만 본다.
+ * 뒷자리가 임의 발급이라 검증은 못 한다. 앞자리의 생년월일이 실제로 있는 날짜인지만 본다.
  *
- * 이 검사로 오탐이 크게 줄어든다. 임의의 13자리 숫자가 앞 6자리에서 월 01~12 와
- * 일 01~31 을 동시에 만족할 확률은 낮다.
+ * 이 검사로 오탐이 크게 줄어든다. 임의의 13자리 숫자가 앞 6자리에서 실재하는
+ * 연월일을 동시에 만족할 확률은 낮다. 2월 29일은 윤년에만 인정한다 — 세기는
+ * 뒷자리 첫 숫자(성별 표시)로 정해진다.
  *
  * @param {string} front 앞 6자리(clean 문자열에서 뽑혀 이미 ASCII 숫자다)
+ * @param {string} genderDigit 뒷자리 맨 앞 숫자
  * @returns {boolean}
  */
-function plausibleBirthDate(front) {
+function plausibleBirthDate(front, genderDigit) {
   const month = Number(front.slice(2, 4));
   const day = Number(front.slice(4, 6));
-  return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+
+  const base = CENTURY_BASE[genderDigit];
+  if (base === undefined) return false;
+  const year = base + Number(front.slice(0, 2));
+
+  return day <= daysInMonth(year, month);
 }
 
 /**
@@ -197,14 +225,14 @@ function scanLine(rawLine, pathOnly) {
   sepRegex.lastIndex = 0;
   let match;
   while ((match = sepRegex.exec(clean)) !== null) {
-    if (!plausibleBirthDate(match[1])) continue;
+    if (!plausibleBirthDate(match[1], match[2][0])) continue;
     push(match);
   }
 
   if (!pathOnly) {
     CANDIDATE_GLUED.lastIndex = 0;
     while ((match = CANDIDATE_GLUED.exec(clean)) !== null) {
-      if (!plausibleBirthDate(match[1])) continue;
+      if (!plausibleBirthDate(match[1], match[2][0])) continue;
       if (keyBeforeIsTimeLike(clean, match.index)) continue;
       push(match);
     }
