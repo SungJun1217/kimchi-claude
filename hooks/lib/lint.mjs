@@ -6,6 +6,7 @@
 import { maskProtected, isIgnoredFile } from "./segment.mjs";
 import { particleHeads, RIEUL, OTHER_FINAL, NO_FINAL } from "./particle.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
+import { findLatinVerbHada } from "./latin-hada.mjs";
 
 // 규칙의 "쓰지 말 것" 칸에서 ~ 는 "앞뒤에 무엇이 붙든"을 뜻한다.
 const WILDCARD = "~";
@@ -725,10 +726,13 @@ function capPerRule(findings) {
  *   범위를 정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
  * @param {Set<string>|null} [extraDefs] maskProtected에 그대로 전달한다. Edit/MultiEdit
  *   조각 밖의 참조식 링크 정의 라벨.
- * @param {{capReporting?: boolean, maxHitsPerRule?: number, maxIterations?: number}} [options]
+ * @param {{capReporting?: boolean, maxHitsPerRule?: number, maxIterations?: number, latinHada?: boolean}} [options]
  *   capReporting을 false로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)을 적용하지 않는다.
  *   applyFixes가 문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다 — 원시 매치·반복 상한도
- *   함께 넉넉히 올려야 그만큼 찾힌다(maxHitsPerRule/maxIterations).
+ *   함께 넉넉히 올려야 그만큼 찾힌다(maxHitsPerRule/maxIterations). latinHada를 false로
+ *   주면 findLatinVerbHada를 건너뛴다 — import-corpus.mjs·corpus.test.mjs처럼 규칙
+ *   하나만 담은 임시 배열로 "규칙 자신을 다시 잡는지"만 볼 때, latin-hada가 그 결과에
+ *   섞여 들어오면 안 되기 때문이다(전체 규칙 집합을 검사하는 게 아니다).
  * @returns {object[]}
  */
 export function lint(text, rules, ext, extraDefs, options = {}) {
@@ -736,6 +740,7 @@ export function lint(text, rules, ext, extraDefs, options = {}) {
     capReporting = true,
     maxHitsPerRule = MAX_RAW_HITS_PER_RULE,
     maxIterations = MAX_PATTERN_ITERATIONS,
+    latinHada = true,
   } = options;
 
   if (typeof text !== "string" || text.length === 0) return [];
@@ -786,8 +791,19 @@ export function lint(text, rules, ext, extraDefs, options = {}) {
     }
   }
 
+  // resolveOverlaps는 규칙끼리만 겹침을 다툰다. latin-hada는 규칙표로 표현할 수 없는
+  // 별개의 검사라(latin-hada.mjs 상단 설명 참고) 규칙과 span이 겹쳐도 어느 한쪽이 다른
+  // 쪽을 밀어내면 안 된다 — "build할때"에서 latin-hada가 "build할"을 잡았다고 "할때"→
+  // "할 때" 치환 규칙까지 지워지면, 그 규칙이 원래 했던 자동 교정(applyFixes는 lint()의
+  // findings를 그대로 후보로 쓴다)까지 함께 사라진다(실측, 0.16.0). latin-hada는 절대
+  // 자동 교정하지 않으므로(check가 늘 정규식이다) 겹침은 표시상의 문제일 뿐이고, 둘 다
+  // 보여 줘도 읽는 사람이 헷갈리지 않는다 — 그래서 규칙 겹침을 먼저 해소한 뒤에 latin-hada
+  // 발견을 그대로 이어 붙인다.
   const resolved = resolveOverlaps(findings);
-  return capReporting ? capPerRule(resolved) : resolved;
+  const combined = latinHada
+    ? [...resolved, ...findLatinVerbHada(masked, normalized)].sort((a, b) => a.index - b.index)
+    : resolved;
+  return capReporting ? capPerRule(combined) : combined;
 }
 
 /**
