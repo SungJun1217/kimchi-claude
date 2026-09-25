@@ -200,10 +200,10 @@ test("실제 규칙표: '타이트 커플링'도 '커플링'에 먼저 삼켜지
   assert.equal(applyFixes("타이트 커플링을 풀었습니다.", rules).text, "강한 결합을 풀었습니다.");
 });
 
-test("실제 규칙표: '데드락'은 지적만 하고 고치지 않는다", () => {
+test("실제 규칙표: '임시 저장소'는 지적만 하고 고치지 않는다", () => {
   const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
-  assert.equal(lint("데드락 발생", rules).some((f) => f.bad === "데드락"), true);
-  assert.equal(applyFixes("데드락 발생", rules).text, "데드락 발생");
+  assert.equal(lint("임시 저장소 발생", rules).some((f) => f.bad === "임시 저장소"), true);
+  assert.equal(applyFixes("임시 저장소 발생", rules).text, "임시 저장소 발생");
 });
 
 test("실제 규칙표: '레더 로직입니다'는 손대지 않고 지적하지도 않는다", () => {

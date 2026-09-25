@@ -16,7 +16,7 @@
 | — | ~에 대한 처리를 진행 | ~를 처리 | 영어 명사구를 직역한 뒤 기능동사를 붙였다 | 정규식 | 핵심 |
 | We regenerate the cache on every call. | 우리는 호출마다 캐시를 재생성합니다. | 호출마다 캐시가 새로 만들어집니다. | 영어 we 직역. 한국어 기술 설명문은 주어를 비웁니다. | 치환 | 핵심 |
 | You can run the tests with npm test. | 당신은 npm test로 테스트를 실행할 수 있습니다. | npm test로 테스트를 돌릴 수 있습니다. | you를 '당신'으로 옮기면 번역서 문체가 됩니다. | 정규식 | 핵심 |
-| Your code has a race condition. | 당신의 코드에 경쟁 조건이 있습니다. | 이 코드에 경쟁 조건이 있습니다. | 소유격 your는 '이'로 바꾸거나 빼는 쪽이 자연스럽습니다. | 치환 | 핵심 |
+| Your code has a race condition. | 당신의 코드에 race condition이 있습니다. | 이 코드에 race condition이 있습니다. | 소유격 your는 '이'로 바꾸거나 빼는 쪽이 자연스럽습니다. | 치환 | 핵심 |
 | handle the request | 요청에 대한 처리를 진행합니다. | 요청을 처리합니다. | 명사구+기능동사 직역. 동사 하나로 끝납니다. | 치환 | 핵심 |
 | perform validation on the input | 입력값에 대한 검증을 수행합니다. | 입력값을 검증합니다. | '수행하다'는 대개 지울 수 있는 군더더기입니다. | 치환 | 핵심 |
 | This value will be removed in the next release. | 이 값은 다음 배포에서 제거되어질 예정입니다. | 이 값은 다음 배포에서 제거됩니다. | '되어질'은 이중 피동입니다. 한국어에 없는 형태입니다. | 정규식 | 핵심 |
