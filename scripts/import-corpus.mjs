@@ -32,7 +32,7 @@ import {
   stripWildcardEdges,
   autoFixReplacement,
 } from "../hooks/lib/lint.mjs";
-import { loadRules, parseTable, PRIORITIES, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
+import { loadRules, parseTable, kindTag, PRIORITIES, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
 import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -154,6 +154,37 @@ export function decideCheck(rule) {
 }
 
 /**
+ * 표 행 한 줄의 `검사` 칸만 다시 계산한다. 바뀌지 않으면 원래 줄을 그대로 돌려준다.
+ *
+ * 순수 함수로 떼어 둔 이유는 시험에서 실제 rules/*.md 파일을 건드리지 않고 이유 칸의
+ * [표기]/[외래어] 표지가 한 바퀴(파싱 → 재계산 → 재조립) 돌아도 살아남는지 확인하기
+ * 위해서다.
+ *
+ * @param {string} line
+ * @param {string} name 파일 이름. changes 로그에만 쓴다
+ * @param {string[]} changes 바뀐 내역을 적어 넣을 배열
+ * @returns {string}
+ */
+export function recheckLine(line, name, changes) {
+  if (!line.trimStart().startsWith("|")) return line;
+  const { rules } = parseTable(line, name);
+  if (rules.length !== 1) return line;
+
+  const rule = rules[0];
+  if (rule.check === CHECK_PROMPT) return line;
+
+  const next = decideCheck({ ...rule, lintable: true });
+  if (next === rule.check || next === CHECK_PROMPT) return line;
+
+  changes.push(`${name}: "${rule.bad}" ${rule.check} → ${next}`);
+  // rule.why 는 parseTable 이 [표기]/[외래어] 표지를 이미 떼어낸 값이다. 표지를
+  // 되살리지 않고 그대로 쓰면 --recheck 가 검사 칸만 다시 계산하려다 표지를 조용히
+  // 지워 버린다. kindTag 로 rule.kind 에서 표지 문자열을 되돌린다.
+  const why = `${kindTag(rule.kind)}${rule.why || "—"}`;
+  return `| ${rule.en || "—"} | ${rule.bad} | ${rule.good} | ${why} | ${next} | ${rule.priority} |`;
+}
+
+/**
  * 이미 있는 rules/*.md 의 `검사` 칸만 다시 계산한다.
  *
  * 규칙 자료는 손으로 고치는 파일이라 통째로 다시 생성할 수 없다. 판정 규칙이 바뀌었을 때
@@ -168,20 +199,7 @@ function recheckColumn({ dryRun }) {
     const before = readFileSync(target, "utf8");
     const lines = before.split("\n");
 
-    const after = lines.map((line) => {
-      if (!line.trimStart().startsWith("|")) return line;
-      const { rules } = parseTable(line, name);
-      if (rules.length !== 1) return line;
-
-      const rule = rules[0];
-      if (rule.check === CHECK_PROMPT) return line;
-
-      const next = decideCheck({ ...rule, lintable: true });
-      if (next === rule.check || next === CHECK_PROMPT) return line;
-
-      changes.push(`${name}: "${rule.bad}" ${rule.check} → ${next}`);
-      return `| ${rule.en || "—"} | ${rule.bad} | ${rule.good} | ${rule.why || "—"} | ${next} | ${rule.priority} |`;
-    });
+    const after = lines.map((line) => recheckLine(line, name, changes));
 
     const text = after.join("\n");
     if (!dryRun && text !== before) writeFileSync(target, text, "utf8");

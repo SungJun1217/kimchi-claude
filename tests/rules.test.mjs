@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTable, byPriority, CHECK_REGEX, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
+import {
+  parseTable,
+  byPriority,
+  CHECK_REGEX,
+  CHECK_PROMPT,
+  RULE_KIND_TAG_NAMES,
+  BRACKET_PREFIX_PATTERN,
+} from "../hooks/lib/rules.mjs";
 
 const TABLE = [
   "| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |",
@@ -84,6 +91,59 @@ test("여러 표가 있어도 모두 읽는다", () => {
 test("잘못된 입력에 안전하다", () => {
   assert.deepEqual(parseTable(null), { rules: [], skipped: 0 });
   assert.deepEqual(parseTable(""), { rules: [], skipped: 0 });
+});
+
+test("이유 칸 맨 앞의 [표기] 표지를 떼어 kind 로 넘긴다", () => {
+  const md = [
+    "| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |",
+    "|---|---|---|---|---|---|",
+    "| — | 나쁨 | 좋음 | [표기] 아무 이유 | 치환 | 보통 |",
+  ].join("\n");
+  const { rules } = parseTable(md);
+  assert.equal(rules[0].kind, "orthography");
+  assert.equal(rules[0].why, "아무 이유");
+});
+
+test("이유 칸 맨 앞의 [외래어] 표지를 떼어 kind 로 넘긴다", () => {
+  const md = [
+    "| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |",
+    "|---|---|---|---|---|---|",
+    "| — | 나쁨 | 좋음 | [외래어] 아무 이유 | 치환 | 보통 |",
+  ].join("\n");
+  const { rules } = parseTable(md);
+  assert.equal(rules[0].kind, "loanword");
+  assert.equal(rules[0].why, "아무 이유");
+});
+
+test("표지가 없으면 kind 가 없다", () => {
+  const { rules } = parseTable(TABLE);
+  assert.equal(rules[0].kind, undefined);
+});
+
+test("정의되지 않은 표지는 표지로 인정하지 않고 글자 그대로 남긴다", () => {
+  // 오타(예: [표기재]나 [foo])를 조용히 표지로 삼으면 안 된다 — 대괄호가 그대로
+  // 이유 문장에 남아야 검토자 눈에 띈다.
+  const md = [
+    "| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |",
+    "|---|---|---|---|---|---|",
+    "| — | 나쁨 | 좋음 | [foo] 아무 이유 | 치환 | 보통 |",
+  ].join("\n");
+  const { rules } = parseTable(md);
+  assert.equal(rules[0].kind, undefined);
+  assert.equal(rules[0].why, "[foo] 아무 이유");
+});
+
+test("공백을 빠뜨린 표지 오타도 대괄호로 잡힌다", () => {
+  // BRACKET_PREFIX_PATTERN이 뒤 공백까지 요구하면 "[외래어]외래어 표기법"처럼 공백을
+  // 빠뜨린 오타가 대괄호 자체를 못 찾아 코퍼스 검사(tests/corpus.test.mjs)를 그냥
+  // 통과해 버린다. 대괄호만 보고, "알려진 표지와 정확히 같은가"는 따로 판정해야 한다.
+  const why = "[외래어]외래어 표기법";
+  assert.ok(BRACKET_PREFIX_PATTERN.test(why), "공백 없는 대괄호를 못 찾았다");
+  assert.equal(
+    RULE_KIND_TAG_NAMES.some((tag) => why.startsWith(tag)),
+    false,
+    "공백이 없는데도 알려진 표지로 인정했다"
+  );
 });
 
 test("byPriority가 순위대로 정렬하고 같은 순위의 순서를 지킨다", () => {
