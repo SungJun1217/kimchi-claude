@@ -230,3 +230,87 @@ test("이유 칸 맨 앞의 대괄호 표지는 [표기]나 [외래어] 뿐이�
 // 참고: 치환 규칙 가운데 상당수는 앞뒤 받침이 다르다. 그 규칙들은 뒤에 조사가 없을 때만
 // 교정되도록 실행 시점 안전장치에 의존하는 정상 규칙이므로, 받침 일치를 자료 불변식으로
 // 단정하면 안 된다. applyFixes 가 실제로 조사를 지키는지는 tests/fixes.test.mjs 가 본다.
+
+// ── 0.14.5 회귀 시험 ──────────────────────────────────────────
+
+test("타겟팅은 타깃팅이 아니라 타기팅으로 고쳐진다 (겹침 해소)", () => {
+  // target(타겟→타깃) 규칙이 타겟팅 안의 타겟까지 잡아 타깃팅으로 잘못 고치던 문제.
+  // 더 긴 타겟팅 규칙이 겹침 해소에서 이겨야 한다.
+  const cases = [
+    ["타겟팅 광고를 껐습니다.", "타기팅 광고를 껐습니다."],
+    ["타겟팅을 다시 설정합니다.", "타기팅을 다시 설정합니다."],
+    ["마이크로타겟팅 전략입니다.", "마이크로타기팅 전략입니다."],
+  ];
+  for (const [input, expected] of cases) {
+    const { text } = applyFixes(input, rules);
+    assert.equal(text, expected, input);
+    assert.ok(!text.includes("타깃팅"), `${input} 이 타깃팅으로 잘못 고쳐졌다`);
+  }
+});
+
+test("타겟만 있으면 그대로 타깃으로 고쳐진다", () => {
+  const { text } = applyFixes("타겟을 지정합니다.", rules);
+  assert.equal(text, "타깃을 지정합니다.");
+});
+
+test("이미 틀린 타깃팅도 타기팅으로 고쳐진다", () => {
+  const { text } = applyFixes("타깃팅 광고입니다.", rules);
+  assert.equal(text, "타기팅 광고입니다.");
+});
+
+test("에 있어서는 문자열로 잡지 않는다 (있다의 활용과 구분할 수 없다)", () => {
+  // 0.14.3에서 정규식으로 추가했으나, 존재를 뜻하는 있다 활용형과 문자열이 같아
+  // "서버에 있어서는 안 됩니다", "있어서 다행입니다" 같은 정당한 문장까지 잡았다.
+  // 문맥 판단이 필요해 프롬프트로 내렸다.
+  const literal = [
+    "이 키는 운영 서버에 있어서는 안 됩니다.",
+    "이 서버에 있어서 다행입니다.",
+  ];
+  for (const sentence of literal) {
+    const findings = lint(sentence, rules).filter((f) => f.matched === "에 있어서");
+    assert.deepEqual(findings, [], sentence);
+  }
+});
+
+test("지금새로는 금새로 잘못 잡지 않는다 (왼쪽 경계)", () => {
+  // 금새→금세 규칙에 [표기] 표지가 있어 왼쪽 경계를 건너뛰던 탓에 지금+새로 속의
+  // 금새까지 잡았다. 표지를 떼어 왼쪽 경계를 다시 켰다.
+  const findings = lint("지금새로 만든 브랜치입니다.", rules);
+  assert.deepEqual(findings.filter((f) => f.bad === "금새"), []);
+});
+
+test("금새는 여전히 잡는다", () => {
+  // 정규식(경고)이라 자동 교정은 하지 않는다. 문맥에 따라 명사 금새(값)일 수 있어서다.
+  const findings = lint("금새 끝났습니다.", rules);
+  assert.ok(findings.some((f) => f.bad === "금새"), "금새 끝났습니다가 잡히지 않는다");
+});
+
+test("ㄹ 받침 어간의 -ㄹ께요 도 게로 고쳐진다", () => {
+  const cases = [
+    ["제가 드릴께요.", "제가 드릴게요."],
+    ["알려드릴께요.", "알려드릴게요."],
+    ["줄께요.", "줄게요."],
+    ["만들께요.", "만들게요."],
+  ];
+  for (const [input, expected] of cases) {
+    const { text } = applyFixes(input, rules);
+    assert.equal(text, expected, input);
+  }
+});
+
+test("볼께·줄께처럼 께 하나만 남긴 행은 두지 않는다 (조사 께와 구분할 수 없다)", () => {
+  // 볼께가 빨개졌습니다: 볼(명사)+께가(조사). 볼께 행이 있으면 볼게가로 잘못 고쳐진다.
+  // 셋째 줄께 앉으세요: 줄(명사)+께(조사). 줄께 행이 있으면 줄게로 잘못 고쳐진다.
+  assert.deepEqual(lint("볼께가 빨개졌습니다.", rules), []);
+  assert.deepEqual(lint("셋째 줄께 앉으세요.", rules), []);
+});
+
+test("매니져와 메니져는 모두 매니저로 고쳐진다", () => {
+  assert.equal(applyFixes("매니져와 이야기했습니다.", rules).text, "매니저와 이야기했습니다.");
+  assert.equal(applyFixes("메니져를 불렀습니다.", rules).text, "매니저를 불렀습니다.");
+});
+
+test("몇일째와 몇일간도 며칠로 고쳐진다", () => {
+  assert.equal(applyFixes("몇일째 야근입니다.", rules).text, "며칠째 야근입니다.");
+  assert.equal(applyFixes("몇일간 쉬었습니다.", rules).text, "며칠간 쉬었습니다.");
+});
