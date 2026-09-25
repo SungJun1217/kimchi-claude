@@ -431,9 +431,34 @@ const JEOK_PATTERN = /^적/;
 const JEOK_ALLOWED_MIN_SYLLABLES = 3;
 const JEOK_DENYLIST = new Set(["접속면", "연결면"]);
 
+// "로"·"으로"는 FOLLOWER_TOKENS에도 있지만(진짜 조사), 뒤에 바로 다른 음절이 이어지면
+// "로그"·"로직"·"로더"·"로컬"·"로드"처럼 다른 낱말의 시작일 수 있다 — "판박이 코드로그를"이
+// 실제로 "판박이 코드"+"로그를"로 오판됐다. FOLLOWER_PATTERN은 접두만 보므로 이 둘을
+// 못 가른다. "로"/"으로" 뒤가 한글이 아니거나(문장 끝) 흔히 그 뒤에 오는 조사
+// 연속(는/도/만/서/써/부터/…)일 때만 진짜 조사로 인정한다. 일반화한 연쇄 판정은 하지
+// 않는다 — "하"+"니다"처럼 다른 어간·어미 조합까지 건드리면 손해가 더 크다.
+const RO_TOKEN = /^(?:으로|로)/;
+const RO_CONTINUATION_TOKENS = [
+  "는", "도", "만", "서", "써", "부터", "의", "까지", "라도", "라면", "나", "요", "선", "은",
+  "야", "밖에", "조차", "마저", "든", "인", "다가",
+];
+const RO_CONTINUATION_PATTERN = new RegExp(
+  `^(?:${[...RO_CONTINUATION_TOKENS].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`
+);
+
 function isAllowedFollower(rest, allowJeok) {
   if (rest.length === 0) return true;
   if (!isHangulChar(rest[0])) return true;
+
+  const ro = RO_TOKEN.exec(rest);
+  if (ro) {
+    const after = rest.slice(ro[0].length);
+    if (after.length === 0 || !isHangulChar(after[0]) || RO_CONTINUATION_PATTERN.test(after)) return true;
+    // "로"/"으로"는 여기서 조사로 인정할 수 없다. FOLLOWER_TOKENS 안에 "로"로 시작하는
+    // 다른 토큰은 없으므로(적 판정 제외) 일반 검사로 넘겨도 결과는 같다 — 명시적으로 끊는다.
+    return allowJeok && JEOK_PATTERN.test(rest);
+  }
+
   if (FOLLOWER_PATTERN.test(rest)) return true;
   return allowJeok && JEOK_PATTERN.test(rest);
 }
@@ -667,9 +692,11 @@ function capPerRule(findings) {
  * @param {object[]} rules
  * @param {string} [ext] 문서 확장자(점 없이, 소문자). 블록형 가리개(들여쓰기 코드, rST, AsciiDoc)의
  *   범위를 정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
+ * @param {Set<string>|null} [extraDefs] maskProtected에 그대로 전달한다. Edit/MultiEdit
+ *   조각 밖의 참조식 링크 정의 라벨.
  * @returns {object[]}
  */
-export function lint(text, rules, ext) {
+export function lint(text, rules, ext, extraDefs) {
   if (typeof text !== "string" || text.length === 0) return [];
   if (!Array.isArray(rules)) return [];
   if (isIgnoredFile(text)) return [];
@@ -679,7 +706,7 @@ export function lint(text, rules, ext) {
   // 매치하면 하나도 안 잡힌다. 정규화한 사본으로 찾아야 두 형태 모두에서 같은 결과가
   // 나온다. text가 이미 NFC면 normalized === text라 아래 로직에 변화가 없다.
   const normalized = text.normalize("NFC");
-  const masked = maskProtected(normalized, ext);
+  const masked = maskProtected(normalized, ext, extraDefs);
   const findings = [];
 
   for (const rule of rules) {
@@ -727,9 +754,10 @@ export function lint(text, rules, ext) {
  * @param {string} text
  * @param {object[]} rules
  * @param {string} [ext] lint() 에 그대로 전달한다.
+ * @param {Set<string>|null} [extraDefs] lint() 에 그대로 전달한다.
  * @returns {{text: string, applied: object[], skipped: object[]}}
  */
-export function applyFixes(text, rules, ext) {
+export function applyFixes(text, rules, ext, extraDefs) {
   const applied = [];
   const skipped = [];
 
@@ -739,7 +767,7 @@ export function applyFixes(text, rules, ext) {
 
   // `검사` 칸이 치환인 것은 규칙을 쓴 사람의 의사 표시이고, 실제로 꽂을 수 있는지는
   // autoFixReplacement 가 따로 판정한다. 둘을 모두 만족해야 고친다.
-  const candidates = lint(text, rules, ext).filter((finding) => finding.check === CHECK_SUBSTITUTE);
+  const candidates = lint(text, rules, ext, extraDefs).filter((finding) => finding.check === CHECK_SUBSTITUTE);
 
   // lint() 는 매치를 NFC로 정규화한 사본에서 찾으므로, 찾은 index는 그 사본 기준이다.
   // text가 이미 NFC면 사본과 원본이 같아 인덱스가 그대로 맞는다. NFD로 들어온 텍스트를

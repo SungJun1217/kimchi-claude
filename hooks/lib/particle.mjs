@@ -378,15 +378,16 @@ const TOKEN_WITH_PARTICLE = new RegExp(
  * @param {string} [ext] 문서 확장자(점 없이, 소문자). maskProtected에 그대로 전달해
  *   들여쓰기 코드·<pre>/<code>·rST·AsciiDoc 같은 문서 전용 가리개도 적용받는다.
  *   생략하면(예: 커밋 메시지) 일반 가리개만 적용된다.
+ * @param {Set<string>|null} [extraDefs] maskProtected에 그대로 전달한다.
  * @returns {{matched: string, word: string, particle: string, correct: string, index: number}[]}
  */
-export function findParticleErrors(text, ext) {
+export function findParticleErrors(text, ext, extraDefs) {
   if (typeof text !== "string" || text.length === 0) return [];
   // lint() 와 같은 기제를 쓴다. 한쪽만 표시를 존중하면 문체 가이드 문서에서 갈린다.
   if (isIgnoredFile(text)) return [];
 
   // 위치를 보존하며 제외 구간을 덮는다. 찾은 자리가 원문 위치와 그대로 맞는다.
-  const masked = maskProtected(text, ext);
+  const masked = maskProtected(text, ext, extraDefs);
 
   const found = [];
   TOKEN_WITH_PARTICLE.lastIndex = 0;
@@ -407,10 +408,11 @@ export function findParticleErrors(text, ext) {
  *
  * @param {string} text
  * @param {string} [ext] findParticleErrors 에 그대로 전달한다.
+ * @param {Set<string>|null} [extraDefs] findParticleErrors 에 그대로 전달한다.
  * @returns {{text: string, applied: object[]}}
  */
-export function fixParticles(text, ext) {
-  const found = findParticleErrors(text, ext);
+export function fixParticles(text, ext, extraDefs) {
+  const found = findParticleErrors(text, ext, extraDefs);
   if (found.length === 0) return { text: typeof text === "string" ? text : "", applied: [] };
 
   let result = text;

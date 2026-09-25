@@ -7,13 +7,13 @@
 // 훅이 깨져서 작업이 막히면 그것이 더 큰 실패다.
 //
 import { readFileSync, statSync } from "node:fs";
-import { dirname, join, extname } from "node:path";
+import { dirname, join, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRules } from "./rules.mjs";
 import { lint, applyFixes, formatFindings } from "./lint.mjs";
 import { findParticleErrors, fixParticles, formatParticleErrors } from "./particle.mjs";
 import { looksKorean } from "./detect.mjs";
-import { isIgnoredFile, maskProtected, MASK } from "./segment.mjs";
+import { isIgnoredFile, maskProtected, collectReferenceDefLabels, MASK } from "./segment.mjs";
 import { extractCommitTargets, escapeDoubleQuoted } from "./bash-commit.mjs";
 
 const PLUGIN_ROOT =
@@ -21,6 +21,23 @@ const PLUGIN_ROOT =
 
 // 문서 파일만 본다. 소스 파일을 검사하면 코드 주석까지 건드리게 되고, 그것은 적용 범위 밖이다.
 const DOC_EXTENSIONS = new Set([".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc"]);
+
+// .txt 확장자 자체는 남겨 둔다. 일반 텍스트로 적은 설계 메모·안내문에도 검사해야 할 산문이 있다.
+// 하지만 아래 이름들은 이름 자체가 이미 정해진 빌드 도구용 형식이지 산문이 아니다.
+// 말투 검사(이 파일)만 뺀다 — 개인정보 검사는 pii.mjs가 파일 종류와 무관하게 모든
+// 파일에 그대로 돈다(불변식 2).
+const TONE_EXEMPT_BASENAMES = [
+  /^CMakeLists\.txt$/,
+  /^requirements.*\.txt$/,
+  /.*-requirements\.txt$/,
+  /^constraints.*\.txt$/,
+  /^robots\.txt$/,
+];
+
+function isToneExemptBasename(filePath) {
+  const base = basename(filePath || "");
+  return TONE_EXEMPT_BASENAMES.some((pattern) => pattern.test(base));
+}
 
 /**
  * 파일이 스스로를 검사 예외로 선언했는지 디스크에서 확인한다.
@@ -107,14 +124,11 @@ function locateAndClassify(fileText, ext, needle, replaceAll) {
  * 여러 번 나오면) 판단을 보류한다 — 불변식 5. 이때 자동 교정은 그 대상을 건너뛰고,
  * 경고는 조각만으로 계속한다.
  *
+ * @param {string|null} fileText 미리 읽어 둔 파일 전체 글. null이면 못 읽은 것이다.
  * @returns {"exempt"|"unknown"|"ok"}
  */
-function classifyEditContext(filePath, oldString, newString, replaceAll) {
-  if (!filePath) return "unknown";
-  const fileText = readDocForContext(filePath);
+function classifyEditContext(fileText, ext, oldString, newString, replaceAll) {
   if (fileText === null) return "unknown";
-  const ext = docExt(filePath);
-
   const viaOld = locateAndClassify(fileText, ext, oldString, replaceAll);
   if (viaOld !== "unknown") return viaOld;
   return locateAndClassify(fileText, ext, newString, replaceAll);
@@ -143,6 +157,7 @@ function extractTargets(toolName, toolInput) {
 
   const filePath = toolInput.file_path || "";
   if (filePath && !DOC_EXTENSIONS.has(extname(filePath).toLowerCase())) return [];
+  if (filePath && isToneExemptBasename(filePath)) return [];
   const ext = docExt(filePath);
   // 파일이 스스로를 예외로 선언했으면 조각만 넘어와도 존중한다.
   //
@@ -156,7 +171,10 @@ function extractTargets(toolName, toolInput) {
   }
 
   if (toolName === "Edit" && typeof toolInput.new_string === "string") {
-    const ctx = classifyEditContext(filePath, toolInput.old_string, toolInput.new_string, toolInput.replace_all);
+    // 파일은 한 번만 읽는다 — 울타리 판정(classifyEditContext)과 참조식 링크 정의 수집
+    // (refDefs)이 같은 사본을 함께 쓴다.
+    const fileText = filePath ? readDocForContext(filePath) : null;
+    const ctx = classifyEditContext(fileText, ext, toolInput.old_string, toolInput.new_string, toolInput.replace_all);
     if (ctx === "exempt") return [];
     return [
       {
@@ -165,15 +183,22 @@ function extractTargets(toolName, toolInput) {
         field: "new_string",
         ext,
         autofixSafe: ctx !== "unknown",
+        // 조각(new_string)만으로는 파일 다른 곳의 참조식 링크 정의(`[라벨]: url`)가 안 보인다.
+        // fileText가 null(못 읽음)이면 null을 그대로 넘겨 findReferenceLabelRanges가
+        // 보수적으로 두 괄호짜리 참조를 전부 가리게 한다 — 죽은 링크보다 지적을 놓치는
+        // 쪽이 낫다.
+        refDefs: fileText === null ? null : collectReferenceDefLabels(fileText, ext),
       },
     ];
   }
 
   if (toolName === "MultiEdit" && Array.isArray(toolInput.edits)) {
+    const fileText = filePath ? readDocForContext(filePath) : null;
+    const refDefs = fileText === null ? null : collectReferenceDefLabels(fileText, ext);
     return toolInput.edits
       .map((edit, editIndex) => {
         if (typeof edit?.new_string !== "string") return null;
-        const ctx = classifyEditContext(filePath, edit.old_string, edit.new_string, edit.replace_all);
+        const ctx = classifyEditContext(fileText, ext, edit.old_string, edit.new_string, edit.replace_all);
         if (ctx === "exempt") return null;
         return {
           label: filePath || "문서",
@@ -182,6 +207,7 @@ function extractTargets(toolName, toolInput) {
           ext,
           editIndex,
           autofixSafe: ctx !== "unknown",
+          refDefs,
         };
       })
       .filter(Boolean);
@@ -202,7 +228,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   if (blockEnabled()) {
     // F8: 막을 때만 전체 위반 목록이 필요하다. 자동 교정 경로에서는 applyFixes 가
     // 안에서 다시 검사하므로 미리 훑으면 같은 일을 두 번 한다.
-    const allFindings = targets.flatMap((target) => lint(target.text, rules, target.ext));
+    const allFindings = targets.flatMap((target) => lint(target.text, rules, target.ext, target.refDefs));
     if (allFindings.length === 0) return null;
     return {
       hookSpecificOutput: {
@@ -219,10 +245,10 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   let changed = false;
 
   /** 조사를 먼저 고치고, 그다음 용어를 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있어 한 번 더 돈다. */
-  function fixOne(text, ext) {
-    const withParticles = fixParticles(text, ext);
-    const result = applyFixes(withParticles.text, rules, ext);
-    const fixedText = fixParticles(result.text, ext).text;
+  function fixOne(text, ext, refDefs) {
+    const withParticles = fixParticles(text, ext, refDefs);
+    const result = applyFixes(withParticles.text, rules, ext, refDefs);
+    const fixedText = fixParticles(result.text, ext, refDefs).text;
     return {
       text: fixedText,
       applied: [
@@ -237,7 +263,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
     const edits = [];
     for (const target of targets) {
       if (target.replaceable === false || !target.span) continue;
-      const fixed = fixOne(target.text, target.ext);
+      const fixed = fixOne(target.text, target.ext, target.refDefs);
       if (fixed.text === target.text) continue;
       // escapeOnWrite: 원문에 실제 이스케이프(\", \\ 등)가 있던 값만 다시 이스케이프한다.
       // 이스케이프가 없던 값(예: $BRANCH, `date` 를 그대로 쓴 메시지)은 손대지 않아야
@@ -256,7 +282,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   } else {
     for (const target of targets) {
       if (target.autofixSafe === false) continue;
-      const fixed = fixOne(target.text, target.ext);
+      const fixed = fixOne(target.text, target.ext, target.refDefs);
       if (fixed.text === target.text) continue;
 
       if (target.editIndex !== undefined) {
@@ -298,9 +324,9 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
 
 export function warnAboutTone(targets, rules) {
   const findings = targets.flatMap((target) =>
-    lint(target.text, rules, target.ext).map((finding) => ({ ...finding, label: target.label }))
+    lint(target.text, rules, target.ext, target.refDefs).map((finding) => ({ ...finding, label: target.label }))
   );
-  const particles = targets.flatMap((target) => findParticleErrors(target.text, target.ext));
+  const particles = targets.flatMap((target) => findParticleErrors(target.text, target.ext, target.refDefs));
   if (findings.length === 0 && particles.length === 0) return null;
 
   const label = targets[0]?.label || "";

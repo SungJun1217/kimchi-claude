@@ -35,16 +35,62 @@ const ALWAYS_PATTERNS = [
   /\bwww\.[^\s)]+/g,
   /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/g, // 환경변수
   /(?:^|\s)--?[A-Za-z][A-Za-z0-9-]*/g, // 명령행 옵션
-  new RegExp(LEAD + String.raw`[\p{L}\p{N}_-]+\.(?:mjs|cjs|js|ts|tsx|jsx|json|md|py|go|rs|java|kt|rb|sh|bash|zsh|yml|yaml|toml|lock|txt|csv|css|scss|html|sql|env|ini|conf)` + TAIL, "gu"),
-  // 밑줄로 잇는 혼합 식별자(예: content_컨텐츠). 밑줄과 한글이 함께 있어야만 덮는다 —
-  // 밑줄 없는 보통 한글 낱말까지 덮으면 지나치다.
-  new RegExp(LEAD + String.raw`[A-Za-z0-9_\p{Script=Hangul}]*_[A-Za-z0-9_\p{Script=Hangul}]*\p{Script=Hangul}[A-Za-z0-9_\p{Script=Hangul}]*` + TAIL, "gu"),
+  new RegExp(LEAD + String.raw`[\p{L}\p{N}_-]+\.(?:mjs|cjs|js|ts|tsx|jsx|json|md|py|go|rs|java|kt|rb|sh|bash|zsh|yml|yaml|toml|lock|txt|csv|css|scss|html|sql|env|ini|conf|png|jpe?g|gif|svg|webp|ico|pdf)` + TAIL, "gu"),
+  // 밑줄로 잇는 혼합 식별자(예: content_컨텐츠, 타겟_id). 밑줄과 한글이 어딘가 함께 있어야만
+  // 덮는다(앞선 방향제한 없는 lookahead) — 밑줄 없는 보통 한글 낱말까지 덮으면 지나치다.
+  new RegExp(
+    LEAD +
+      String.raw`(?=[A-Za-z0-9_\p{Script=Hangul}]*\p{Script=Hangul})[A-Za-z0-9_\p{Script=Hangul}]*_[A-Za-z0-9_\p{Script=Hangul}]*` +
+      TAIL,
+    "gu"
+  ),
+
+  // 마크다운 링크·이미지 대상 `](...)`. 대괄호 안(링크 텍스트·대체 텍스트)은 산문이라
+  // 계속 검사해야 하지만, 괄호 안의 대상 경로는 코드다. 문자 집합에서 `(`·`]`도 뺀다 —
+  // `)`만 빼면 "](".repeat(40000)처럼 닫는 괄호가 없는 입력에서 각 "](" 마다 문자열
+  // 끝까지 밀었다 되돌리는 이차 비용이 났다(실측 5.7초). 괄호·대괄호가 나오면 그 자리에서
+  // 바로 실패하므로 더 되돌릴 게 없다. 길이도 2000자로 한 번 더 막는다.
+  /\]\([^()\]\n]{0,2000}\)/g,
+  // 참조 정의 줄 `[label]: url "title"` 전체.
+  /^ {0,3}\[[^\]\n]+\]:[ \t]+\S[^\n]*$/gm,
+  // 한 줄짜리 `$(...)` 명령 치환. 중첩 괄호는 다루지 않는다 — 그런 경우까지 정확히 가르려면
+  // bash-commit.mjs 수준의 셸 파서가 필요하다.
+  /\$\([^()\n]*\)/g,
 
   // 사람이 지정한 예외 구간.
   // 문체 가이드나 규칙 문서는 나쁜 예를 일부러 인용한다. 그것까지 지적하면 쓸 수 없다.
   /<!--\s*kimchi-ignore-start\b[\s\S]*?-->[\s\S]*?<!--\s*kimchi-ignore-end\b[\s\S]*?-->/g,
   /^.*<!--\s*kimchi-ignore\b[^>]*-->.*$/gm, // 표시가 붙은 한 줄
 ];
+
+// 한글 음절 바로 뒤에 로마자가 붙은 캐멀케이스 혼합 식별자(예: 타겟Id, 타겟Name). \p{L}*로
+// 양쪽을 넓게 무는 정규식은 137KB 문서에서 0.27ms 대 13.5ms로 50배 느려진다(실측) — 대신
+// 한글→로마자 경계만 스캔으로 찾고 [\p{L}\p{N}_] 문자 집합으로 좌우를 선형으로 넓힌다.
+//
+// 시드는 한글 뒤에 소문자, 또는 대문자+소문자(캐멀케이스 시작)가 와야만 잡는다 — "컨텐츠UI를"·
+// "타겟API 호출"·"리팩토링PR을"처럼 한글 뒤에 대문자만 이어지는 두문자어는 식별자가 아니라
+// 보통 산문에 섞인 영문 약어라 계속 검사해야 한다. 반대 방향(API가 처럼 로마자 뒤에 한글이
+// 오는 경우)도 다루지 않는다 — 그쪽은 보통 산문이다.
+const HANGUL_ASCII_SEED = /[가-힣](?:[a-z]|[A-Z][a-z])/g;
+const JOIN_TOKEN_CHAR = /[\p{L}\p{N}_]/u;
+
+function findHangulAsciiJoinRanges(text) {
+  const ranges = [];
+  HANGUL_ASCII_SEED.lastIndex = 0;
+  let m;
+  while ((m = HANGUL_ASCII_SEED.exec(text)) !== null) {
+    let start = m.index;
+    let end = m.index + m[0].length;
+    while (start > 0 && JOIN_TOKEN_CHAR.test(text[start - 1])) start -= 1;
+    while (end < text.length && JOIN_TOKEN_CHAR.test(text[end])) end += 1;
+    ranges.push([start, end]);
+    // 한 붙임 구간은 한 번만 넓힌다. lastIndex를 넓힌 끝으로 밀지 않으면 "가a"를
+    // 수천 번 이어 붙인 입력에서 시드가 겹치는 위치마다 매번 좌우로 문자열 전체를
+    // 다시 훑어 이차 비용이 난다(실측: 5000회 반복에서 0.5초 → 8.8초).
+    if (end > HANGUL_ASCII_SEED.lastIndex) HANGUL_ASCII_SEED.lastIndex = end;
+  }
+  return ranges;
+}
 
 // 문서 확장자별로만 적용하는 블록형 가리개. 커밋 메시지(ext 없음)에는 무엇도 걸리지 않는다 —
 // 커밋 메시지에 "    컨텐츠 정리"처럼 앞에 공백 몇 칸이 붙었다고 코드로 볼 이유가 없다.
@@ -75,6 +121,53 @@ function findPathRanges(text) {
   while ((m = re.exec(text)) !== null) {
     if (/[A-Za-z0-9]/.test(m[0])) ranges.push([m.index, m.index + m[0].length]);
     else if (m[0].length === 0) re.lastIndex += 1;
+  }
+  return ranges;
+}
+
+/**
+ * 글자(\p{L}) 가운데 한글 비율이 낮은지(대략 30% 미만) 본다. 로그·프롬프트 줄 판정에 쓴다.
+ * 숫자·기호뿐이면(글자가 하나도 없으면) 막을 이유가 없다고 보고 그대로 코드로 취급한다.
+ */
+function isMostlyNonHangul(text) {
+  let letters = 0;
+  let hangul = 0;
+  for (const ch of text) {
+    if (!/\p{L}/u.test(ch)) continue;
+    letters += 1;
+    if (ch >= "가" && ch <= "힣") hangul += 1;
+  }
+  if (letters === 0) return true;
+  return hangul / letters < 0.3;
+}
+
+// 줄 앞의 로그 레벨·예외 이름으로 시작하는 한 줄. 인용부호(`> `)나 목록 표시가 붙어도 된다.
+// "Error: 컨텐츠를 불러오지 못하면 다시 시도하세요"처럼 "Error:"가 안내문의 첫 낱말일 뿐인
+// 온전한 한국어 문장까지 통째로 덮으면 그 문장은 다시는 검사되지 않는다 — 콜론 뒤가 한글
+// 위주면(실측 기준 30% 이상) 로그가 아니라 산문으로 보고 덮지 않는다.
+const LOG_LINE = /^[ \t]*(?:>[ \t]*)?(?:[-*+][ \t]+)?(?:[A-Z][A-Za-z]*(?:Error|Exception)|Error|ERROR|FATAL|Fatal|fatal|WARN|WARNING|Warning|warning|error|panic|Traceback)(?:\[[^\]\n]*\])?:[ \t]([^\n]*)/gm;
+
+function findLogLineRanges(text) {
+  const ranges = [];
+  LOG_LINE.lastIndex = 0;
+  let m;
+  while ((m = LOG_LINE.exec(text)) !== null) {
+    if (isMostlyNonHangul(m[1])) ranges.push([m.index, m.index + m[0].length]);
+  }
+  return ranges;
+}
+
+// 울타리 없는 셸 프롬프트 한 줄(`$ npm test`). "$ 5를 내면 컨텐츠를 받습니다"처럼 공백
+// 바로 뒤가 숫자면 값을 나타내는 보통 문장이지 명령 프롬프트가 아니다.
+const PROMPT_LINE = /^[ \t]*\$ ([^\n]*)/gm;
+
+function findPromptLineRanges(text) {
+  const ranges = [];
+  PROMPT_LINE.lastIndex = 0;
+  let m;
+  while ((m = PROMPT_LINE.exec(text)) !== null) {
+    if (/^[0-9]/.test(m[1])) continue;
+    ranges.push([m.index, m.index + m[0].length]);
   }
   return ranges;
 }
@@ -124,8 +217,12 @@ function findIndentedBlockRanges(text) {
       continue;
     }
 
-    if (trimmed.length > 0) lastNonBlankLine = line;
-    prevBlank = trimmed.length === 0;
+    // 울타리 닫힘이나 ATX 제목 바로 뒤에 오는 들여쓰기 줄은 목록 연속이 아니라 새
+    // 코드 블록이다 — lastNonBlankLine을 비워 두어야 뒤이은 들여쓰기가 LIST_ITEM 검사에
+    // 걸려 코드 취급을 놓치지 않는다.
+    const fenceOrHeading = /^ {0,3}(?:```|~~~|#{1,6}(?:\s|$))/.test(line);
+    if (trimmed.length > 0) lastNonBlankLine = fenceOrHeading ? "" : line;
+    prevBlank = trimmed.length === 0 || fenceOrHeading;
     i = end + 1;
   }
   return ranges;
@@ -181,6 +278,214 @@ function findAsciidocRanges(text) {
   return ranges;
 }
 
+// 문서 맨 앞(인덱스 0)의 YAML 프런트매터. 마크다운 계열(md/mdx/markdown)에만 적용한다 —
+// 커밋 메시지(ext 없음)에는 애초에 "맨 앞 ---"이라는 개념이 없다.
+//
+// title/description/summary/excerpt/subtitle 값은 사람이 읽는 산문이라 계속 검사한다.
+// 나머지 키·값(빌드 도구가 읽는 설정)은 코드로 보고 덮는다. `---`로 시작하지만 안쪽 줄이
+// YAML처럼 안 생겼으면(보통 문단이면) 프런트매터가 아니라 가로줄이다 — 덮지 않는다.
+const PROSE_KEYS = /^(?:title|description|summary|excerpt|subtitle)[ \t]*:/;
+const FRONTMATTER_FENCE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?=\r?\n|$)/;
+// 키 이름은 \w로 제한하지 않는다 — "환경: prod"처럼 한글 키도 실제로 쓰인다. `*`(굵게)나
+// `#`(마크다운 제목)으로 시작하는 줄은 키로 보지 않는다 — "**참고**: 컨텐츠를 옮겼습니다."는
+// 콜론이 있어도 YAML 키가 아니라 강조한 산문이다.
+const KEY_LINE = /^[^\s:*#-][^\n:]*:(?=[ \t]|$)/;
+// 빌드 도구가 읽는 프런트매터 키는 실무에서 거의 항상 영문/숫자다. "참고: 컨텐츠 문서를
+// 옮겼습니다"처럼 키 자리가 한글뿐이면 YAML이 아니라 "키처럼 보이는 한국어 문장"일 수
+// 있다 — 블록 안에 영문 키가 하나도 없으면 프런트매터로 보지 않는다.
+const ASCII_KEY_LINE = /^[A-Za-z0-9_-]+[ \t]*:(?=[ \t]|$)/;
+
+/**
+ * 프런트매터 안쪽 줄들이 실제로 YAML처럼 생겼는지 본다.
+ *
+ * 여는 --- 바로 다음 줄이 빈 줄이거나 키 줄이 아니면 프런트매터가 아니라 "---로 감싼
+ * 산문"이다("---\n\n## 변경 사항\n\n- 컨텐츠…" 처럼 제목 뒤에 목록으로 적은 변경 이력이
+ * 이 모양으로 자동 교정을 빠져나간 적이 있다). 목록(`- `)·주석(`#`) 줄은 앞서 키 줄이 한
+ * 번이라도 나온 뒤에만 YAML의 값으로 인정한다 — 키 없이 곧장 나오면 그냥 마크다운 목록·제목이다.
+ */
+function looksLikeFrontmatter(lines) {
+  if (lines.length === 0 || !KEY_LINE.test(lines[0])) return false;
+  let sawKey = true;
+  let sawAsciiKey = ASCII_KEY_LINE.test(lines[0]);
+  for (let i = 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/^\s*$/.test(line)) continue;
+    if (KEY_LINE.test(line)) {
+      sawKey = true;
+      if (ASCII_KEY_LINE.test(line)) sawAsciiKey = true;
+      continue;
+    }
+    if (/^\s+\S/.test(line)) continue; // 들여쓴 계속 줄(값)
+    if (sawKey && /^-[ \t]/.test(line)) continue; // 키 뒤에 오는 목록 값
+    if (sawKey && /^#/.test(line)) continue; // 키 뒤에 오는 주석
+    return false;
+  }
+  return sawAsciiKey;
+}
+
+function findFrontmatterRanges(text) {
+  const m = FRONTMATTER_FENCE.exec(text);
+  if (!m) return [];
+  const lines = m[1].split("\n");
+  if (!looksLikeFrontmatter(lines)) return [];
+
+  const ranges = [];
+  let pos = text.indexOf("\n") + 1;
+  ranges.push([0, pos]); // 여는 --- 줄
+  let inProseValue = false;
+  for (const line of lines) {
+    const key = PROSE_KEYS.exec(line);
+    if (key) {
+      ranges.push([pos, pos + key[0].length]); // "title:" 만 덮고 값은 산문으로 남긴다
+      inProseValue = true;
+    } else if (inProseValue && /^\s+\S/.test(line)) {
+      // 산문 키의 들여쓴 계속 줄 — 통째로 산문이라 덮지 않는다.
+    } else {
+      inProseValue = false;
+      ranges.push([pos, pos + line.length]);
+    }
+    pos += line.length + 1;
+  }
+  ranges.push([pos, m.index + m[0].length]); // 닫는 --- 또는 ... 줄
+  return ranges;
+}
+
+// 참조식 링크의 라벨. `[글 내용][라벨]`·`[라벨][]`(축약형)·`[라벨]`(단축형)의 라벨은
+// 문서 어딘가의 정의 줄(`[라벨]: url`)과 글자 그대로 맞아야 링크가 산다. 라벨이 규칙에
+// 걸려 자동 교정되면(예: 타겟→타깃) 정의 줄은 안 바뀐 채 라벨만 바뀌어 링크가 끊긴다 —
+// 실제로 `[설정 안내][타겟]` 이 `[설정 안내][타깃]`으로 바뀌고 `[타겟]:` 정의는 그대로
+// 남아 죽은 링크가 됐다. 정의가 있는 라벨만 가려 그 부분만 검사에서 뺀다. 링크 텍스트
+// (`[글 내용]`)는 라벨이 아니므로 계속 검사한다. 마크다운 계열(md/mdx/markdown)에서만
+// 본다 — 참조식 링크 자체가 마크다운 전용 문법이다.
+const REF_DEF_LINE = /^ {0,3}\[([^\]\n]+)\]:[ \t]+\S[^\n]*$/gm;
+// 대괄호 안 문자 집합에서 "["·"]" 둘 다 빼고 길이도 999자로 막는다. "["를 수만 개 이어
+// 붙인 입력에서 시작마다 문자열 끝까지 밀었다 되돌리는 이차 비용이 났다(실측 36초) —
+// 정의가 하나라도 있으면 이 패턴들이 전체 글에서 돈다.
+const FULL_OR_COLLAPSED_REF = /\[([^[\]\n]{0,999})\]\[([^[\]\n]{0,999})\]/g;
+// 앞이 "]"가 아니고(두 괄호짜리 형태의 둘째 라벨이 아니고) 뒤가 "("나 "["가 아닌(인라인
+// 링크·두 괄호짜리 형태의 첫 괄호가 아닌) 홑 대괄호만 단축형 참조로 본다.
+const SHORTCUT_REF = /(?<!\])\[([^[\]\n]{0,999})\](?![(\[])/g;
+
+function normalizeRefLabel(label) {
+  return label.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** ranges로 표시한 자리를 센티넬로 덮는다. maskProtected와 정의 전용 스캔이 함께 쓴다. */
+function maskRanges(text, ranges) {
+  if (ranges.length === 0) return text;
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  let out = "";
+  let cursor = 0;
+  for (const [from, to] of sorted) {
+    if (to <= cursor) continue;
+    const start = Math.max(from, cursor);
+    out += text.slice(cursor, start);
+    out += MASK.repeat(to - start);
+    cursor = to;
+  }
+  return out + text.slice(cursor);
+}
+
+const CODE_ONLY_PATTERNS = [/```[\s\S]*?```/g, /~~~[\s\S]*?~~~/g, /`[^`\n]*`/g];
+
+/**
+ * 정의 줄을 찾기 전에 코드만 가려 둔 사본을 만든다. 울타리·인라인 코드 안의
+ * `` `[타겟]` `` 나 펜스 안 ` ```\n[타겟]: x\n``` `는 진짜 정의가 아니다 — 코드 예시로
+ * 인용했을 뿐인데 실제 정의로 세면 그 라벨을 쓰는 모든 자리가 부당하게 검사에서 빠진다.
+ */
+function maskCodeForDefScan(text, ext) {
+  const ranges = [];
+  for (const pattern of CODE_ONLY_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match[0].length === 0) {
+        pattern.lastIndex += 1;
+        continue;
+      }
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+  if (INDENTED_CODE_EXTS.has(ext)) ranges.push(...findIndentedBlockRanges(text));
+  if (PRE_CODE_EXTS.has(ext)) {
+    for (const pattern of PRE_CODE_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        if (match[0].length === 0) {
+          pattern.lastIndex += 1;
+          continue;
+        }
+        ranges.push([match.index, match.index + match[0].length]);
+      }
+    }
+  }
+  return maskRanges(text, ranges);
+}
+
+function scanDefLabels(maskedText, into) {
+  REF_DEF_LINE.lastIndex = 0;
+  let dm;
+  while ((dm = REF_DEF_LINE.exec(maskedText)) !== null) into.add(normalizeRefLabel(dm[1]));
+}
+
+/**
+ * 문서 안의 참조식 링크 정의 라벨을 모은다. Edit/MultiEdit처럼 조각만 보이는 호출에서,
+ * 실제 정의 줄은 조각 밖 파일 어딘가에 있을 수 있다 — 그 정의를 maskProtected의 extraDefs
+ * 로 얹어 주는 통로다. 코드 울타리·인라인 코드 안의 가짜 정의는 세지 않는다.
+ *
+ * @param {string} text 파일 전체 글
+ * @param {string} [ext]
+ * @returns {Set<string>}
+ */
+export function collectReferenceDefLabels(text, ext) {
+  if (typeof text !== "string" || text.length === 0) return new Set();
+  const defs = new Set();
+  scanDefLabels(maskCodeForDefScan(text, ext), defs);
+  return defs;
+}
+
+/**
+ * @param {string} text
+ * @param {string} [ext]
+ * @param {Set<string>|null} [extraDefs] Edit/MultiEdit처럼 조각 밖의 정의를 알아야 할 때
+ *   미리 모은 라벨 집합. `null`이면 "파일을 못 읽어 알 수 없음"이라는 뜻으로, 보수적으로
+ *   두 괄호짜리 참조(`][라벨]`·`[라벨][]`)를 정의 확인 없이 전부 가린다 — 단축형(`[라벨]`)은
+ *   혼자서도 흔한 대괄호 표기라 여기서까지 넓히지 않는다. 자동 교정이 죽은 링크를 만드는
+ *   쪽이 지적 하나를 놓치는 쪽보다 나쁘다.
+ */
+function findReferenceLabelRanges(text, ext, extraDefs) {
+  const conservative = extraDefs === null;
+  const defs = new Set(conservative ? [] : extraDefs || []);
+  scanDefLabels(maskCodeForDefScan(text, ext), defs);
+
+  const ranges = [];
+
+  FULL_OR_COLLAPSED_REF.lastIndex = 0;
+  let m;
+  while ((m = FULL_OR_COLLAPSED_REF.exec(text)) !== null) {
+    const [full, linkText, label] = m;
+    if (label.length > 0) {
+      if (conservative || defs.has(normalizeRefLabel(label))) {
+        const secondBracketStart = m.index + 1 + linkText.length + 1; // "[" + 글 내용 + "]" 다음
+        ranges.push([secondBracketStart, m.index + full.length]);
+      }
+    } else if (conservative || defs.has(normalizeRefLabel(linkText))) {
+      // 축약형 [라벨][] — 글 내용 자체가 라벨을 겸한다. 통째로 뺀다.
+      ranges.push([m.index, m.index + full.length]);
+    }
+  }
+
+  if (!conservative) {
+    SHORTCUT_REF.lastIndex = 0;
+    while ((m = SHORTCUT_REF.exec(text)) !== null) {
+      if (defs.has(normalizeRefLabel(m[1]))) ranges.push([m.index, m.index + m[0].length]);
+    }
+  }
+
+  return ranges;
+}
+
 // 문서 전체를 검사에서 빼는 표시.
 // 표시 뒤에 이유를 덧붙일 수 있게 둔다. 왜 빼는지 적어 두는 것이 자연스러운 쓰임이다.
 const IGNORE_FILE = /<!--\s*kimchi-ignore-file\b[\s\S]*?-->/;
@@ -201,9 +506,11 @@ export function isIgnoredFile(text) {
  * @param {string} [ext] 문서 확장자(점 없이, 소문자로). 들여쓰기 코드·rST·AsciiDoc·HTML
  *   리터럴 블록처럼 "이 파일 형식이라야 코드로 읽힌다"는 가리개의 범위를 정한다.
  *   생략하면(예: 커밋 메시지) 이 블록형 가리개는 하나도 적용되지 않는다.
+ * @param {Set<string>|null} [extraDefs] 참조식 링크 라벨 판정에 쓸, 이 글 밖에서 모은 정의
+ *   라벨. collectReferenceDefLabels 참고.
  * @returns {string}
  */
-export function maskProtected(text, ext) {
+export function maskProtected(text, ext, extraDefs) {
   if (typeof text !== "string" || text.length === 0) return "";
 
   const ranges = [];
@@ -219,6 +526,9 @@ export function maskProtected(text, ext) {
     }
   }
   ranges.push(...findPathRanges(text));
+  ranges.push(...findHangulAsciiJoinRanges(text));
+  ranges.push(...findLogLineRanges(text));
+  ranges.push(...findPromptLineRanges(text));
 
   if (PRE_CODE_EXTS.has(ext)) {
     for (const pattern of PRE_CODE_PATTERNS) {
@@ -234,25 +544,14 @@ export function maskProtected(text, ext) {
     }
   }
 
+  if (INDENTED_CODE_EXTS.has(ext)) {
+    ranges.push(...findFrontmatterRanges(text));
+    ranges.push(...findReferenceLabelRanges(text, ext, extraDefs));
+  }
   const indentedBlocks = INDENTED_CODE_EXTS.has(ext) ? findIndentedBlockRanges(text) : [];
   ranges.push(...indentedBlocks);
   if (RST_EXTS.has(ext)) ranges.push(...findRstLiteralRanges(text, findIndentedBlockRanges(text)));
   if (ASCIIDOC_EXTS.has(ext)) ranges.push(...findAsciidocRanges(text));
 
-  // 가릴 구간이 없으면 원문을 그대로 돌려준다. 아무것도 할당하지 않는다.
-  if (ranges.length === 0) return text;
-
-  ranges.sort((a, b) => a[0] - b[0]);
-
-  // 겹치거나 품은 구간은 커서로 정리한다. 센티넬을 구간 길이만큼 채워 위치를 보존한다.
-  let out = "";
-  let cursor = 0;
-  for (const [from, to] of ranges) {
-    if (to <= cursor) continue;
-    const start = Math.max(from, cursor);
-    out += text.slice(cursor, start);
-    out += MASK.repeat(to - start);
-    cursor = to;
-  }
-  return out + text.slice(cursor);
+  return maskRanges(text, ranges);
 }
