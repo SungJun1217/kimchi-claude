@@ -47,7 +47,7 @@ echo '<hook json>' | node hooks/guard.mjs  # drive a hook directly with a synthe
 7. **Skills load or silently vanish.** `SKILL.md` frontmatter starts on line 1 (nothing before it, not even an ignore marker); every file a skill references exists; example code is exercised by `npm test`. Values that change (holiday dates, retention periods) are not hardcoded — point to the authoritative source.
 8. **Dogfood.** Every Korean doc in the repo passes the repo's own linter (`tests/dogfood.test.mjs`). Deliberately quoted bad examples go inside `kimchi-ignore` markers — not the other way around.
 9. **Rule data quality is product quality.** A wrong rule entry is harm, not help. New entries carry a reason; terms with legitimate uses are excluded with the reason written in the rule file.
-10. Zero dependencies, Node ESM, no network or LLM calls from hooks/scripts. Hooks stay cheap — they run on every tool call (measured ~80 ms per call).
+10. Zero dependencies, Node ESM, no network or LLM calls from hooks/scripts. Hooks stay cheap — they run on every tool call (measured ~100 ms per call on Node 26, ~80 ms of it Node startup).
 
 ## Architecture
 

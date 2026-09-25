@@ -392,7 +392,7 @@ function layers(c) {
   s += box(400, 198, 246, 64, c.card, c.red) +
     `<text x="523" y="225" text-anchor="middle" class="sans" font-size="14.5" font-weight="800" fill="${c.red}">시스템 프롬프트</text>` +
     `<text x="523" y="246" text-anchor="middle" class="mono" font-size="12" fill="${c.muted}">force-for-plugin · 압축돼도 남는다</text>`;
-  s += node(46, 198, 330, "hooks/guard.mjs", "모든 Bash·Write·Edit 호출 · 약 80ms", c.cardBorder);
+  s += node(46, 198, 330, "hooks/guard.mjs", "모든 Bash·Write·Edit 호출 · 약 100ms", c.cardBorder);
   const pills = [["주민등록번호 → 차단", c.red, c.card], ["말투 → 경고", c.amber, c.card], ["코드 · 식별자 → 손대지 않음", c.muted, c.card]];
   let px = 46;
   pills.forEach(([label, tone]) => {
