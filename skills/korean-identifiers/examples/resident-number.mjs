@@ -101,7 +101,9 @@ function buildClean(line) {
 // 점·밑줄·슬래시는 실측 후 뺐다 — 부동소수점, 날짜/번호 나열, `ORD_`·`IMG_` 류
 // 식별자와 겹친다. hooks/lib/pii.mjs 의 SEP 설명을 참고할 것.
 const SEP = "(?: ?- ?| {1,2})";
-const CANDIDATE_SEPARATED = new RegExp(`(?<![0-9.])([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`, "g");
+// 숫자 뒤의 '.' 만 소수점으로 보고 거른다. 글자 뒤의 '.' 는 문장부호일 뿐이라
+// ("No.900101-1234567") 앞자리 숫자를 막지 않는다. hooks/lib/pii.mjs 와 같다.
+const CANDIDATE_SEPARATED = new RegExp(`(?<![0-9])(?<![0-9]\\.)([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`, "g");
 const CANDIDATE_GLUED = /(?<![0-9A-Za-z_.])([0-9]{6})([1-8][0-9]{6})(?![0-9A-Za-z_])/g;
 
 // 콜론/대입 바로 앞의 키 이름 자체가 시간을 가리킬 때만 타임스탬프로 보고 넘어간다.
@@ -154,6 +156,21 @@ function scanLine(rawLine) {
   return results;
 }
 
+// 뒷자리 맨 앞 숫자(성별·세기 표시)가 가리키는 출생 세기. 1/2 는 1900년대,
+// 3/4 는 2000년대(내국인). 5/6·7/8 은 외국인 표시로 같은 세기를 가리킨다.
+const CENTURY_BASE = { 1: 1900, 2: 1900, 3: 2000, 4: 2000, 5: 1900, 6: 1900, 7: 2000, 8: 2000 };
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function daysInMonth(year, month) {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return DAYS_IN_MONTH[month - 1];
+}
+
 /**
  * 형식만 확인한다. 유효한 번호인지는 알 수 없다.
  *
@@ -174,7 +191,12 @@ export function looksLikeResidentNumber(value) {
   if (month < 1 || month > 12) return false;
   if (day < 1 || day > 31) return false;
   // 1~4 는 내국인, 5~8 은 외국인. 9·0 은 1900년 이전 출생으로 현재는 사실상 없다.
-  return genderDigit >= 1 && genderDigit <= 8;
+  if (genderDigit < 1 || genderDigit > 8) return false;
+
+  // 2월 30일처럼 형식은 맞아도 실재하지 않는 날짜는 거른다. 2월 29일은 세기 자리로
+  // 정해지는 실제 연도가 윤년일 때만 인정한다.
+  const year = CENTURY_BASE[genderDigit] + Number(digits.slice(0, 2));
+  return day <= daysInMonth(year, month);
 }
 
 /**

@@ -324,3 +324,43 @@ test("여야/여서도 숫자 뒤에서는 판정하지 않는다", () => {
   // 숫자가 아닌 낱말 뒤에서는 그대로 판정한다.
   assert.equal(correctParticle("commit", "여야"), "이어야");
 });
+
+// ── 같은 오류가 대량 반복될 때(결함 4) ────────────────────────
+
+test("같은 조사 오류가 수천 번 반복돼도 메시지는 한 줄로 묶고 건수를 센다", () => {
+  const text = "commit를 올렸습니다.\n".repeat(1000);
+  const found = findParticleErrors(text);
+  assert.equal(found.length, 1000, "탐지 자체는 전부 세야 한다");
+
+  const message = formatParticleErrors(found);
+  const bullets = message.split("\n").filter((line) => line.startsWith("- "));
+  assert.equal(bullets.length, 1, "종류가 하나면 줄도 하나여야 한다");
+  assert.match(bullets[0], /"commit를" → "commit을".*총 1000곳/);
+  assert.match(message, /1가지\(총 1000건\)/);
+});
+
+test("교정 종류가 많으면 목록에 상한을 두고 나머지는 개수로만 말한다", () => {
+  // 받침 있는 낱말(을/를이 틀리는 자리)만 골라야 낱말마다 실제로 서로 다른 교정이
+  // 하나씩 나온다 — LEXICON에서 받침 있는 낱말 25개를 모았다.
+  const words = [
+    "git", "commit", "webpack", "stack", "heap", "column", "function", "token",
+    "session", "stream", "hook", "timeout", "callback", "python", "kotlin", "bun",
+    "terraform", "spring", "tomcat", "maven", "storybook", "yarn", "pnpm", "iam", "cdn",
+  ];
+  const sentences = words.map((w) => `${w}를 확인`).join(" ");
+  const found = findParticleErrors(sentences);
+  assert.equal(found.length, words.length, "낱말마다 하나씩 잡혀야 시험 전제가 맞다");
+
+  const message = formatParticleErrors(found);
+  const bullets = message.split("\n").filter((line) => line.startsWith("- "));
+  assert.ok(bullets.length < found.length, "상한 없이 종류마다 다 나열하면 안 된다");
+  assert.match(message, /외 \d+가지 더/);
+});
+
+test("fixParticles 는 대량 반복 문서에서도 값이 맞다", () => {
+  const text = "commit를 올렸습니다.\n".repeat(500);
+  const fixed = fixParticles(text);
+  assert.equal(fixed.applied.length, 500);
+  assert.ok(!fixed.text.includes("commit를"), "고치지 않은 자리가 남았다");
+  assert.equal((fixed.text.match(/commit을/g) || []).length, 500);
+});

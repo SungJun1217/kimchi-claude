@@ -216,13 +216,49 @@ function extractTargets(toolName, toolInput) {
   return [];
 }
 
+// 같은 교정이 문서에 수천 번 반복될 수 있다(1.24M자 문서에서 실측: 3.6MB짜리 훅 JSON).
+// 종류별로 묶어 세지 않으면 systemMessage/additionalContext 가 건수에 비례해 커진다 —
+// particle.mjs의 formatParticleErrors, lint.mjs의 formatFindings와 같은 문제, 같은 해법이다.
+const MAX_LISTED_FIXES = 20;
+
+function groupApplied(applied) {
+  const groups = new Map();
+  for (const item of applied) {
+    const key = `${item.matched}\u0000${item.replacement}`;
+    const entry = groups.get(key);
+    if (entry) entry.count += 1;
+    else groups.set(key, { item, count: 1 });
+  }
+  return [...groups.values()];
+}
+
 function formatFixList(applied) {
-  return applied.map((item) => `- "${item.matched}" → "${item.replacement}"`).join("\n");
+  const entries = groupApplied(applied);
+  const listed = entries.slice(0, MAX_LISTED_FIXES);
+  const rest = entries.length - listed.length;
+  const lines = listed.map(
+    ({ item, count }) => `- "${item.matched}" → "${item.replacement}"${count > 1 ? ` (총 ${count}곳)` : ""}`
+  );
+  if (rest > 0) lines.push(`- 외 ${rest}가지 더`);
+  return lines.join("\n");
 }
 
 function describeFixes(applied) {
-  return [`한국어 표현 ${applied.length}건을 고쳤습니다.`, formatFixList(applied)].join("\n");
+  const distinct = groupApplied(applied).length;
+  const header =
+    distinct === applied.length
+      ? `한국어 표현 ${applied.length}건을 고쳤습니다.`
+      : `한국어 표현 ${distinct}가지(총 ${applied.length}건)를 고쳤습니다.`;
+  return [header, formatFixList(applied)].join("\n");
 }
+
+// 자동 교정은 updatedInput 필드에 고친 문서 전체를 그대로 되실어 보낸다. 문서가 크면
+// 훅 JSON 자체가 그만큼 커진다(실측: 2.48MB 문서 → 출력 JSON 2.6MB). fixParticles/
+// applyFixes 를 선형으로 고쳐도(0.14.13) 계산·직렬화·쓰기가 모두 안전 타이머(guard.mjs,
+// 4초) 안에 끝난다는 보장은 문서 크기가 무한이면 성립하지 않는다. 이 상한을 넘는
+// 대상은 자동 교정을 건너뛰고 원본 그대로 둔다 — PostToolUse 의 warnAboutTone 이
+// 이어받아 경고만 한다.
+const MAX_AUTOFIX_CHARS = 2_000_000;
 
 export function autofixOrBlock(toolName, toolInput, targets, rules) {
   if (blockEnabled()) {
@@ -238,6 +274,13 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
       },
     };
   }
+
+  // 자동 교정은 updatedInput에 고친 문서 전체를 되실어 보낸다. MultiEdit처럼 대상이
+  // 여럿이면 편집 하나하나는 상한 밑이어도 다 더하면 넘을 수 있다 — 훅 JSON 크기를
+  // 결정하는 것은 호출 전체이지 대상 하나가 아니다. 합쳐서 넘으면 이 호출 전체에서
+  // 자동 교정을 건너뛴다(PostToolUse의 warnAboutTone이 이어받는다).
+  const totalChars = targets.reduce((sum, target) => sum + (typeof target.text === "string" ? target.text.length : 0), 0);
+  if (totalChars > MAX_AUTOFIX_CHARS) return null;
 
   // 자동 교정. 원본을 그대로 유지한 채 필드별로 바꿔 넣는다.
   const updatedInput = { ...toolInput };
@@ -277,7 +320,11 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
       for (const edit of edits) command = command.slice(0, edit.start) + edit.writeText + command.slice(edit.end);
       updatedInput.command = command;
       changed = true;
-      for (const edit of edits) applied.push(...edit.applied);
+      // spread(...edit.applied)는 함수 호출 인자 개수 상한(수만 건)에 걸려 대량
+      // 반복 문서에서 "Maximum call stack size exceeded"로 죽는다(실측). 원소를 하나씩 민다.
+      for (const edit of edits) {
+        for (const item of edit.applied) applied.push(item);
+      }
     }
   } else {
     for (const target of targets) {
@@ -294,7 +341,9 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
         updatedInput[target.field] = fixed.text;
         changed = true;
       }
-      applied.push(...fixed.applied);
+      // spread(...fixed.applied)는 함수 호출 인자 개수 상한에 걸려 대량 반복 문서에서
+      // 죽는다(실측, 위 Bash 분기와 같은 문제). 원소를 하나씩 민다.
+      for (const item of fixed.applied) applied.push(item);
     }
   }
 

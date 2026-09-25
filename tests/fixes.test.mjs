@@ -319,3 +319,34 @@ test("실제 규칙표: 계사·랑의 축약형이 깨지면 자동 교정을 �
     assert.equal(applyFixes(sentence, rules).text, sentence, sentence);
   }
 });
+
+// ── 같은 규칙이 문서에 많이 반복될 때 전부 고친다(결함 5, 2차 검토) ────
+
+test("규칙당 보고 상한(3건)과 무관하게 같은 규칙의 매치를 전부 고친다", () => {
+  // lint()의 보고 상한을 그대로 쓰면 "디렉토리" 10번 중 3번만 고치고도 "10건을
+  // 고쳤습니다"라고 말하는 불일치가 생긴다(실측: 300KB 문서에서 2838건 중 2835건만
+  // 고쳐졌다). applyFixes는 이 상한을 쓰지 않는다.
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const sentence = Array.from({ length: 10 }, (_, i) => `${i}번째 디렉토리를 만든다.`).join(" ");
+  const result = applyFixes(sentence, rules);
+
+  assert.equal(result.applied.length, 10, "10건 모두 고쳐야 한다");
+  assert.equal((result.text.match(/디렉토리/g) || []).length, 0, "안 고친 디렉토리가 남았다");
+  assert.equal((result.text.match(/디렉터리/g) || []).length, 10);
+});
+
+test("타이밍: 같은 규칙이 대량 반복돼도 자동 교정은 선형에 가깝게 끝난다(이차 비용 회귀 방지)", () => {
+  const rule2 = { bad: "가나", good: "다라", why: "t", check: "치환", priority: "보통", source: "test" };
+  const timeFor = (reps) => {
+    const text = "가나 ".repeat(reps);
+    const start = Date.now();
+    const result = applyFixes(text, [rule2]);
+    assert.equal(result.applied.length, reps);
+    return Date.now() - start;
+  };
+  const small = timeFor(20000);
+  const large = timeFor(160000); // 8배
+  console.log(`    자동 교정 2만건: ${small}ms, 16만건: ${large}ms`);
+  // 이차 비용이면 8배 입력이 64배 가까이 걸린다. 선형이면 8배 안팎에 머문다.
+  assert.ok(large < small * 15 + 200, `16만건(${large}ms)이 2만건(${small}ms)에 견줘 이차 비용처럼 늘었다`);
+});

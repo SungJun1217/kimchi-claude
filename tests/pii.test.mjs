@@ -81,6 +81,23 @@ test("생년월일이 말이 되지 않으면 넘긴다", () => {
   assert.equal(findResidentNumbers("900100-1234567").length, 0, "0일");
 });
 
+test("달마다 실제 있는 날짜인지까지 본다 — 2월 30일은 없다", () => {
+  // 월별 일수만 따로 보지 않고 1~31 을 모두 허용하면 2월 30일 같은 실재하지 않는
+  // 날짜도 통과한다.
+  assert.equal(findResidentNumbers("900230-1234567").length, 0, "2월 30일은 없다");
+  assert.equal(findResidentNumbers("900431-1234567").length, 0, "4월 31일은 없다");
+  assert.equal(findResidentNumbers("900631-1234567").length, 0, "6월 31일은 없다");
+});
+
+test("2월 29일은 세기 자리로 정해지는 실제 연도가 윤년일 때만 인정한다", () => {
+  // 뒷자리 첫 숫자(성별 표시)가 세기를 정한다. 1/2 → 1900년대, 3/4 → 2000년대.
+  assert.equal(findResidentNumbers("000229-1234567").length, 0, "1900년은 윤년이 아니다");
+  assert.equal(findResidentNumbers("000229-3234567").length, 1, "2000년은 윤년이다");
+  assert.equal(findResidentNumbers("040229-3234567").length, 1, "2004년은 윤년이다");
+  assert.equal(findResidentNumbers("010229-3234567").length, 0, "2001년은 윤년이 아니다");
+  assert.equal(findResidentNumbers("960229-1234567").length, 1, "1996년은 윤년이다");
+});
+
 test("성별 자리가 범위를 벗어나면 넘긴다", () => {
   assert.equal(findResidentNumbers("900101-9234567").length, 0, "9는 쓰이지 않는다");
   assert.equal(findResidentNumbers("900101-0234567").length, 0, "0은 쓰이지 않는다");
@@ -378,6 +395,15 @@ test("유닉스 밀리초 타임스탬프는 JSON 값·대입문 문맥에서 �
 test("소수점 뒤에 붙은 13자리는 잡지 않는다", () => {
   assert.equal(findResidentNumbers("127.1201151234567").length, 0);
   assert.equal(findResidentNumbers("0.9001011234567").length, 0);
+});
+
+test("숫자 뒤의 점만 소수점으로 거르고, 글자 뒤의 점은 구분자 앞을 막지 않는다", () => {
+  // "No.900101-1234567"·"…번호.900101-1234567" 처럼 글자 뒤에 점이 와도 실제로는
+  // 문장부호일 뿐이다 — 앞자리 숫자가 소수점 뒤에 있는 것과 다르다.
+  assert.equal(findResidentNumbers("주민번호 No.900101-1234567").length, 1, "글자 뒤 점은 막지 않는다");
+  assert.equal(findResidentNumbers("주민등록번호.900101-1234567").length, 1, "글자 뒤 점은 막지 않는다");
+  assert.equal(findResidentNumbers("1.900101-1234567").length, 0, "숫자 뒤 점은 소수점으로 본다");
+  assert.equal(findResidentNumbers("v1.900101-1234567").length, 0, "버전 문자열의 소수점도 막는다");
 });
 
 test("구분자가 있는 형태는 문맥과 무관하게 여전히 의심한다", () => {

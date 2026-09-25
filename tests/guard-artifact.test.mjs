@@ -5,7 +5,8 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractCommitMessages, extractTargets } from "../hooks/lib/artifact.mjs";
+import { extractCommitMessages, extractTargets, autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
+import { fastestMs } from "./helpers.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "guard.mjs");
@@ -487,4 +488,126 @@ test("이 저장소의 생성물과 규칙 자료는 선언으로 걸러진다",
   for (const file of ["output-styles/natural-korean.md", "rules/terms.md", "rules/observed.md"]) {
     assert.equal(extractTargets("Edit", { file_path: join(ROOT, file), new_string: content }).length, 0, file);
   }
+});
+
+// ── 대량 반복 문서에서 메시지 크기와 처리 시간(결함 4, 5) ────────
+
+test("자동 교정 메시지는 같은 교정이 수천 번 반복돼도 종류별로 묶고 건수만 센다", () => {
+  // 실제 훅 프로세스(runHook)를 거치면 큰 출력이 execFileSync 의 기본 stdout 버퍼
+  // 한도를 넘어 ENOBUFS 로 죽는다 — 여기서 재는 것은 메시지 크기 자체이므로 라이브러리를
+  // 직접 부른다.
+  const rules = loadToneRules();
+  const content = "commit를 올렸습니다.\n".repeat(1000);
+  const toolInput = { file_path: "notes.md", content };
+  const targets = extractTargets("Write", toolInput);
+  let output;
+  process.env.KIMCHI_AUTOFIX = "1";
+  try {
+    output = autofixOrBlock("Write", toolInput, targets, rules);
+  } finally {
+    delete process.env.KIMCHI_AUTOFIX;
+  }
+  assert.ok(output, "자동 교정이 전혀 동작하지 않았다");
+
+  const bullets = output.systemMessage.split("\n").filter((line) => line.startsWith("- "));
+  assert.equal(bullets.length, 1, "교정 종류가 하나면 줄도 하나여야 한다");
+  assert.match(bullets[0], /총 1000곳/);
+  assert.match(output.systemMessage, /1가지\(총 1000건\)/);
+  // 모델에게 닿는 목록도 같은 크기로 줄어야 한다 — additionalContext 가 systemMessage 를
+  // 그대로 옮긴 값이라 여기서 부풀면 3.6MB짜리 훅 JSON(실측)으로 되돌아간다.
+  assert.ok(
+    output.hookSpecificOutput.additionalContext.length < 2000,
+    "additionalContext 가 여전히 건수에 비례해 커진다"
+  );
+});
+
+test("자동 교정 메시지의 건수는 실제로 고친 건수와 같다(규칙당 보고 상한과 무관하게 전부 고친다)", () => {
+  // lint()의 규칙당 보고 상한(3건)을 자동 교정에도 그대로 쓰면 "디렉토리" 10번 중
+  // 3번만 고치고도 메시지는 "10건을 고쳤습니다"라고 말하는 불일치가 생긴다.
+  const rules = loadToneRules();
+  const content = Array.from({ length: 10 }, (_, i) => `${i}번째 디렉토리를 만든다.`).join(" ");
+  const toolInput = { file_path: "notes.md", content };
+  const targets = extractTargets("Write", toolInput);
+  let output;
+  process.env.KIMCHI_AUTOFIX = "1";
+  try {
+    output = autofixOrBlock("Write", toolInput, targets, rules);
+  } finally {
+    delete process.env.KIMCHI_AUTOFIX;
+  }
+
+  assert.ok(output, "자동 교정이 전혀 동작하지 않았다");
+  // 매치 문자열("디렉토리"→"디렉터리")이 전부 같아 한 줄로 묶이지만, 괄호 안 건수는
+  // 실제로 고친 건수(10)와 같아야 한다.
+  assert.match(output.systemMessage, /\(총 10건\)/);
+  assert.match(output.systemMessage, /총 10곳/);
+  assert.equal((output.hookSpecificOutput.updatedInput.content.match(/디렉토리/g) || []).length, 0, "안 고친 디렉토리가 남았다");
+  assert.equal((output.hookSpecificOutput.updatedInput.content.match(/디렉터리/g) || []).length, 10);
+});
+
+test("자동 교정은 문서가 너무 크면 건드리지 않고 원본 그대로 둔다", () => {
+  // updatedInput 이 고친 파일 전체를 되싣기 때문에, 상한 없이 큰 문서를 교정하면 훅
+  // JSON 자체가 그만큼 커진다(실측: 2.48MB 문서 → 2.6MB JSON). 상한을 넘는 문서는
+  // 자동 교정을 건너뛰고 PostToolUse 경고에 맡긴다.
+  const rules = loadToneRules();
+  const content = "commit를 올렸습니다. 디렉토리를 만든다.\n".repeat(100000); // 약 2.5MB
+  const toolInput = { file_path: "notes.md", content };
+  const targets = extractTargets("Write", toolInput);
+  let output;
+  process.env.KIMCHI_AUTOFIX = "1";
+  try {
+    output = autofixOrBlock("Write", toolInput, targets, rules);
+  } finally {
+    delete process.env.KIMCHI_AUTOFIX;
+  }
+  assert.equal(output, null, "상한을 넘는 문서인데 자동 교정이 실행됐다");
+});
+
+test("자동 교정 상한은 대상 하나가 아니라 호출 전체(대상을 다 합친 길이)로 본다", () => {
+  // MultiEdit처럼 대상이 여럿이면, 편집 하나하나는 상한(200만자) 밑이어도 다 더하면
+  // 넘을 수 있다 — 훅 JSON 크기를 결정하는 것은 호출 전체다. 대상별 검사만 있으면
+  // 이 경우를 놓친다.
+  const rules = loadToneRules();
+  const chunk = "commit를 확인. ".repeat(90000); // 약 108만자, 개별로는 상한 밑
+  assert.ok(chunk.length < 2_000_000, "개별 대상이 상한을 넘으면 시험 전제가 깨진다");
+  assert.ok(chunk.length * 2 > 2_000_000, "둘을 합쳐도 상한을 안 넘으면 시험 전제가 깨진다");
+
+  const targets = [
+    { label: "notes.md", text: chunk, field: "content" },
+    { label: "notes.md", text: chunk, field: "content2" },
+  ];
+  let output;
+  process.env.KIMCHI_AUTOFIX = "1";
+  try {
+    output = autofixOrBlock("Write", { file_path: "notes.md" }, targets, rules);
+  } finally {
+    delete process.env.KIMCHI_AUTOFIX;
+  }
+  assert.equal(output, null, "대상 각각은 상한 밑인데 합쳐서 상한을 넘겨도 자동 교정이 실행됐다");
+});
+
+test("타이밍: 자동 교정은 큰 문서에서도 선형에 가깝게 끝난다(이차 비용 회귀 방지)", () => {
+  const rules = loadToneRules();
+  const unit = "commit를 올렸습니다. 디렉토리를 만든다.\n";
+  const timeFor = (mb) => {
+    const reps = Math.round((mb * 1_000_000) / unit.length);
+    const content = unit.repeat(reps);
+    const toolInput = { file_path: "notes.md", content };
+    const targets = extractTargets("Write", toolInput);
+    // runs=1: 비율만 보면 되고, 다른 시험과 병렬로 돌 때의 흔들림보다 시험 전체
+    // 실행 시간을 줄이는 쪽이 낫다(재측정 없이도 이차 비용 회귀는 비율에 그대로 남는다).
+    return fastestMs(() => autofixOrBlock("Write", toolInput, targets, rules), 1);
+  };
+  let small;
+  let large;
+  process.env.KIMCHI_AUTOFIX = "1";
+  try {
+    small = timeFor(0.1);
+    large = timeFor(0.4); // 4배 큰 입력
+  } finally {
+    delete process.env.KIMCHI_AUTOFIX;
+  }
+  console.log(`    자동 교정 0.1MB: ${small}ms, 0.4MB: ${large}ms`);
+  // 이차 비용이면 4배 입력이 16배 가까이 걸린다. 선형이면 4배 안팎에 머문다.
+  assert.ok(large < small * 8 + 200, `0.4MB(${large}ms)가 0.1MB(${small}ms)에 견줘 이차 비용처럼 늘었다`);
 });

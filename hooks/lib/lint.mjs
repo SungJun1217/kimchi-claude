@@ -26,12 +26,25 @@ const MAX_HITS_PER_RULE = 3;
 // 반복한 문서에서 진짜 "커플링이 높습니다."가 뒤에 와도, 경계에 막힌 50번이 이 상한을
 // 먼저 채워 버리면 진짜 지적을 하나도 못 잡는다. 대신 정규식이 도는 횟수 자체는
 // MAX_PATTERN_ITERATIONS 로 따로 막는다.
+//
+// 이 상한은 **보고**(lint()의 기본값) 전용이다. 자동 교정(applyFixes)은 문서에 실제로
+// 있는 만큼 다 고쳐야 한다 — 이 상한을 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고
+// 말하는" 불일치가 생긴다(실측, 0.14.13). applyFixes는 MAX_AUTOFIX_HITS_PER_RULE을
+// 대신 쓴다.
 const MAX_RAW_HITS_PER_RULE = 50;
 
 // 경계에 막혀 버려지는 매치까지 포함한, 정규식이 한 규칙당 돌 수 있는 총 횟수의 상한.
 // MAX_RAW_HITS_PER_RULE 보다 넉넉해야 "경계에 막힌 매치가 많은 문서"에서도 진짜 매치를
 // 찾을 때까지 계속 돈다.
 const MAX_PATTERN_ITERATIONS = 1000;
+
+// 자동 교정 전용 상한. artifact.mjs의 MAX_AUTOFIX_CHARS(2,000,000자)가 이미 문서 크기를
+// 막아 두므로, 그 문서 안에서 규칙 하나(최소 매치 길이 MIN_LITERAL_LENGTH=2)가 이론상
+// 가질 수 있는 매치 수의 상한(100만)을 그대로 쓴다 — 실측한 실제 문서(2838건)보다
+// 훨씬 여유 있게 잡아, 문서 크기 제한 안에서는 "일부만 고치고 다 고쳤다고 말하는" 일이
+// 없다. 그래도 무한은 아니어야 병적인 입력에서 정규식이 무한히 돌지 않는다.
+const MAX_AUTOFIX_HITS_PER_RULE = 1_000_000;
+const MAX_AUTOFIX_PATTERN_ITERATIONS = 2_000_000;
 
 const HANGUL_START = 0xac00;
 const HANGUL_END = 0xd7a3;
@@ -652,6 +665,24 @@ function resolveOverlaps(findings) {
     (hasInteriorWildcard(finding.bad) ? wildcard : plain).push(finding);
   }
 
+  // 흔한 경우(실제로 겹치는 발견이 하나도 없음)는 훑기 한 번으로 끝낸다. 아래의
+  // 길이 내림차순 삽입은 규칙마다 서로 다른 길이가 뒤섞여 끼어드는 자리가 흩어지면
+  // splice 가 매번 배열 중간을 옮겨 이차 비용이 된다(실측: 서로 다른 두 규칙이
+  // 30만 건 뒤섞인 문서에서 3.5초). 대부분의 문서는 애초에 겹치는 발견이 없으므로
+  // — "루즈 커플링"처럼 한 규칙이 다른 규칙 안에 포함되는 경우만 예외다 — index
+  // 오름차순으로 정렬한 뒤 인접한 것끼리만 겹치는지 한 번 보고, 안 겹치면 그대로 돌려준다.
+  const byIndex = [...plain].sort((a, b) => a.index - b.index);
+  let hasOverlap = false;
+  for (let i = 1; i < byIndex.length; i += 1) {
+    if (byIndex[i - 1].index + byIndex[i - 1].length > byIndex[i].index) {
+      hasOverlap = true;
+      break;
+    }
+  }
+  if (!hasOverlap) {
+    return [...byIndex, ...wildcard].sort((a, b) => a.index - b.index);
+  }
+
   const ordered = plain.sort((a, b) => b.length - a.length || a.index - b.index);
   const accepted = [];
 
@@ -694,9 +725,19 @@ function capPerRule(findings) {
  *   범위를 정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
  * @param {Set<string>|null} [extraDefs] maskProtected에 그대로 전달한다. Edit/MultiEdit
  *   조각 밖의 참조식 링크 정의 라벨.
+ * @param {{capReporting?: boolean, maxHitsPerRule?: number, maxIterations?: number}} [options]
+ *   capReporting을 false로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)을 적용하지 않는다.
+ *   applyFixes가 문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다 — 원시 매치·반복 상한도
+ *   함께 넉넉히 올려야 그만큼 찾힌다(maxHitsPerRule/maxIterations).
  * @returns {object[]}
  */
-export function lint(text, rules, ext, extraDefs) {
+export function lint(text, rules, ext, extraDefs, options = {}) {
+  const {
+    capReporting = true,
+    maxHitsPerRule = MAX_RAW_HITS_PER_RULE,
+    maxIterations = MAX_PATTERN_ITERATIONS,
+  } = options;
+
   if (typeof text !== "string" || text.length === 0) return [];
   if (!Array.isArray(rules)) return [];
   if (isIgnoredFile(text)) return [];
@@ -720,8 +761,8 @@ export function lint(text, rules, ext, extraDefs) {
     let iterations = 0;
     let match;
     while (
-      hits < MAX_RAW_HITS_PER_RULE &&
-      iterations < MAX_PATTERN_ITERATIONS &&
+      hits < maxHitsPerRule &&
+      iterations < maxIterations &&
       (match = pattern.exec(masked)) !== null
     ) {
       iterations += 1;
@@ -745,7 +786,8 @@ export function lint(text, rules, ext, extraDefs) {
     }
   }
 
-  return capPerRule(resolveOverlaps(findings));
+  const resolved = resolveOverlaps(findings);
+  return capReporting ? capPerRule(resolved) : resolved;
 }
 
 /**
@@ -767,7 +809,16 @@ export function applyFixes(text, rules, ext, extraDefs) {
 
   // `검사` 칸이 치환인 것은 규칙을 쓴 사람의 의사 표시이고, 실제로 꽂을 수 있는지는
   // autoFixReplacement 가 따로 판정한다. 둘을 모두 만족해야 고친다.
-  const candidates = lint(text, rules, ext, extraDefs).filter((finding) => finding.check === CHECK_SUBSTITUTE);
+  //
+  // lint()의 기본 상한(규칙당 3건 보고)을 그대로 쓰지 않는다 — 자동 교정은 문서에 실제로
+  // 있는 만큼 다 고쳐야 한다. 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고 말하는"
+  // 불일치가 생긴다(실측, 0.14.13). capReporting: false로 규칙당 보고 상한을 끄고,
+  // 원시 매치·반복 상한도 자동 교정 전용 값으로 넉넉히 올린다.
+  const candidates = lint(text, rules, ext, extraDefs, {
+    capReporting: false,
+    maxHitsPerRule: MAX_AUTOFIX_HITS_PER_RULE,
+    maxIterations: MAX_AUTOFIX_PATTERN_ITERATIONS,
+  }).filter((finding) => finding.check === CHECK_SUBSTITUTE);
 
   // lint() 는 매치를 NFC로 정규화한 사본에서 찾으므로, 찾은 index는 그 사본 기준이다.
   // text가 이미 NFC면 사본과 원본이 같아 인덱스가 그대로 맞는다. NFD로 들어온 텍스트를
@@ -785,17 +836,21 @@ export function applyFixes(text, rules, ext, extraDefs) {
     };
   }
 
-  // 뒤에서부터 고친다. 앞쪽을 먼저 고치면 뒤쪽 위치가 어긋난다.
-  //
   // 겹침은 이미 lint() 안의 resolveOverlaps 가 해소했다 — 물결표가 있는 문장 패턴
   // 규칙만 그 해소에서 빠지는데, 그 규칙들은 bad 안에 물결표가 있어 autoFixReplacement 가
-  // 항상 null 을 돌려주므로 애초에 갈아 끼우지 않는다. 그래서 여기서 candidates 끼리
-  // 겹칠 일이 없고, 별도의 겹침 검사가 필요 없다.
-  const ordered = [...candidates].sort((a, b) => b.index - a.index);
+  // 항상 null 을 돌려주므로 애초에 갈아 끼우지 않는다. 그래서 candidates 끼리 겹칠 일이
+  // 없고, index 오름차순으로 이미 정렬되어 있다(lint()의 resolveOverlaps가 그렇게 돌려준다).
+  //
+  // 조사 위험 판정(particleRisk)은 뒤(오른쪽)부터 해야 한다. 두 매치가 맞닿아 있으면
+  // ("계약이 얇 계약이 얇다"처럼) 왼쪽 매치의 nextChar가 오른쪽 매치를 실제로 고칠지
+  // 여부에 달려 있는데, 그 답은 오른쪽부터 판정해야 먼저 나온다. 다만 예전처럼 판정마다
+  // 전체 문자열을 자르고 이으면 매치 수 × 문서 길이에 비례해 느려진다(실측: fixParticles의
+  // 같은 문제로 1.2MB 문서에서 10초 넘게 걸렸다, 0.14.13). 그래서 판정은 오른쪽부터 하되
+  // 결과만 기록하고, 문자열 조립은 왼쪽에서 오른쪽으로 한 번만 훑는다.
+  const outcomes = new Array(candidates.length);
 
-  let result = text;
-
-  for (const finding of ordered) {
+  for (let i = candidates.length - 1; i >= 0; i -= 1) {
+    const finding = candidates[i];
     const end = finding.index + finding.length;
     const replacement = autoFixReplacement(finding);
     if (replacement === null) {
@@ -803,19 +858,38 @@ export function applyFixes(text, rules, ext, extraDefs) {
       continue;
     }
 
-    const nextChar = result[end] ?? "";
-    const prevChar = result[finding.index - 1] ?? "";
+    // 바로 다음 매치가 이 매치에 맞닿아 있으면(둘 사이에 원문이 없으면) 그 매치가 실제로
+    // 적용됐는지에 따라 nextChar가 달라진다. 적용됐으면 그 교정 결과의 첫 글자, 건너뛰었거나
+    // 안 맞닿았으면 원문 그대로다 — 어느 쪽이든 이 자리는 다른 매치가 손대지 않았으므로
+    // 원문에서 그대로 읽어도 안전하다.
+    const next = candidates[i + 1];
+    const nextOutcome = i + 1 < outcomes.length ? outcomes[i + 1] : undefined;
+    const nextChar = next && next.index === end && nextOutcome ? nextOutcome.replacement[0] ?? "" : text[end] ?? "";
+    // prevChar는 항상 아직 판정하지 않은 왼쪽 매치 앞이라 원문 그대로다(오른쪽부터
+    // 판정하므로 왼쪽은 아직 안 바뀐 것으로 본다 — 예전 구현도 같은 순서였다).
+    const prevChar = text[finding.index - 1] ?? "";
     const risk = particleRisk(finding.matched, replacement, nextChar, prevChar);
     if (risk !== null) {
       skipped.push({ ...finding, reason: risk });
       continue;
     }
 
-    result = result.slice(0, finding.index) + replacement + result.slice(end);
-    applied.push({ ...finding, replacement });
+    outcomes[i] = { replacement };
   }
 
-  return { text: result, applied: applied.reverse(), skipped };
+  const pieces = [];
+  let cursor = 0;
+  for (let i = 0; i < candidates.length; i += 1) {
+    const outcome = outcomes[i];
+    if (!outcome) continue;
+    const finding = candidates[i];
+    pieces.push(text.slice(cursor, finding.index), outcome.replacement);
+    cursor = finding.index + finding.length;
+    applied.push({ ...finding, replacement: outcome.replacement });
+  }
+  pieces.push(text.slice(cursor));
+
+  return { text: pieces.join(""), applied, skipped };
 }
 
 /**

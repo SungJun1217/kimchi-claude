@@ -20,7 +20,7 @@
 // 사용법:
 //   node scripts/import-corpus.mjs corpus.json
 //   node scripts/import-corpus.mjs corpus.json --dry-run
-//   node scripts/import-corpus.mjs --recheck     기존 rules/*.md 의 검사 칸만 다시 계산
+//   node scripts/import-corpus.mjs --recheck     기존 rules/*.md 의 검사 칸을 치환→정규식으로만 강등
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -32,7 +32,15 @@ import {
   stripWildcardEdges,
   autoFixReplacement,
 } from "../hooks/lib/lint.mjs";
-import { loadRules, parseTable, kindTag, PRIORITIES, CHECK_PROMPT } from "../hooks/lib/rules.mjs";
+import {
+  loadRules,
+  parseTable,
+  kindTag,
+  PRIORITIES,
+  CHECK_PROMPT,
+  CHECK_SUBSTITUTE,
+  CHECK_REGEX,
+} from "../hooks/lib/rules.mjs";
 import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -174,7 +182,12 @@ export function recheckLine(line, name, changes) {
   if (rule.check === CHECK_PROMPT) return line;
 
   const next = decideCheck({ ...rule, lintable: true });
-  if (next === rule.check || next === CHECK_PROMPT) return line;
+  if (next === rule.check) return line;
+  // 재계산은 강등만 한다 — decideCheck 는 "기계적 치환이 되는가"만 보므로 손으로
+  // 내려 둔 정규식 규칙(예: "로그" 같은 다른 뜻과 겹치는 말)을 다시 치환으로 되돌릴 수
+  // 있다. 치환 → 정규식만 허용하고, 정규식 → 치환과 프롬프트로의 이동은 사람 판단이므로
+  // 건드리지 않는다.
+  if (!(rule.check === CHECK_SUBSTITUTE && next === CHECK_REGEX)) return line;
 
   changes.push(`${name}: "${rule.bad}" ${rule.check} → ${next}`);
   // rule.why 는 parseTable 이 [표기]/[외래어] 표지를 이미 떼어낸 값이다. 표지를
