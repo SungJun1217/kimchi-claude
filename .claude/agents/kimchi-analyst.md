@@ -39,7 +39,7 @@ If a conclusion touches any of these, **say so explicitly**.
 7. `SKILL.md` frontmatter starts on line 1; referenced files exist; examples run in `npm test`; changing values aren't hardcoded.
 8. Repo Korean docs pass the repo's own linter; quoted bad examples sit inside `kimchi-ignore` markers.
 9. A wrong rule entry is harm. Entries carry a reason; legitimate-use exclusions are documented.
-10. Zero dependencies; hooks stay cheap (~80 ms per tool call measured).
+10. Zero dependencies; hooks stay cheap (~100 ms per tool call measured, ~80 ms of it Node startup).
 
 ## How to work
 
