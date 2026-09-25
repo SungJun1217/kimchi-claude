@@ -187,10 +187,12 @@ test("긴 쪽이 조사 때문에 위험하면 짧은 쪽으로 물러나지 않
   assert.equal(skipped[0].bad, "얇은 계약");
 });
 
-test("실제 규칙표: '루즈 커플링'과 '커플링'이 각각 옳게 고쳐진다", () => {
+test("실제 규칙표: '루즈 커플링'은 고쳐지고, 짧은 '디펜던시'도 따로 옳게 고쳐진다", () => {
+  // "커플링"은 일상어(TV·전기 커플링)로도 쓰여 0.14.10에서 정규식(경고만)으로 내렸다.
+  // 겹침 해소 자체는 여전히 살아 있는지 확인하려면 자동 교정이 남아 있는 다른 짧은 규칙이 필요하다.
   const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
   assert.equal(applyFixes("루즈 커플링 구조로 바꿨습니다.", rules).text, "느슨한 결합 구조로 바꿨습니다.");
-  assert.equal(applyFixes("커플링 문제입니다.", rules).text, "결합도 문제입니다.");
+  assert.equal(applyFixes("디펜던시 문제입니다.", rules).text, "의존성 문제입니다.");
 });
 
 test("실제 규칙표: '타이트 커플링'도 '커플링'에 먼저 삼켜지지 않고 옳게 고쳐진다", () => {

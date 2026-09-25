@@ -22,7 +22,10 @@ import {
   toPattern,
   applyFixes,
   autoFixReplacement,
+  alternativesOf,
+  primaryGood,
 } from "../hooks/lib/lint.mjs";
+import { fixParticles } from "../hooks/lib/particle.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { rules, skipped, files } = loadRules(join(ROOT, "rules"));
@@ -313,4 +316,106 @@ test("매니져와 메니져는 모두 매니저로 고쳐진다", () => {
 test("몇일째와 몇일간도 며칠로 고쳐진다", () => {
   assert.equal(applyFixes("몇일째 야근입니다.", rules).text, "며칠째 야근입니다.");
   assert.equal(applyFixes("몇일간 쉬었습니다.", rules).text, "며칠간 쉬었습니다.");
+});
+
+// ── 0.14.10 회귀 시험 ─────────────────────────────────────────
+// 안전하지 않은 치환(활용형에 따라 문장이 깨지거나, 일상어와 겹치거나, 왼쪽 경계를 보지
+// 않는 숫자 규칙이 다른 숫자 속을 잘못 잡는 경우)을 정규식(경고만)으로 내린 작업이다.
+
+test("쓰지 말 것은 alternativesOf 로 나눈 뒤에도 규칙 사이에서 겹치지 않는다", () => {
+  // " / "로 여러 대안을 적은 행이 있어도, 대안 하나하나가 다른 행의 금칙어와 같으면 안 된다.
+  // 같으면 두 행 중 어느 쪽을 적용해야 할지 알 수 없다.
+  //
+  // 행(rule 객체) 자체를 열쇠로 겹침을 판정한다. bad 문자열로 판정하면 "같은 bad, 같은
+  // good"인 진짜 중복 행(예전에 hanja.md/metaphors.md에 있던 행복한 길·변덕스러운 테스트·
+  // 여파가 미치는 범위)까지 "bad가 같으니 같은 규칙"이라며 봐줘 버려서 이 시험이 못 잡는다.
+  const seen = new Map();
+  const duplicates = [];
+  for (const rule of rules) {
+    for (const alt of alternativesOf(rule.bad)) {
+      const owner = seen.get(alt);
+      if (owner && owner !== rule) {
+        duplicates.push(
+          `"${alt}" 가 "${owner.source}:${owner.bad}" 와 "${rule.source}:${rule.bad}" 두 행에 걸쳐 나온다`
+        );
+      }
+      seen.set(alt, rule);
+    }
+  }
+  assert.deepEqual(duplicates, [], `\n${duplicates.join("\n")}`);
+});
+
+// "늘어놓기"·"올리기"처럼 동사를 명사형으로 적은 금칙어는 뒤에 "위해"·"쉽게"가 붙는
+// 활용 문맥에서 그대로 꽂으면 문장이 깨진다(정규식으로 내려 자동 교정은 하지 않는다).
+// 남은 두 행은 "기"로 끝나지만 그 자체로 굳은 명사(락 단위를 재는 크기, dirty read의
+// 읽기)라 이 시험의 대상이 아니다 — 접미사로 느슨하게 걸면 앞으로 들어올 진짜 위반까지
+// 조용히 가릴 수 있어, 금칙어 전체 문자열로만 정확히 예외를 둔다.
+const GI_ALLOWED_BAD = ["자물쇠 알갱이 크기", "더러운 읽기"];
+
+test("치환 규칙의 금칙어가 '기'로 끝나면 쓸 것도 '기'로 끝난다 (예외는 명시한다)", () => {
+  const mismatched = [];
+  for (const rule of rules) {
+    if (rule.check !== CHECK_SUBSTITUTE) continue;
+    const alts = alternativesOf(rule.bad);
+    const last = alts[alts.length - 1] ?? "";
+    if (!last.endsWith("기")) continue;
+    if (GI_ALLOWED_BAD.includes(last)) continue;
+    const good = primaryGood(rule.good);
+    if (!good.endsWith("기")) {
+      mismatched.push(`"${last}" → "${good}"`);
+    }
+  }
+  assert.deepEqual(mismatched, [], `\n${mismatched.join("\n")}`);
+});
+
+test("치환 규칙의 금칙어가 숫자로 시작하면 쓸 것도 같은 숫자로 시작한다", () => {
+  // 숫자로 시작하는 금칙어는 왼쪽 경계 검사를 하지 않는다(compilePattern이 한글만 본다).
+  // "13개의 파일"의 "3개의"까지 잡으면 안 되므로, 애초에 앞자리 숫자가 같은 자료만 남긴다.
+  const mismatched = [];
+  for (const rule of rules) {
+    if (rule.check !== CHECK_SUBSTITUTE) continue;
+    const alts = alternativesOf(rule.bad);
+    const last = alts[alts.length - 1] ?? "";
+    const digits = last.match(/^[0-9]+/)?.[0];
+    if (!digits) continue;
+    const good = primaryGood(rule.good);
+    if (!good.startsWith(digits)) {
+      mismatched.push(`"${last}" → "${good}"`);
+    }
+  }
+  assert.deepEqual(mismatched, [], `\n${mismatched.join("\n")}`);
+});
+
+test("골든 문장: 자동 교정 파이프라인을 그대로 통과한다", () => {
+  // fixParticles → applyFixes → fixParticles 는 hooks/lib/artifact.mjs 의 실제 순서다.
+  const pipeline = (text) => fixParticles(applyFixes(fixParticles(text).text, rules).text).text;
+
+  const unchanged = [
+    "계약이 두꺼워서 바꾸기 어렵습니다.",
+    "데이터를 차례로 늘어놓기 위해",
+    "제가 맡은 일은 끝났습니다.",
+    "선물 포장지를 샀다",
+    "세입자 퇴거 일정",
+    "심장 박동 수를 측정",
+    "AC 커플링 커패시터",
+    "건물 뒷문 열쇠",
+    "원하시면 환불해 드릴 수 있습니다.",
+    "13개의 파일을 수정했습니다.",
+    "설치 후 설정 파일을 확인하십시오.",
+    "회원 등급 올리기",
+    "이 작업은 더 쪼갤 수 없음.",
+    "캐시가 살아 있는 시간을 줄였다.",
+    "서버가 잘 안 죽는 구성으로 바꿨다.",
+    "새 API가 예전 것과도 맞는 구조입니다.",
+    "락을 해제하는 것은 중요합니다.",
+    "마이그레이션을 실행하는 것을 잊지 마세요.",
+    "이것은 가장 흔한 실수들 중의 하나입니다.",
+    "저는 이 부분이 원인이라고 생각합니다.",
+  ];
+  for (const sentence of unchanged) {
+    assert.equal(pipeline(sentence), sentence, sentence);
+  }
+
+  assert.equal(pipeline("제가 확인해 본 결과를 공유합니다."), "확인해 본 결과를 공유합니다.");
+  assert.equal(pipeline("패러렐리즘을 높였다"), "병렬성을 높였다");
 });
