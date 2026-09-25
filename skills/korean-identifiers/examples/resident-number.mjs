@@ -98,6 +98,41 @@ function buildClean(line) {
   return { chars, clean, map };
 }
 
+/**
+ * 원문을 탐지용으로 접되(보이지 않는 문자 제거, 대시류·공백류·숫자류 정규화),
+ * 접은 문자열(clean) 안의 위치를 원문의 실제 위치로 되짚을 수 있게 해 준다.
+ *
+ * 주민등록번호 말고 다른 패턴(전화번호 등)도 같은 접기 규칙으로 찾고, 찾은 자리를
+ * **원문 그대로**에서 가려야 할 때 쓴다 — clean 문자열을 그대로 돌려주면 원문에만
+ * 있던 표기(리가처, 로마 숫자, 단위 기호 등)가 관계없는 자리까지 바뀌어 나간다.
+ *
+ * @param {string} text
+ * @returns {{clean: string, spanToOriginal(cleanStart: number, cleanEnd: number): {start: number, end: number}}}
+ */
+export function foldForScan(text) {
+  const { chars, clean, map } = buildClean(text);
+
+  function spanToOriginal(cleanStart, cleanEnd) {
+    // 접을 게 없었으면(chars === null) clean 이 원문 그대로라 위치도 그대로 맞는다.
+    if (chars === null) return { start: cleanStart, end: cleanEnd };
+    const startCodePoint = map[cleanStart];
+    const endCodePoint = map[cleanEnd - 1] + 1;
+    const start = chars.slice(0, startCodePoint).join("").length;
+    const end = start + chars.slice(startCodePoint, endCodePoint).join("").length;
+    return { start, end };
+  }
+
+  return { clean, spanToOriginal };
+}
+
+// 구분자 없이 붙은 13자리("9001011234567", "주민번호9001011234567"). RESIDENT_NUMBER_PATTERN
+// 은 구분자가 있는 형태만 잡는다 — 자유 텍스트에서는 구분자 없이 그대로 붙여 넣는
+// 경우도 흔해서 따로 둔다. foldForScan() 이 돌려준 clean 문자열에만 쓴다(원문에
+// 전각 숫자가 섞이면 이 패턴의 [0-9] 로는 못 잡는다). 식별자 속(`order_9001011234567`)
+// 이나 소수점 뒤(`0.9001011234567`)에서는 잡지 않는다 — hooks/lib/pii.mjs 의
+// CANDIDATE_GLUED 와 같은 이유다.
+export const RESIDENT_NUMBER_GLUED_PATTERN = /(?<![0-9A-Za-z_.])[0-9]{6}[1-8][0-9]{6}(?![0-9A-Za-z_])/g;
+
 // 점·밑줄·슬래시는 실측 후 뺐다 — 부동소수점, 날짜/번호 나열, `ORD_`·`IMG_` 류
 // 식별자와 겹친다. hooks/lib/pii.mjs 의 SEP 설명을 참고할 것.
 const SEP = "(?: ?- ?| {1,2})";
@@ -105,6 +140,12 @@ const SEP = "(?: ?- ?| {1,2})";
 // ("No.900101-1234567") 앞자리 숫자를 막지 않는다. hooks/lib/pii.mjs 와 같다.
 const CANDIDATE_SEPARATED = new RegExp(`(?<![0-9])(?<![0-9]\\.)([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`, "g");
 const CANDIDATE_GLUED = /(?<![0-9A-Za-z_.])([0-9]{6})([1-8][0-9]{6})(?![0-9A-Za-z_])/g;
+
+// 구분자가 있는 형태를 탐지기(findResidentNumbers)와 똑같은 경계로 잡는다. 가리는 쪽이
+// 따로 패턴을 두면 "ID900101-1234567"처럼 탐지기는 잡는데 마스킹은 놓치는 틈이 생긴다.
+// foldForScan() 이 돌려준 clean 문자열에만 쓴다. lastIndex 를 탐지기와 나눠 쓰지 않도록
+// 따로 만든다.
+export const RESIDENT_NUMBER_SEPARATED_PATTERN = new RegExp(CANDIDATE_SEPARATED.source, "g");
 
 // 콜론/대입 바로 앞의 키 이름 자체가 시간을 가리킬 때만 타임스탬프로 보고 넘어간다.
 // 줄 전체에 시간 낱말이 있다는 것만으로는 부족하다 — 그러면 같은 줄의 다른 필드

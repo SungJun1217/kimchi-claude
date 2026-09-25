@@ -692,6 +692,240 @@ test("빈 값과 잘못된 입력에 안전하다", () => {
   assert.equal(masked.phone, undefined);
 });
 
+test("필드 이름 표기가 달라도 같은 필드로 알아본다", () => {
+  // resident_number·residentNumber·RESIDENT-NUMBER·RRN 이 관리자 화면마다 DB 컬럼명
+  // 관행(snake_case, camelCase, 대문자 약어)으로 갈려 온다. 정규화하지 않으면 하나만
+  // 맞고 나머지는 마스킹 없이 새 나갔다.
+  const { masked, warnings } = maskRecord({
+    resident_number: "900101-1234567",
+    phone_number: "010-1234-5678",
+    user_name: "홍길동",
+    RRN: "900101-1234567",
+  });
+  assert.equal(masked.resident_number, "900101-*******");
+  assert.equal(masked.phone_number, "010-****-5678");
+  assert.equal(masked.user_name, "홍*동");
+  assert.equal(masked.RRN, "900101-*******");
+  assert.deepEqual(warnings, []);
+});
+
+test("모르는 필드라도 값에 주민등록번호나 전화번호가 섞여 있으면 찾아 가린다", () => {
+  const { masked, warnings } = maskRecord({
+    memo: "연락처 010-1234-5678, 주민번호 900101-1234567 확인함",
+  });
+  assert.ok(!masked.memo.includes("1234-5678"));
+  assert.ok(!masked.memo.includes("1234567"));
+  assert.match(warnings[0], /memo 값에서 민감정보로 보이는 값을 찾아 가렸다/);
+});
+
+test("모르는 필드의 값에 민감정보가 없으면 그대로 둔다", () => {
+  const { masked, warnings } = maskRecord({ memo: "VIP 고객" });
+  assert.equal(masked.memo, "VIP 고객");
+  assert.deepEqual(warnings, []);
+});
+
+test("중첩된 객체와 배열도 재귀적으로 마스킹한다", () => {
+  const { masked } = maskRecord({
+    contact: { phone: "010-1234-5678", email: "hong@example.com" },
+    phones: ["010-1234-5678", "02-123-4567"],
+    history: [{ name: "홍길동", memo: "010-1234-5678로 연락" }],
+  });
+  assert.equal(masked.contact.phone, "010-****-5678");
+  assert.equal(masked.contact.email, "ho**@example.com");
+  assert.equal(masked.phones[0], "010-****-5678");
+  assert.equal(masked.phones[1], "02-****-4567");
+  assert.equal(masked.history[0].name, "홍*동");
+  assert.ok(!masked.history[0].memo.includes("1234-5678"));
+});
+
+test("같은 객체를 여러 필드가 공유해도 마스킹된 사본을 함께 쓴다", () => {
+  // 원본을 그대로 돌려주면 b 자리에서 마스킹 없는 phone·rrn 이 새어 나간다.
+  const shared = { phone: "010-1234-5678", rrn: "900101-1234567" };
+  const { masked } = maskRecord({ a: shared, b: shared });
+  assert.equal(masked.a.phone, "010-****-5678");
+  assert.equal(masked.b.phone, "010-****-5678");
+  assert.equal(masked.a, masked.b, "같은 사본을 재사용한다");
+  assert.notEqual(masked.b, shared);
+});
+
+test("배열 안에서 같은 객체를 공유해도 원본이 새지 않는다", () => {
+  const shared = { rrn: "900101-1234567" };
+  const { masked } = maskRecord({ items: [shared, shared] });
+  assert.equal(masked.items[0].rrn, "900101-*******");
+  assert.equal(masked.items[0], masked.items[1]);
+  assert.notEqual(masked.items[1], shared);
+});
+
+test("같은 배열을 정책이 다른 두 필드가 공유해도 각자의 정책대로 가린다", () => {
+  // 캐시를 값만으로 키로 삼으면 먼저 계산된 쪽(마스킹됐든 안 됐든)의 결과를
+  // 정책이 다른 자리에 그대로 돌려준다 — 순서에 따라 새는 게 갈렸다.
+  const names = ["홍길동", "김철수"];
+  const order1 = maskRecord({ tags: names, name: names });
+  assert.deepEqual(order1.masked.tags, ["홍길동", "김철수"], "마스커가 없는 자리는 그대로 둔다");
+  assert.deepEqual(order1.masked.name, ["홍*동", "김*수"], "마스커가 있는 자리는 가린다");
+
+  const order2 = maskRecord({ name: names, tags: names });
+  assert.deepEqual(order2.masked.tags, ["홍길동", "김철수"]);
+  assert.deepEqual(order2.masked.name, ["홍*동", "김*수"]);
+
+  const emails = ["hong@example.com"];
+  const order3 = maskRecord({ tags: emails, emails });
+  assert.deepEqual(order3.masked.tags, ["hong@example.com"]);
+  assert.deepEqual(order3.masked.emails, ["ho**@example.com"]);
+});
+
+test("글자에 붙거나 특이한 구분자로 이어진 주민등록번호도 자유 텍스트에서 찾는다", () => {
+  assert.ok(!maskRecord({ memo: "9001011234567" }).masked.memo.includes("1234567"), "구분자 없이 붙은 형태");
+  assert.ok(
+    !maskRecord({ memo: "주민번호9001011234567" }).masked.memo.includes("1234567"),
+    "글자 바로 뒤에 붙은 형태"
+  );
+  assert.ok(
+    !maskRecord({ memo: "900101-​1234567" }).masked.memo.includes("1234567"),
+    "제로폭 공백이 끼어든 형태"
+  );
+  assert.ok(!maskRecord({ memo: "900101–1234567" }).masked.memo.includes("1234567"), "en dash 구분자");
+});
+
+test("탐지기가 잡는 주민등록번호는 마스킹도 놓치지 않는다", () => {
+  // 가리는 쪽이 탐지기와 다른 경계를 쓰면, 글자나 밑줄 바로 뒤에 붙은 번호를
+  // 탐지기는 잡는데 마스킹은 그대로 흘렸다.
+  for (const memo of ["ID900101-1234567", "rrn900101-1234567", "x_900101-1234567", "No.900101-1234567"]) {
+    assert.deepEqual(residentNumber.findResidentNumbers(memo), ["900101-1234567"], memo);
+    const { masked, warnings } = maskRecord({ memo });
+    assert.ok(!masked.memo.includes("1234567"), memo);
+    assert.equal(warnings.length, 1, memo);
+  }
+});
+
+test("함수 값(특히 toJSON)은 마스킹된 결과에서 빼고 경고한다", () => {
+  // toJSON 이 원본 함수 그대로 옮겨지면, 다른 필드는 다 가려졌어도
+  // JSON.stringify(masked) 한 번에 클로저가 쥔 원본 민감정보가 새어 나간다.
+  const leaking = { a: 1, toJSON: () => ({ rrn: "900101-1234567" }) };
+  const nested = maskRecord({ x: leaking });
+  assert.equal(nested.masked.x.toJSON, undefined);
+  assert.ok(!JSON.stringify(nested.masked).includes("1234567"));
+  assert.match(nested.warnings.join(" "), /toJSON 값이 함수라 마스킹된 결과에서 뺐다/);
+
+  const top = maskRecord({ toJSON: () => ({ rrn: "900101-1234567" }), other: "ok" });
+  assert.equal(top.masked.toJSON, undefined);
+  assert.equal(top.masked.other, "ok");
+  assert.ok(!JSON.stringify(top.masked).includes("1234567"));
+});
+
+test("알려진 필드가 Date를 담고 있으면 통째로 가리고 경고한다", () => {
+  const { masked, warnings } = maskRecord({ rrn: new Date(0) });
+  assert.equal(masked.rrn, "****");
+  assert.match(warnings.join(" "), /rrn 값이 문자열이나 숫자가 아니라 통째로 가렸다/);
+});
+
+test("자유 텍스트를 가릴 때 찾은 구간만 바꾸고 나머지 표기는 그대로 둔다", () => {
+  // 예전에는 값 전체를 NFKC 로 접어 돌려줘서 리가처·단위 기호·원문자 같은 민감정보가
+  // 아닌 표기까지 바뀌어 나갔다.
+  const { masked } = maskRecord({ memo: "ﬁle ㎥ 010-1234-5678 ①" });
+  assert.equal(masked.memo, "ﬁle ㎥ ************* ①");
+});
+
+test("너무 깊게 중첩되면 그 지점부터 통째로 가리고 경고한다", () => {
+  // 한도를 넘는 지점부터 가린다 — 더 들어가지 않으므로 그 안의 rrn 은 절대 새지 않는다.
+  let deep = { rrn: "900101-1234567" };
+  for (let i = 0; i < 10; i += 1) deep = { child: deep };
+  const { masked, warnings } = maskRecord({ tree: deep });
+  assert.ok(!JSON.stringify(masked).includes("1234567"), "한도 너머의 rrn 이 새면 안 된다");
+  assert.match(warnings.join(" "), /너무 깊게 중첩되어 있어 통째로 가렸다/);
+});
+
+test("Date는 손대지 않고 그대로 지나간다", () => {
+  const when = new Date("2024-01-01T00:00:00.000Z");
+  const { masked, warnings } = maskRecord({ createdAt: when });
+  assert.equal(masked.createdAt, when);
+  assert.deepEqual(warnings, []);
+});
+
+test("Map·Buffer 같은 예외적 객체는 순회하지 않고 통째로 가린다", () => {
+  const { masked: maskedMap, warnings: warningsMap } = maskRecord({ meta: new Map([["rrn", "900101-1234567"]]) });
+  assert.equal(maskedMap.meta, "****");
+  assert.match(warningsMap.join(" "), /마스킹할 수 없는 객체 형식이라 통째로 가렸다/);
+
+  const { masked: maskedBuf, warnings: warningsBuf } = maskRecord({ file: Buffer.from("900101-1234567") });
+  assert.equal(maskedBuf.file, "****");
+  assert.match(warningsBuf.join(" "), /마스킹할 수 없는 객체 형식이라 통째로 가렸다/);
+});
+
+test("알려진 필드가 객체나 객체 배열을 담고 있으면 통째로 가리고 경고한다", () => {
+  const { masked, warnings } = maskRecord({
+    name: { first: "길동", last: "홍" },
+    rrn: { value: "900101-1234567" },
+  });
+  assert.equal(masked.name, "****");
+  assert.equal(masked.rrn, "****");
+  assert.match(warnings.join(" "), /name 값이 문자열이 아니라 객체라 통째로 가렸다/);
+  assert.match(warnings.join(" "), /rrn 값이 문자열이 아니라 객체라 통째로 가렸다/);
+});
+
+test("알려진 필드의 배열 안에 객체가 섞이면 통째로 가린다", () => {
+  const { masked, warnings } = maskRecord({ phones: ["010-1234-5678", { number: "010-1234-5678" }] });
+  assert.equal(masked.phones, "****");
+  assert.match(warnings.join(" "), /phones 값이 문자열이 아니라 배열이라 통째로 가렸다/);
+});
+
+test("모르는 필드의 숫자 값에서도 주민등록번호·전화번호를 찾아 가린다", () => {
+  const { masked, warnings } = maskRecord({ memo: 9001011234567, note: 1012345678 });
+  assert.equal(typeof masked.memo, "string");
+  assert.ok(!masked.memo.includes("1234567"));
+  assert.equal(typeof masked.note, "string");
+  assert.ok(!masked.note.includes("12345678"));
+  assert.equal(warnings.length, 2);
+});
+
+test("전각 숫자와 다양한 구분자로 섞인 자유 텍스트도 가린다", () => {
+  const { masked: m1 } = maskRecord({ memo: "연락처 ０１０-１２３４-５６７８ 입니다" });
+  assert.ok(!m1.memo.includes("１２３４"));
+
+  const { masked: m2 } = maskRecord({ memo: "010 1234 5678로 연락 주세요" });
+  assert.ok(!m2.memo.includes("1234 5678"));
+
+  const { masked: m3 } = maskRecord({ memo: "010.1234.5678로 연락 주세요" });
+  assert.ok(!m3.memo.includes("1234.5678"));
+
+  const { masked: m4 } = maskRecord({ memo: "주민번호 ９００１０１-１２３４５６７ 확인함" });
+  assert.ok(!m4.memo.includes("１２３４５６７"));
+});
+
+test("조합 경고는 마스커가 없는 필드만 센다", () => {
+  // name·address 는 항상 마스커가 있어서 shown 목록에 절대 들어오지 않는다 — 죽은
+  // 항목이 아니라 실제로 마스킹하지 않은 필드끼리만 모여야 경고가 뜻대로 동작한다.
+  const { warnings } = maskRecord({ name: "홍길동", address: "서울 강남구 테헤란로 123", zipCode: "06236" });
+  assert.deepEqual(warnings, [], "name과 address는 이미 마스킹됐으니 조합 경고에 들어가면 안 된다");
+});
+
+test("순환 참조가 있어도 무한 루프에 빠지지 않고, 원본을 그대로 돌려주지 않는다", () => {
+  // record.self 가 원본 record 를 그대로 돌려주면 util.inspect·구조적 복제·로거가
+  // 원본까지 따라가 rrn 을 그대로 보여준다. 자리표시자 + 경고로 막는다.
+  const record = { name: "홍길동", rrn: "900101-1234567" };
+  record.self = record;
+  const { masked, warnings } = maskRecord(record);
+  assert.equal(masked.name, "홍*동");
+  assert.equal(masked.rrn, "900101-*******");
+  assert.notEqual(masked.self, record);
+  assert.equal(masked.self, "[순환참조]");
+  assert.ok(!JSON.stringify(masked).includes("1234567"), "원본 순환 참조를 통해 rrn 이 새면 안 된다");
+  assert.match(warnings.join(" "), /순환 참조가 있어 가렸다/);
+});
+
+test("알려진 필드인데 형식을 알아볼 수 없으면 통째로 가리고 경고한다", () => {
+  // maskAddress 가 알아보지 못한 주소를 통째로 가리는 것과 같은 실패 방향이다.
+  const { masked, warnings } = maskRecord({ phone: "abc" });
+  assert.equal(masked.phone, "***");
+  assert.match(warnings[0], /phone 값이 예상한 형식이 아니어서 전체를 가렸다/);
+});
+
+test("한 글자 이름을 통째로 가리는 것은 형식 실패 경고가 아니다", () => {
+  const { masked, warnings } = maskRecord({ name: "김" });
+  assert.equal(masked.name, "*");
+  assert.deepEqual(warnings, []);
+});
+
 test("이름 마스킹은 잘못된 입력에서 열려 있지 않다", () => {
   // maskName(null) 이 String(null) 을 거치면 "n**l" 이 나와 "null" 을 이름처럼 마스킹해 버렸다.
   assert.equal(maskName(null), "");
