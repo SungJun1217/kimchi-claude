@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rule as base, manyRules } from "./helpers.mjs";
 import { buildBody, MAX_CHARS } from "../scripts/build-style.mjs";
+import { loadRules } from "../hooks/lib/rules.mjs";
 
 // 이 시험 묶음의 기본값만 여기서 정하고, 규칙 객체 모양은 helpers 가 갖는다.
 const rule = (overrides = {}) => base({ en: "thin contract", good: "결합도", source: "metaphors.md", ...overrides });
@@ -124,4 +125,60 @@ test("규칙이 없어도 서두만으로 동작한다", () => {
   assert.equal(included, 0);
   assert.equal(dropped, 0);
   assert.match(body, /용어 처리 우선순위/);
+});
+
+// 다른 규칙의 이유·쓸 것 칸 글자 수가 늘면(용어 자료를 고치는 흔한 작업), 같은 순위인데
+// 알파벳 순서가 뒤인 파일(patterns.md, metaphors.md 등)의 핵심 규칙이 예산에서 밀려날 수
+// 있다. 실제로 rules/hanja.md 몇 행을 고치면서 patterns.md 문장 구조 핵심 규칙 두 개가
+// 이렇게 조용히 빠졌었다. 본문에 꼭 있어야 하는 핵심 규칙을 여기 못박아, 다음에 같은 일이
+// 생기면 npm test가 잡는다.
+test("실제 규칙표: 핵심 순위 문장 구조·은유 규칙이 본문 예산에서 밀려나지 않는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const { body } = buildBody(rules);
+  const mustInclude = [
+    "우리는 ~합니다", // patterns.md: 인칭 주어 직역
+    "이 변경은 성능 향상을 가져옵니다.", // patterns.md: This change brings...
+    "한 문장에 절을 셋 이상 이어 붙이기", // patterns.md: 절 3개 이상
+    "수정 완료. 확인 필요.", // patterns.md: 전보체
+    "얇은 계약", // metaphors.md: thin contract
+    "두꺼운 모델", // metaphors.md: fat model
+    "신선하지 않은 데이터", // metaphors.md: stale data
+    "김빠진 캐시", // metaphors.md: stale cache
+  ];
+  for (const bad of mustInclude) {
+    assert.ok(body.includes(bad), `핵심 규칙이 본문 예산에서 빠졌다: ${bad}`);
+  }
+});
+
+// tier별로 즉시 anyLane을 재시도하는 게 실제로 필요한지 못박는다. 예전 코드(전체를 한
+// 순회로 훑고 나서야 한 번에 anyLane을 재시도)로 되돌리면 이 시험이 실패해야 한다 —
+// 실제로 되돌려서 확인했다: 옛 코드는 핵심 14개 중 8개, 보통 40개 중 7개가 들어갔지만
+// (보통 규칙이 아직 자리가 있는 핵심 규칙보다 먼저 들어갔다), 지금 코드는 보통을 하나도
+// 들이지 않고 핵심 14개를 채운다.
+test("갈래 예산을 넘긴 핵심 규칙이 자리가 있는데도 보통 규칙에 밀리지 않는다", () => {
+  const core = manyRules(40, (i, tag) => ({
+    en: `core-${tag}`,
+    bad: `핵심표현${tag}`,
+    good: `대체표현${tag}`,
+    why: "핵심 이유 문장입니다 핵심 이유 문장입니다",
+    check: "치환",
+    priority: "핵심",
+    source: "metaphors.md",
+  }));
+  const normal = manyRules(40, (i, tag) => ({
+    en: `normal-${tag}`,
+    bad: `보통표현${tag}`,
+    good: `대체표현${tag}`,
+    why: "보통 이유 문장",
+    check: "프롬프트",
+    priority: "보통",
+    source: "patterns.md",
+  }));
+
+  const { body } = buildBody([...core, ...normal], 3000);
+  const normalIncluded = normal.filter((r) => body.includes(r.bad)).length;
+  const coreIncluded = core.filter((r) => body.includes(r.bad)).length;
+
+  assert.equal(normalIncluded, 0, "핵심 규칙이 더 들어갈 수 있는데 보통 규칙이 먼저 들어갔다");
+  assert.ok(coreIncluded >= 10, `핵심 규칙이 ${coreIncluded}개만 들어갔다`);
 });

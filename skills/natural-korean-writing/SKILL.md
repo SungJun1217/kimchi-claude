@@ -32,8 +32,9 @@ description: Use when asked to review, rewrite or proofread Korean technical pro
    인증, 인가.
 3. **개발자가 로마자로 쓰는 말은 로마자로.** state, props, payload, target, directory,
    endpoint 같은 명사입니다. race condition·deadlock·latency·throughput·side effect·
-   regression은 여기 넣지 않습니다 — 경쟁 조건·교착 상태·지연 시간·처리량·부수 효과·회귀라는
-   정착 한국어 용어가 이미 있고 규칙표 행도 그렇게 가르칩니다(hanja.md, terms.md). 여러
+   regression도 여기 포함됩니다 — 슬랙·PR에서 개발자가 실제로 영어 원어를 그대로 타이핑하고,
+   규칙표(hanja.md, terms.md)도 이제 원어를 `쓸 것`의 첫 자리로 가르칩니다. 경쟁 조건·교착
+   상태·지연 시간·처리량·부수 효과·회귀는 설명이 필요할 때 괄호로 덧붙이는 대안입니다. 여러
    낱말로 된 용어는 통째로 씁니다("build target directory"). 로마자는 명사 자리에만 씁니다 —
    동사는 한국어를 쓰고, 로마자 동사에 하다를 붙이지 않습니다("state를 업데이트하고"는 맞고
    "push합니다"는 틀립니다). 정착한 음차 동사는 한글로 씁니다 — 푸시합니다, 머지합니다,

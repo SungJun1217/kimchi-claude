@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   loadRules,
   byPriority,
+  PRIORITIES,
   CHECK_PROMPT,
   CHECK_REGEX,
   CHECK_SUBSTITUTE,
@@ -174,16 +175,24 @@ export function buildBody(rules, maxChars = MAX_CHARS) {
     return true;
   };
 
-  // 자기 갈래 예산을 넘긴 규칙은 미뤄 둔다. 한 규칙이 안 들어가도 멈추지 않는다.
-  // 뒤에 오는 짧은 규칙은 아직 들어갈 수 있다.
-  const deferred = [];
-  for (const rule of ordered) {
-    if (!admit(rule, rule.check === CHECK_PROMPT ? promptLane : termLane)) deferred.push(rule);
+  // 자기 갈래 예산을 넘긴 규칙은 같은 순위 안에서 곧바로 남는 자리(anyLane)에 다시 시도한다.
+  // 순위 tier가 끝날 때까지 미루면 안 된다 — 미루는 동안 낮은 순위 규칙이 (제 갈래 예산이
+  // 아직 안 찼다는 이유로) 첫 시도에서 바로 들어가 length를 먼저 써버리면, 높은 순위인데
+  // 제 갈래만 못 들어간 규칙이 나중에 anyLane을 시도할 때는 정작 남는 자리가 없다. 실측:
+  // rules/hanja.md의 핵심 순위 행 몇 개가 길어져 치환 갈래(termLane) 예산을 넘기자, 같은
+  // 핵심 순위인 metaphors.md의 lazy evaluation(치환)이 밀려났는데, 그보다 뒤에 오는 보통
+  // 순위 profiling(hanja.md, 프롬프트)은 프롬프트 갈래(promptLane) 예산이 아직 남아 있어
+  // 첫 시도에서 바로 들어갔다 — 낮은 순위가 자기 갈래에 자리가 있다는 이유만으로 높은
+  // 순위의 재시도보다 먼저 length를 차지한 것이다. tier별로 즉시 재시도해야 이 역전이 안 생긴다.
+  for (const priority of PRIORITIES) {
+    const tier = ordered.filter((rule) => rule.priority === priority);
+    const deferred = [];
+    for (const rule of tier) {
+      if (!admit(rule, rule.check === CHECK_PROMPT ? promptLane : termLane)) deferred.push(rule);
+    }
+    // 한쪽 갈래가 이 순위에서 예산을 덜 썼으면 남은 자리를 같은 순위 안에서 넘긴다.
+    for (const rule of deferred) admit(rule, anyLane);
   }
-  // 한쪽이 예산을 덜 썼으면 남은 자리를 넘긴다. 상한을 남기고 버리지 않는다.
-  // 지금 자료에서는 프롬프트 규칙이 자기 갈래를 넘치게 채워 이 순회가 아무것도 담지 않는다.
-  // 프롬프트 규칙이 적은 설정에서 자리를 버리지 않기 위한 장치다.
-  for (const rule of deferred) admit(rule, anyLane);
 
   let body = PREAMBLE;
   for (const [title, rows] of sections) {
