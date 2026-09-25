@@ -23,11 +23,54 @@ export const SCANNABLE_CHECKS = [CHECK_SUBSTITUTE, CHECK_REGEX];
 
 export const PRIORITIES = ["핵심", "보통", "참고"];
 
+// 이유 칸 맨 앞에 적는 명시 표지. lint.mjs 가 이유의 낱말(예: "표기")을 문자열로 매칭해
+// 경계 검사를 켜고 끄던 것을 대신한다 — 이유를 다듬어 적다 보면 매칭 낱말이 우연히
+// 빠지거나 들어가 판정이 조용히 바뀌었다. 0.13.19에서 실제로 그랬다(레지스터리는 "외래어"
+// 낱말이 빠져 분류를 잃었고, "50 %"는 새 이유에 "띄어"가 우연히 들어가 분류를 얻었다).
+// 판정에 쓰는 값과 사람이 읽는 설명을 분리해 이유 문장을 자유롭게 고쳐도 판정이 흔들리지
+// 않게 한다.
+//   [표기]   — 표기·맞춤법·띄어쓰기 규칙. 왼쪽 경계 검사를 건너뛴다(kind: "orthography")
+//   [외래어] — 외래어 표기 규칙. 왼쪽·오른쪽 경계 둘 다 건너뛴다(kind: "loanword", 표기를 포함한다)
+const RULE_KIND_TAGS = { "[표기] ": "orthography", "[외래어] ": "loanword" };
+// 코퍼스 검사(tests/corpus.test.mjs)가 "이유 칸 맨 앞의 대괄호는 늘 이 둘 중 하나"를 확인할 때 쓴다.
+export const RULE_KIND_TAG_NAMES = Object.keys(RULE_KIND_TAGS);
+// 대괄호로 시작하는지만 느슨하게 본다. 뒤에 오는 공백까지 요구하면 "[외래어]외래어 표기법"처럼
+// 공백을 빠뜨린 오타가 대괄호 자체를 못 찾아 코퍼스 검사를 통과해 버린다 — 그 오타를 잡는 일이
+// 정확히 이 검사의 목적이므로, 여기서는 대괄호만 보고 "알려진 표지와 정확히 같은가"는
+// RULE_KIND_TAG_NAMES 로 따로 비교한다.
+export const BRACKET_PREFIX_PATTERN = /^\[[^\]]*\]/;
+
+/**
+ * rule.kind 를 이유 칸 맨 앞 표지 문자열로 되돌린다. kind 가 없으면 빈 문자열.
+ * import-corpus.mjs 의 --recheck 가 이유 칸을 다시 쓸 때 표지를 잃지 않게 하는 데 쓴다 —
+ * parseTable 이 이미 떼어낸 rule.why 에는 표지가 남아 있지 않다.
+ * @param {string} [kind]
+ * @returns {string}
+ */
+export function kindTag(kind) {
+  const entry = Object.entries(RULE_KIND_TAGS).find(([, k]) => k === kind);
+  return entry ? entry[0] : "";
+}
+
 const HEADER_FIRST_CELL = "원어";
 const CELL_COUNT = 6;
 const PIPE_PLACEHOLDER = "\u0001";
 const PIPE_PLACEHOLDER_PATTERN = new RegExp(PIPE_PLACEHOLDER, "g");
 const EMPTY_MARKS = new Set(["—", "-", "–", ""]);
+
+/**
+ * 이유 칸 맨 앞의 표지를 떼어 kind 로 돌려준다. 표지가 없으면 kind 는 undefined.
+ * 정의되지 않은 표지(예: "[foo] ")는 표지로 인정하지 않고 이유 글자 그대로 둔다 —
+ * 오타를 조용히 무시하는 대신 이유 문장 첫머리에 대괄호가 그대로 남아 눈에 띈다.
+ * @param {string} why
+ * @returns {{why: string, kind?: string}}
+ */
+function stripKindTag(why) {
+  for (const [tag, kind] of Object.entries(RULE_KIND_TAGS)) {
+    if (why.startsWith(tag)) return { why: why.slice(tag.length), kind };
+  }
+  return { why };
+}
 
 function splitCells(line) {
   const escaped = line.replace(/\\\|/g, PIPE_PLACEHOLDER);
@@ -76,7 +119,7 @@ export function parseTable(markdown, source = "") {
       continue;
     }
 
-    const [en, bad, good, why, check, priority] = cells;
+    const [en, bad, good, whyRaw, check, priority] = cells;
 
     if (!CHECKS.includes(check)) {
       skipped += 1;
@@ -91,11 +134,14 @@ export function parseTable(markdown, source = "") {
       continue;
     }
 
+    const { why, kind } = stripKindTag(normalizeOptional(whyRaw));
+
     rules.push({
       en: normalizeOptional(en),
       bad,
       good,
-      why: normalizeOptional(why),
+      why,
+      ...(kind ? { kind } : {}),
       check,
       priority,
       source,

@@ -1063,5 +1063,75 @@
       "source_url": "https://www.korean.go.kr/front/etcData/etcDataView.do?mn_id=208&etc_seq=699 (한눈에 알아보는 공공언어 바로 쓰기 개정판 PDF p.13; 공공누리 제4유형) ; https://www.korean.go.kr/front/etcData/etcDataView.do?mn_id=208&etc_seq=699 (한눈에 알아보는 공공언어 바로 쓰기 개정판 PDF p.72; 공공누리 제4유형)",
       "verdict": "CANDIDATE"
     }
-  ]
+  ],
+  "notImported": {
+    "다듬은말": [
+      {
+        "term": "디버깅",
+        "en": "debugging",
+        "source": "다듬은 말",
+        "replacement": "벌레잡기",
+        "reason": "개발 현장에서 쓰지 않는 조어다. 디버깅은 이미 정착한 전문 용어라 순화 대상으로 보지 않는다."
+      },
+      {
+        "term": "로그인",
+        "en": "login",
+        "source": "다듬은 말",
+        "replacement": "회원 들어가기",
+        "reason": "개발 현장에서 쓰지 않는 조어다. 로그인은 이미 정착한 전문 용어라 순화 대상으로 보지 않는다."
+      },
+      {
+        "term": "쿠키",
+        "en": "cookie",
+        "source": "다듬은 말",
+        "replacement": "과자",
+        "reason": "브라우저 쿠키를 뜻하는 자리에 과자로 바꾸면 뜻이 사라진다. 다듬은 말의 대상 개념 자체가 다르다."
+      },
+      {
+        "term": "서버",
+        "en": "server",
+        "source": "다듬은 말",
+        "replacement": "메김 선수",
+        "reason": "테니스·배구 같은 스포츠 용어의 순화어다. 다듬은 말은 낱말별이 아니라 분야(domain)별로 새로 조어되므로, 개발 문서의 서버(컴퓨터)에 기계적으로 적용할 수 없다는 것을 보여 주는 사례다."
+      }
+    ],
+    "관행과_다른_표기": [
+      {
+        "term": "스냅숏",
+        "en": "snapshot",
+        "practice": "스냅샷",
+        "source": "용례 찾기, 표준국어대사전(『영상』 뜻)",
+        "reason": "실무 관행(스냅샷)과 갈린다. 규칙으로 만들면 오탐과 반발만 남는다."
+      },
+      {
+        "term": "칼럼",
+        "en": "column",
+        "practice": "컬럼",
+        "source": "용례 찾기, 표준국어대사전(신문 칼럼 뜻)",
+        "reason": "표준국어대사전 표제어는 신문 칼럼 뜻이고 데이터베이스 열 뜻이 아니다. 개발자는 데이터베이스 문맥에서 컬럼을 쓴다."
+      },
+      {
+        "term": "프러시저",
+        "en": "procedure",
+        "practice": "프로시저",
+        "source": "표준국어대사전(『정보·통신』 뜻)",
+        "reason": "실무 관행(프로시저)과 갈린다."
+      },
+      {
+        "term": "플로",
+        "en": "flow",
+        "practice": "플로우",
+        "source": "용례 찾기",
+        "reason": "실무 관행(플로우)과 갈린다."
+      },
+      {
+        "term": "리포지터리",
+        "en": "repository",
+        "practice": "리포지토리",
+        "source": "우리말샘",
+        "reason": "0.14.0에서 검토. GitHub 한국어 문서가 리포지토리를 쓴다. 실무에선 저장소가 더 흔해 병기 권장."
+      }
+    ],
+    "note": "섬네일(thumbnail)·콘텍스트(context)는 외래어 표기법 원칙(thumbnail의 [θ]→ㅅ, context의 짧은 [ɒ]→오)대로면 이 표기가 나오지만, 저장 자료(용례 찾기·표준국어대사전·우리말샘)에서 실제 등재를 확인하지 못했다. 확인 안 된 근거로 규칙을 만들지 않는다."
+  }
 }

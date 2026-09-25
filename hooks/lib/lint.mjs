@@ -423,29 +423,31 @@ function hangulSyllableCount(word) {
 // 앞에 어떤 동사가 오든 붙여 쓴 것 자체가 틀렸고, "데이타"(→"데이터")는 "메타데이타"처럼
 // 다른 낱말에 붙어 있어도 표기가 틀린 건 마찬가지다 — 오탐의 성격이 다른 규칙과 다르다.
 //
-// register.md 의 이유 칸에 표기 계열 낱말이 있으면 이 부류로 본다. "함으로서"→"함으로써"는
-// 이유 칸이 "수단·자격" 설명이라 낱말 매칭에 안 걸려 따로 적어 둔다.
-const ORTHOGRAPHY_WHY_PATTERN = /표기|맞춤법|띄어|의존명사|외래어/;
-const ORTHOGRAPHY_EXTRA_BAD = new Set(["함으로서"]);
+// rules.mjs 의 parseTable 이 이유 칸 맨 앞 [표기]/[외래어] 표지를 읽어 rule.kind 로 넘겨준다.
+// 예전에는 이유 문장 낱말(표기·맞춤법·띄어 …)을 정규식으로 매칭했는데, 이유를 다듬어
+// 적다 보니 매칭 낱말이 우연히 빠지거나 들어가 판정이 조용히 바뀌었다. 0.13.19에서 실제로
+// 그랬다 — 레지스터리는 이유에서 "외래어"라는 말이 빠져 왼쪽·오른쪽 경계 판정을 둘 다
+// 잃었고, "50 %"는 반대로 새 이유에 "붙여도 띄어도 된다"는 "띄어"가 우연히 들어가 없던
+// 왼쪽 경계 예외를 얻었다(첫 글자가 숫자라 동작은 그대로였다). 판정은 표지 하나로만 하고, 이유 문장은 사람이 읽기 좋게
+// 자유로 고친다. 파일 위치(source)는 더 안 본다 — 표지 자체가 이미 명시적이라 register.md
+// 로 한정할 이유가 없고, 한정하면 다른 규칙 파일에 표지를 적어도 조용히 무시되는 두 번째
+// 함정이 생긴다.
 function isOrthographyRule(rule) {
-  if (rule?.source !== "register.md") return false;
-  if (ORTHOGRAPHY_EXTRA_BAD.has(rule.bad)) return true;
-  return ORTHOGRAPHY_WHY_PATTERN.test(rule.why ?? "");
+  return rule?.kind === "orthography" || rule?.kind === "loanword";
 }
 
 // 오른쪽 경계는 원칙대로 본다 — "어떻게 할 지"(띄어쓰기 규칙)를 오른쪽까지 빼면
 // "어떻게 할 지침이"의 "지침"까지 "할지침이"로 잘못 고친다. 표기가 틀렸다는 사실이 뒤에
 // 다른 낱말이 와도 된다는 뜻은 아니다.
 //
-// 예외는 외래어 표기법 규칙 하나뿐이다. "메세지"+"큐", "데이타"+"베이스", "쓰레드"+"풀"
+// 예외는 [외래어] 표지가 붙은 규칙뿐이다. "메세지"+"큐", "데이타"+"베이스", "쓰레드"+"풀"
 // 처럼 한국어 개발 현장은 외래어 명사 둘을 조사 없이 그대로 붙여 쓴다 — 뒤에 오는 것도
 // 한글 조사가 아니라 또 다른 외래어라서 FOLLOWER_TOKENS 로는 절대 다 셀 수 없다. 이
-// 부류만 오른쪽도 뺀다. "어떻게 할 지"·"하는것"·"궁굼한" 같은 띄어쓰기·맞춤법 규칙은
+// 부류만 오른쪽도 뺀다. "어떻게 할 지"·"하는것"·"궁굼한" 같은 [표기] 규칙은
 // 뒤에 오는 것이 보통 조사·어미라 FOLLOWER_TOKENS 로 이미 받는다 — 그쪽은 오른쪽
 // 검사를 켜 둬도 손해가 없다.
-const LOANWORD_SPELLING_WHY_PATTERN = /외래어/;
 function isLoanwordSpellingRule(rule) {
-  return rule?.source === "register.md" && LOANWORD_SPELLING_WHY_PATTERN.test(rule.why ?? "");
+  return rule?.kind === "loanword";
 }
 
 // bad 문자열이 아니라 규칙 객체를 열쇠로 쓴다. why·source 도 판정에 들어가기 때문이다.

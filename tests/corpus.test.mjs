@@ -6,9 +6,17 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRules, CHECKS, PRIORITIES, CHECK_SUBSTITUTE } from "../hooks/lib/rules.mjs";
+import {
+  loadRules,
+  CHECKS,
+  PRIORITIES,
+  CHECK_SUBSTITUTE,
+  RULE_KIND_TAG_NAMES,
+  BRACKET_PREFIX_PATTERN,
+} from "../hooks/lib/rules.mjs";
 import {
   lint,
   toPattern,
@@ -195,6 +203,28 @@ test("자동 교정은 검사 칸을 믿지 않고 스스로 막는다", () => {
   const { text, applied } = applyFixes("커플링 문제입니다.", [handEdited]);
   assert.equal(applied[0]?.replacement, "결합도", "대안 나열을 그대로 꽂았다");
   assert.equal(text, "결합도 문제입니다.");
+});
+
+test("이유 칸 맨 앞의 대괄호 표지는 [표기]나 [외래어] 뿐이다", () => {
+  // parseTable 은 이유 칸의 낱말이 아니라 이 표지만으로 orthography/loanword 를 가른다
+  // (hooks/lib/lint.mjs 의 isOrthographyRule 참고). 정의되지 않은 대괄호가 파일에 남으면
+  // 표지를 붙였다고 착각하고도 조용히 무시되는 규칙이 생긴다 — 자료를 손으로 고치다
+  // 생기는 오타이므로 여기서 잡는다.
+  const RULES_DIR = join(ROOT, "rules");
+  const bad = [];
+  for (const name of readdirSync(RULES_DIR).filter((n) => n.endsWith(".md"))) {
+    const text = readFileSync(join(RULES_DIR, name), "utf8");
+    for (const line of text.split("\n")) {
+      if (!line.trimStart().startsWith("|")) continue;
+      const cells = line.split("|");
+      const why = cells[4]?.trim() ?? "";
+      const match = why.match(BRACKET_PREFIX_PATTERN);
+      if (!match) continue;
+      const known = RULE_KIND_TAG_NAMES.some((tag) => why.startsWith(tag));
+      if (!known) bad.push(`${name}: "${why}"`);
+    }
+  }
+  assert.deepEqual(bad, [], `\n${bad.join("\n")}`);
 });
 
 // 참고: 치환 규칙 가운데 상당수는 앞뒤 받침이 다르다. 그 규칙들은 뒤에 조사가 없을 때만
