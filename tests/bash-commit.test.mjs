@@ -1,8 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { extractCommitTargets } from "../hooks/lib/bash-commit.mjs";
 import { autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
+
+const HOOK = join(dirname(fileURLToPath(import.meta.url)), "..", "hooks", "guard.mjs");
 
 function autofixCommand(command) {
   const targets = extractCommitTargets(command).map((t) => ({
@@ -315,4 +319,69 @@ test("항목1: 안쪽 값에 명령 치환이 있으면 bash -c 이중따옴표 
   const command = `bash -c "git commit -m \\"$(grep 컨텐츠 a.txt)\\""`;
   const fixed = autofixCommand(command);
   assert.equal(fixed, command);
+});
+
+// 항목E: heredoc 종료 표시가 따옴표로 감쌌는지가 본문 안의 $(…)·${…}·백틱을 자동 교정해도
+// 되는지를 가른다 — 감쌌으면(quoted) 셸이 그 문자를 확장하지 않아 글자를 고쳐도 안전하다.
+test("항목E: 따옴표로 감싼 heredoc 종료 표시는 본문에 $(...)가 있어도 교체 가능하다", () => {
+  const command = ["git commit -F - <<'EOF'", "리팩토링 $(echo x) 정리", "EOF"].join("\n");
+  const [target] = extractCommitTargets(command);
+  assert.equal(target.replaceable, true);
+});
+
+test("항목E: 따옴표 없는 heredoc 종료 표시는 본문의 $(...)/${...}/백틱 때문에 교체할 수 없다", () => {
+  for (const body of ["리팩토링 $(echo x) 정리", "리팩토링 ${VAR} 정리", "리팩토링 `date` 정리"]) {
+    const command = ["git commit -F - <<EOF", body, "EOF"].join("\n");
+    const [target] = extractCommitTargets(command);
+    assert.equal(target.replaceable, false, body);
+  }
+});
+
+test("항목E: 따옴표 없는 heredoc 종료 표시라도 위험한 문자가 없으면 교체 가능하다", () => {
+  const command = ["git commit -F - <<EOF", "리팩토링 정리", "EOF"].join("\n");
+  const [target] = extractCommitTargets(command);
+  assert.equal(target.replaceable, true);
+});
+
+test("항목E: $(cat <<'EOF' ...) 형태도 종료 표시가 따옴표면 본문의 $(...)에도 교체 가능하다", () => {
+  const command = [
+    `git commit -m "$(cat <<'EOF'`,
+    "리팩토링 $(echo x) 정리",
+    "EOF",
+    ')"',
+  ].join("\n");
+  const [target] = extractCommitTargets(command);
+  assert.equal(target.replaceable, true);
+});
+
+test("항목E: $(cat <<EOF ...) 처럼 종료 표시가 따옴표 없으면 본문의 $(...) 때문에 교체할 수 없다", () => {
+  const command = [
+    `git commit -m "$(cat <<EOF`,
+    "리팩토링 $(echo x) 정리",
+    "EOF",
+    ')"',
+  ].join("\n");
+  const [target] = extractCommitTargets(command);
+  assert.equal(target.replaceable, false);
+});
+
+test("항목E: 가드 종단 — 따옴표 없는 heredoc 안 $(...) 인자는 KIMCHI_AUTOFIX 에서도 그대로 남는다", () => {
+  // "$(grep 리팩토링 a.txt)"를 글자 그대로 고치면 grep 의 검색어까지 바뀐다.
+  const command = ["git commit -F - <<EOF", "리팩토링 $(grep 리팩토링 a.txt) 정리", "EOF"].join("\n");
+  const payload = {
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command },
+  };
+  const stdout = execFileSync("node", [HOOK], {
+    input: JSON.stringify(payload),
+    encoding: "utf8",
+    env: { ...process.env, KIMCHI_DISABLE: "", KIMCHI_AUTOFIX: "1", KIMCHI_BLOCK: "" },
+  });
+  const output = stdout.trim() === "" ? null : JSON.parse(stdout);
+  // 위험해서 교체하지 않으므로 명령이 아예 안 바뀔 수 있다(출력 없음) — 바뀌었다면
+  // grep 인자는 원문 그대로여야 한다.
+  if (output) {
+    assert.match(output.hookSpecificOutput.updatedInput.command, /grep 리팩토링 a\.txt/);
+  }
 });

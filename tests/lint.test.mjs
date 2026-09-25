@@ -263,6 +263,43 @@ test("-게로 끝나는 부사형 규칙도 활용형이 붙어도 잡는다", (
   assert.ok(lint("얇게 만들고 있습니다.", rules).some((f) => f.bad === "얇게 만들"));
 });
 
+// ── "로"/"으로" 오른쪽 경계 ───────────────────────────────
+//
+// "로"는 조사이기도 하지만 "로그"·"로직"의 시작이기도 하다. "판박이 코드"(→"보일러플레이트")
+// 규칙이 "판박이 코드로그를"까지 잡아 "보일러플레이트로그를"로 깨졌던 것이 실제 사례다.
+
+test("판박이 코드 뒤에 로그/로직/으로그가 이어지면 다른 낱말 속이라 잡지 않는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const boilerplate = (text) => lint(text, rules).filter((f) => f.bad === "판박이 코드");
+
+  assert.deepEqual(boilerplate("판박이 코드로그를 확인합니다."), []);
+  assert.deepEqual(boilerplate("판박이 코드로직을 확인합니다."), []);
+  assert.deepEqual(boilerplate("판박이 코드로더를 확인합니다."), []);
+  assert.deepEqual(boilerplate("판박이 코드로컬을 확인합니다."), []);
+  assert.deepEqual(boilerplate("판박이 코드로드를 확인합니다."), []);
+  assert.deepEqual(boilerplate("판박이 코드으로그를 확인합니다."), []);
+});
+
+test("판박이 코드 뒤에 진짜 로/으로 조사·연속 조사가 오면 여전히 잡는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const boilerplate = (text) => lint(text, rules).filter((f) => f.bad === "판박이 코드");
+
+  assert.ok(boilerplate("판박이 코드로 확인합니다.").length > 0);
+  assert.ok(boilerplate("판박이 코드는 확인합니다.").length > 0);
+  assert.ok(boilerplate("판박이 코드로서 확인합니다.").length > 0);
+  assert.ok(boilerplate("판박이 코드로써 확인합니다.").length > 0);
+  assert.ok(boilerplate("판박이 코드로부터 확인합니다.").length > 0);
+  assert.ok(boilerplate("판박이 코드으로는 확인합니다.").length > 0);
+});
+
+test("판박이 코드 뒤에 로인해/로다가가 이어져도 여전히 잡는다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const boilerplate = (text) => lint(text, rules).filter((f) => f.bad === "판박이 코드");
+
+  assert.ok(boilerplate("판박이 코드로인해 문제가 생겼습니다.").length > 0);
+  assert.ok(boilerplate("판박이 코드로다가 확인합니다.").length > 0);
+});
+
 // ── 표기·띄어쓰기 규칙은 경계를 보지 않는다 ──────────────────
 //
 // "수정해야합니다"의 "해야합니다", "메타데이타를"의 "데이타"처럼 앞뒤에 무엇이 오든

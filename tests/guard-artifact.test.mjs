@@ -411,6 +411,77 @@ test("항목B: 문서의 들여쓰기 코드·<pre> 안 조사는 PostToolUse도
   assert.equal(runHook(autofixPayload, { KIMCHI_AUTOFIX: "1" }), null, "코드 예시 안의 조사까지 고쳤다");
 });
 
+test("항목F: CMakeLists.txt/requirements-dev.txt 같은 빌드 도구 파일은 말투 검사에서 빠진다", () => {
+  const content = "리팩토링과 컨텐츠를 정리해야 합니다.";
+  for (const file of ["CMakeLists.txt", "requirements-dev.txt", "dev-requirements.txt", "constraints.txt", "robots.txt"]) {
+    const output = runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Write",
+      tool_input: { file_path: `/tmp/${file}`, content },
+    });
+    assert.equal(output, null, file);
+  }
+});
+
+test("항목F: notes.txt 처럼 이름이 걸리지 않는 .txt 는 여전히 경고한다", () => {
+  const output = runHook({
+    hook_event_name: "PostToolUse",
+    tool_name: "Write",
+    tool_input: { file_path: "/tmp/notes.txt", content: "리팩토링과 컨텐츠를 정리해야 합니다." },
+  });
+  assert.match(output.hookSpecificOutput.additionalContext, /리팩터링/);
+});
+
+test("항목F: 말투 검사에서 빠지는 파일이어도 주민등록번호는 여전히 막는다", () => {
+  const output = runHook({
+    hook_event_name: "PreToolUse",
+    tool_name: "Write",
+    tool_input: { file_path: "/tmp/CMakeLists.txt", content: "# 900101-1234567" },
+  });
+  assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
+});
+
+test("항목1: Edit 조각 밖에 있는 참조식 링크 정의도 파일에서 읽어 라벨을 보호한다", () => {
+  // Edit의 new_string은 조각일 뿐이다 — 정의 줄([타겟]: ./setup.md)이 조각 밖에 있으면
+  // 조각만 보고 판정하는 쪽은 그 정의를 모른 채 라벨을 자동 교정해 죽은 링크를 만든다.
+  const dir = mkdtempSync(join(tmpdir(), "kimchi-"));
+  const file = join(dir, "doc.md");
+  const oldFragment = "문서는 [설정 안내][타겟]을 보세요.";
+  writeFileSync(file, [oldFragment, "", "[타겟]: ./setup.md"].join("\n"), "utf8");
+  try {
+    const newFragment = "타겟 문서는 [설정 안내][타겟]을 보세요.";
+    const output = runHook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: "Edit",
+        tool_input: { file_path: file, old_string: oldFragment, new_string: newFragment },
+      },
+      { KIMCHI_AUTOFIX: "1" }
+    );
+    assert.ok(output, "자동 교정이 전혀 동작하지 않았다");
+    assert.match(output.hookSpecificOutput.updatedInput.new_string, /\[설정 안내\]\[타겟\]/, "라벨이 바뀌어 링크가 죽었다");
+    assert.match(output.hookSpecificOutput.updatedInput.new_string, /^타깃 문서는/, "라벨 밖의 낱말은 정상적으로 고쳐야 한다");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("항목1: 파일을 못 읽으면(새 파일 등) old_string 위치를 못 찾아 애초에 자동 교정하지 않는다", () => {
+  const output = runHook(
+    {
+      hook_event_name: "PreToolUse",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/tmp/kimchi-없는-파일.md",
+        old_string: "예전",
+        new_string: "안내는 [설정][타겟]을 보고 타겟 문서도 확인합니다.",
+      },
+    },
+    { KIMCHI_AUTOFIX: "1" }
+  );
+  assert.equal(output, null);
+});
+
 test("이 저장소의 생성물과 규칙 자료는 선언으로 걸러진다", () => {
   const content = "리팩토링과 컨텐츠를 고쳐야 합니다.";
   for (const file of ["output-styles/natural-korean.md", "rules/terms.md", "rules/observed.md"]) {

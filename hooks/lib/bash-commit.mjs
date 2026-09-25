@@ -140,7 +140,9 @@ function matchHeredocOperator(command, i) {
   }
   while (command[j] === " " || command[j] === "\t") j += 1;
   let marker = "";
+  let quoted = false; // 종료 표시를 따옴표로 감쌌는지 — 감쌌으면 본문 안의 $(…)·${…}·백틱이 셸에서 확장되지 않는다
   if (command[j] === "'" || command[j] === '"') {
+    quoted = true;
     const q = command[j];
     const close = command.indexOf(q, j + 1);
     if (close === -1) return null;
@@ -152,7 +154,7 @@ function matchHeredocOperator(command, i) {
     if (j === start) return null;
     marker = command.slice(start, j);
   }
-  return { heredoc: { marker, dashStrip }, next: j };
+  return { heredoc: { marker, dashStrip, quoted }, next: j };
 }
 
 /**
@@ -184,7 +186,9 @@ function consumeHeredocBodies(command, pos, heredocs) {
       }
       searchFrom = lineEnd + 1;
     }
-    if (hd.slot) hd.slot.heredocs.push({ marker: hd.marker, dashStrip: hd.dashStrip, bodyStart, bodyEnd });
+    if (hd.slot) {
+      hd.slot.heredocs.push({ marker: hd.marker, dashStrip: hd.dashStrip, quoted: hd.quoted, bodyStart, bodyEnd });
+    }
     pos = resumeAt;
   }
   return pos;
@@ -555,12 +559,17 @@ export function extractCommitTargets(command, depth = 0) {
           // 한 명령에 heredoc이 여럿이면(드물지만) 실제로 표준입력에 연결되는 건 마지막 것이다.
           const hd = sc.heredocs[sc.heredocs.length - 1];
           if (!hd || hd.bodyEnd <= hd.bodyStart) continue;
+          const hdBody = command.slice(hd.bodyStart, hd.bodyEnd);
           targets.push({
             start: hd.bodyStart,
             end: hd.bodyEnd,
-            text: command.slice(hd.bodyStart, hd.bodyEnd),
+            text: hdBody,
             quote: null,
-            replaceable: true,
+            // 종료 표시가 따옴표로 감싸여 있으면(quoted) 본문의 $(…)·${…}·백틱은 셸이
+            // 확장하지 않는 글자 그대로다 — 자동 교정이 그 글자를 고쳐도 실행에 영향이
+            // 없다. 감싸지 않았다면(unquoted) -m 경로(아래)와 같은 정책으로, 그런 문자가
+            // 없을 때만 안전하다.
+            replaceable: hd.quoted || !/\$\(|\$\{|`/.test(hdBody),
             escapeOnWrite: false,
           });
           continue;
@@ -574,12 +583,16 @@ export function extractCommitTargets(command, depth = 0) {
           const catMatch = CAT_HEREDOC_VALUE.exec(raw);
           if (catMatch) {
             const [bStart, bEnd] = catMatch.indices[3];
+            const catBody = catMatch[3];
+            // catMatch[1]은 종료 표시를 감싼 따옴표 글자('든 "든) 자체는 안 본다 — 감쌌는지
+            // 여부만 중요하다. 감쌌으면(quoted) -F - 경로와 같은 정책을 그대로 적용한다.
+            const catQuoted = catMatch[1] !== "";
             targets.push({
               start: value.innerStart + bStart,
               end: value.innerStart + bEnd,
-              text: catMatch[3],
+              text: catBody,
               quote: null,
-              replaceable: true,
+              replaceable: catQuoted || !/\$\(|\$\{|`/.test(catBody),
               escapeOnWrite: false,
             });
             continue;
