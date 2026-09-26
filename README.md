@@ -14,6 +14,7 @@
 <br>
 
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D9532B?style=for-the-badge&logo=anthropic&logoColor=white)
+[![test](https://img.shields.io/github/actions/workflow/status/SungJun1217/kimchi-claude/test.yml?branch=develop&style=for-the-badge&label=test)](https://github.com/SungJun1217/kimchi-claude/actions/workflows/test.yml)
 ![Node ESM](https://img.shields.io/badge/Node-ESM-2F8A45?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![dependencies 0](https://img.shields.io/badge/dependencies-0-2F8A45?style=for-the-badge)
 ![LLM calls 0](https://img.shields.io/badge/LLM%20calls-0-2F8A45?style=for-the-badge)

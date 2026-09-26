@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractCommitTargets } from "../hooks/lib/bash-commit.mjs";
 import { autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
+import { fastestMs } from "./helpers.mjs";
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), "..", "hooks", "guard.mjs");
 
@@ -237,9 +238,12 @@ test("항목B: sh -c '…' 안의 커밋도 잡는다", () => {
 test("100KB 명령도 선형 시간 근처에서 끝난다", () => {
   const filler = "echo hi && ".repeat(5000);
   const command = `${filler}git commit -m "리팩토링 컨텐츠"`;
-  const start = Date.now();
-  const targets = extractCommitTargets(command);
-  const ms = Date.now() - start;
+  // 병렬로 도는 다른 시험 때문에 한 번 잰 시간이 튈 수 있다. 최솟값이 실제 비용에
+  // 가깝고, 이차 비용 회귀는 최솟값에도 그대로 남는다(helpers.mjs 의 fastestMs 참고).
+  let targets;
+  const ms = fastestMs(() => {
+    targets = extractCommitTargets(command);
+  });
   assert.deepEqual(targets.map((t) => t.text), ["리팩토링 컨텐츠"]);
   console.log(`    100KB 명령 파싱: ${ms}ms (명령 길이 ${command.length})`);
   assert.ok(ms < 500, `100KB 명령 파싱이 ${ms}ms 걸렸다`);

@@ -180,7 +180,9 @@ test("타이밍: 1MB 문서도 오늘의 자릿수 안에서 끝난다", () => {
   // 가깝고, 이차 비용 회귀는 최솟값에도 그대로 남는다(helpers.mjs 의 fastestMs 참고).
   const ms = fastestMs(() => maskProtected(doc));
   console.log(`    1MB 문서 마스킹: ${ms}ms (길이 ${doc.length})`);
-  assert.ok(ms < 2000, `1MB 문서 마스킹이 ${ms}ms 걸렸다`);
+  // 부하 없이 도는 로컬에서는 수십 ms 안에 끝난다. 이 상한의 여유는 공유 CI
+  // 러너의 부하를 견디기 위한 것이고, 이차 비용 회귀(수 초대로 튀는 것)는 여전히 잡는다.
+  assert.ok(ms < 3000, `1MB 문서 마스킹이 ${ms}ms 걸렸다`);
 });
 
 // 라운드1 항목1: 새로 추가한 가리개가 보통 한글 글을 지우면 안 된다.
