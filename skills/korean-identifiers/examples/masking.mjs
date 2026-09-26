@@ -316,7 +316,7 @@ function maskContainer(key, value, masker, ctx, depth, isArrayLike) {
           ctx.warnings.push(`${key} 값의 배열 안에 함수가 있어 결과에서 뺐다`);
           return [];
         }
-        return [maskField(key, item, ctx, depth + 1)];
+        return [maskField(key, item, masker, ctx, depth + 1)];
       })
     : maskEntries(Object.entries(value), ctx, depth + 1);
   ctx.inProgress.delete(value);
@@ -332,23 +332,29 @@ function maskContainer(key, value, masker, ctx, depth, isArrayLike) {
 // 원본 함수를 마스킹된 사본에 그대로 옮기면, 다른 필드는 다 가려졌어도
 // JSON.stringify(masked) 한 번에 그 클로저가 쥐고 있던 원본 민감정보가 그대로
 // 나온다. util.inspect 도 함수 자체(클로저 포함)를 그대로 보여줄 수 있다 —
-// 함수는 통째로 뺀다.
-function maskEntries(entries, ctx, depth) {
+// 함수는 통째로 뺀다. maskRecord 도 최상위 필드에 이 함수를 그대로 쓴다 — 중첩된
+// 객체와 최상위 레코드가 같은 판단을 따로 두 번 짤 이유가 없다.
+//
+// onEntry 는 maskRecord 가 필드별 마스커 유무와 마스킹 전후 값을 한 번에 넘겨받으려는
+// 훅이다 — 마스커를 여기서 한 번만 계산하고, 호출하는 쪽이 normalizeKey 를 다시 돌려
+// 같은 값을 두 번 구하지 않게 한다.
+function maskEntries(entries, ctx, depth, onEntry) {
   const result = {};
   for (const [k, v] of entries) {
     if (typeof v === "function") {
       ctx.warnings.push(`${k} 값이 함수라 마스킹된 결과에서 뺐다`);
       continue;
     }
-    result[k] = maskField(k, v, ctx, depth);
+    const masker = MASKERS_BY_KEY[normalizeKey(k)];
+    const maskedValue = maskField(k, v, masker, ctx, depth);
+    result[k] = maskedValue;
+    onEntry?.(k, v, masker, maskedValue);
   }
   return result;
 }
 
-function maskField(key, value, ctx, depth) {
+function maskField(key, value, masker, ctx, depth) {
   if (value === null || value === undefined) return value;
-
-  const masker = MASKERS_BY_KEY[normalizeKey(key)];
 
   if (value instanceof Date) {
     if (masker === undefined) return value; // 필드 이름을 모르면 원자 값으로 보고 손대지 않는다.
@@ -382,17 +388,12 @@ function maskField(key, value, ctx, depth) {
     return result;
   }
 
-  if (typeof value === "string") {
-    const scanned = maskFreeText(value);
-    if (scanned !== null) {
-      ctx.warnings.push(`${key} 값에서 민감정보로 보이는 값을 찾아 가렸다`);
-      return scanned;
-    }
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "bigint") {
-    const scanned = maskFreeNumber(value);
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") {
+    // resident-number.mjs 의 findResidentNumbers() 는 키 이름 끝이 시간을 가리키면
+    // (created_at 등) 오탐 방지로 건너뛰지만, 여기서는 그 판단을 일부러 들여오지 않는다.
+    // 관리자 화면에서 값을 보여 주는 쪽은 실수로 섞여 들어간 값을 놓치는 게 더 큰
+    // 사고다 — created_at 에 주민등록번호가 잘못 들어갔어도 그대로 가려야 한다.
+    const scanned = typeof value === "string" ? maskFreeText(value) : maskFreeNumber(value);
     if (scanned !== null) {
       ctx.warnings.push(`${key} 값에서 민감정보로 보이는 값을 찾아 가렸다`);
       return scanned;
@@ -429,22 +430,14 @@ export function maskRecord(record) {
   // 자기 자신을 가리키는 필드를 만났을 때 순환 참조로 바로 걸린다.
   if (isObject) ctx.inProgress.add(record);
 
-  const masked = {};
-  for (const [key, value] of Object.entries(record ?? {})) {
-    if (typeof value === "function") {
-      // toJSON 처럼 클로저에 원본 민감정보를 쥔 함수를 그대로 옮기면, 다른 필드는
-      // 다 가려졌어도 JSON.stringify(masked) 한 번에 새어 나간다 — maskEntries 의
-      // 같은 판단을 최상위 필드에도 적용한다.
-      ctx.warnings.push(`${key} 값이 함수라 마스킹된 결과에서 뺐다`);
-      continue;
-    }
-    const normalized = normalizeKey(key);
-    const hasMasker = MASKERS_BY_KEY[normalized] !== undefined;
-    masked[key] = maskField(key, value, ctx, 1);
-    if (!hasMasker && IDENTIFYING_TOGETHER.has(normalized) && masked[key] === value) {
+  // 최상위 필드도 중첩된 객체와 똑같이 maskEntries 를 거친다 — 함수 값을 거르는 판단을
+  // 여기서 따로 다시 짜지 않는다. onEntry 로 마스커 유무와 마스킹 전후 값만 받아 조합
+  // 위험(shown) 목록을 만든다.
+  const masked = maskEntries(Object.entries(record ?? {}), ctx, 1, (key, value, masker, maskedValue) => {
+    if (masker === undefined && IDENTIFYING_TOGETHER.has(normalizeKey(key)) && maskedValue === value) {
       shown.push(key);
     }
-  }
+  });
 
   if (isObject) {
     ctx.inProgress.delete(record);

@@ -798,6 +798,16 @@ test("탐지기가 잡는 주민등록번호는 마스킹도 놓치지 않는다
   }
 });
 
+test("탐지기는 시간류 키를 건너뛰지만 마스킹은 그대로 가린다", () => {
+  // findResidentNumbers 는 오탐 방지로 created_at 같은 시간류 키 뒤의 숫자를 건너뛴다.
+  // 마스킹은 그 판단을 들여오지 않는다 — 관리자 화면에서 실수로 섞여 들어간 값을
+  // 놓치는 쪽이 더 위험하기 때문이다.
+  assert.deepEqual(residentNumber.findResidentNumbers("created_at: 9001011234567"), []);
+  const { masked, warnings } = maskRecord({ created_at: 9001011234567 });
+  assert.notEqual(masked.created_at, 9001011234567, "created_at 도 그대로 가려야 한다");
+  assert.equal(warnings.length, 1);
+});
+
 test("함수 값(특히 toJSON)은 마스킹된 결과에서 빼고 경고한다", () => {
   // toJSON 이 원본 함수 그대로 옮겨지면, 다른 필드는 다 가려졌어도
   // JSON.stringify(masked) 한 번에 클로저가 쥔 원본 민감정보가 새어 나간다.
