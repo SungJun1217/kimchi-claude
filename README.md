@@ -15,6 +15,7 @@
 
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D9532B?style=for-the-badge&logo=anthropic&logoColor=white)
 [![test](https://img.shields.io/github/actions/workflow/status/SungJun1217/kimchi-claude/test.yml?branch=develop&style=for-the-badge&label=test)](https://github.com/SungJun1217/kimchi-claude/actions/workflows/test.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/SungJun1217/kimchi-claude/codeql.yml?branch=develop&style=for-the-badge&label=CodeQL)](https://github.com/SungJun1217/kimchi-claude/actions/workflows/codeql.yml)
 ![Node ESM](https://img.shields.io/badge/Node-ESM-2F8A45?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![dependencies 0](https://img.shields.io/badge/dependencies-0-2F8A45?style=for-the-badge)
 ![LLM calls 0](https://img.shields.io/badge/LLM%20calls-0-2F8A45?style=for-the-badge)
@@ -314,7 +315,8 @@ claude --plugin-dir ./kimchi-claude
 ## 기여
 
 규칙을 더하거나 고치는 방법, 개발 명령은 [CONTRIBUTING.md](CONTRIBUTING.md)에 정리해 뒀습니다.
-의존성이 없어서 Node만 있으면 `npm test`로 바로 시험을 돌릴 수 있습니다.
+의존성이 없어서 Node만 있으면 `npm test`로 바로 시험을 돌릴 수 있습니다. 보안 취약점은
+[SECURITY.md](SECURITY.md)에 적은 대로 비공개 채널로 제보해 주세요.
 
 <div align="center">
 <br>
