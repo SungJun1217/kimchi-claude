@@ -1,0 +1,328 @@
+name: kimchi-claude lint
+description: >-
+  변경된 문서, 커밋 메시지, PR 제목·본문을 kimchi-claude 의 한국어 말투 규칙과 주민등록번호
+  탐지로 검사해 PR 리뷰나 워크플로 주석으로 알린다.
+author: SungJun1217
+
+inputs:
+  github-token:
+    description: PR 파일 목록·커밋·리뷰 게시에 쓰는 토큰
+    required: false
+    default: ${{ github.token }}
+  paths:
+    description: >-
+      검사할 파일의 간이 glob 목록(쉼표로 구분). ** 와 * 만 지원한다. 문서 확장자로
+      좁혀도 실제로 검사하는 것은 hooks/lib/artifact.mjs 와 같은 문서 확장자
+      (.md/.mdx/.txt/.rst/.adoc)뿐이다 — 다른 확장자를 넣어도 산문으로 보지 않는다.
+    required: false
+    default: "**/*.md,**/*.mdx,**/*.txt,**/*.rst,**/*.adoc"
+  check-commits:
+    description: PR 의 커밋 메시지도 검사할지
+    required: false
+    default: "true"
+  check-pr-text:
+    description: PR 제목·본문도 검사할지
+    required: false
+    default: "true"
+  mode:
+    description: >-
+      comment(PR 리뷰 코멘트로 알림) 또는 annotations(워크플로 로그의 ::warning 으로만
+      알림). fork PR·dependabot PR 처럼 쓰기 권한이 없는 토큰이면 comment 를 골라도
+      자동으로 annotations 로 내려간다. 리뷰·코멘트 게시가 403 으로 실패해도(권한이
+      예상과 다른 경우) job 은 실패하지 않고 annotations 만 남는다.
+    required: false
+    default: comment
+  fail-on-findings:
+    description: 위반이 하나라도 있으면(문서·커밋·PR 텍스트·주민등록번호 모두 포함) 이 액션을 실패로 만들지
+    required: false
+    default: "false"
+
+outputs:
+  findings-count:
+    description: 찾은 위반 건수(문서 + 커밋 + PR 텍스트)
+    value: ${{ steps.lint.outputs.findings-count }}
+  pii-count:
+    description: 찾은 주민등록번호로 보이는 값 건수
+    value: ${{ steps.lint.outputs.pii-count }}
+
+runs:
+  using: composite
+  steps:
+    # 이 액션은 대상 저장소를 직접 체크아웃하지 않는다 — 호출부가 actions/checkout 을
+    # 먼저 실행해야 한다. 어느 ref 를 체크아웃했든, 파일 내용은 아래 "HEAD 커밋 확보"
+    # 단계가 --head-sha 로 PR 헤드 커밋을 직접 지정해 읽으므로 결과가 갈리지 않는다
+    # (요구사항 8 — merge 커밋을 체크아웃해도 base 쪽 변경이 섞여 들어오지 않는다).
+    - name: Node 준비
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24"
+
+    - name: 이벤트가 pull_request 인지 확인
+      id: pr
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.event_name }}" != "pull_request_target" ]; then
+          echo "kimchi-claude lint 는 pull_request 이벤트에서만 동작합니다. 건너뜁니다." >&2
+          echo "number=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+        echo "head-sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+
+    # fork 에서 온 PR, 그리고 Dependabot 이 연 PR 은 기본 토큰이 읽기 전용이라
+    # pull-requests: write 가 없다 — 리뷰 게시를 시도하면 403 으로 실패한다. head
+    # 저장소가 base 저장소와 다르거나 작성자가 dependabot[bot] 이면 읽기 전용으로
+    # 본다. 이 판정이 틀렸더라도(예: 저장소 설정이 특이한 경우) 아래 게시 단계들이
+    # 403 을 만나면 job 을 실패시키지 않고 조용히 annotations 만 남긴다.
+    - name: 쓰기 권한 판정
+      id: perm
+      if: steps.pr.outputs.number != ''
+      shell: bash
+      run: |
+        if [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ] \
+           && [ "${{ github.actor }}" != "dependabot[bot]" ]; then
+          echo "can-write=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "can-write=false" >> "$GITHUB_OUTPUT"
+          echo "fork PR 이거나 Dependabot PR 이라 리뷰를 올리지 못합니다. annotations 로만 알립니다." >&2
+        fi
+
+    - name: HEAD 커밋 확보
+      id: head
+      if: steps.pr.outputs.number != ''
+      shell: bash
+      env:
+        HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+      run: |
+        # 체크아웃이 얕은 클론이면 PR 헤드 커밋 객체 자체가 로컬에 없을 수 있다 —
+        # 있는지 먼저 보고, 없으면 그 커밋 하나만 가져온다.
+        if ! git -C "${GITHUB_WORKSPACE}" cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+          git -C "${GITHUB_WORKSPACE}" fetch --depth=1 origin "${HEAD_SHA}" || true
+        fi
+        if git -C "${GITHUB_WORKSPACE}" cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          echo "PR 헤드 커밋(${HEAD_SHA})을 로컬에서 찾지 못했습니다. 작업 트리 내용으로 대신 검사합니다." >&2
+        fi
+
+    - name: 변경 파일 목록 수집
+      id: files
+      if: steps.pr.outputs.number != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ steps.pr.outputs.number }}
+      run: |
+        WORKDIR="${RUNNER_TEMP}/kimchi-lint"
+        mkdir -p "$WORKDIR"
+        echo "workdir=$WORKDIR" >> "$GITHUB_OUTPUT"
+
+        gh api "repos/${REPO}/pulls/${NUMBER}/files" --paginate > "$WORKDIR/pr-files.json.parts" || echo "[]" > "$WORKDIR/pr-files.json.parts"
+        # --paginate 는 페이지마다 배열을 이어 붙여 내보낸다. jq -s 'add' 로 한 배열로 합친다.
+        jq -s 'add // []' "$WORKDIR/pr-files.json.parts" > "$WORKDIR/pr-files.json"
+        jq -r '.[].filename' "$WORKDIR/pr-files.json" > "$WORKDIR/files.txt"
+
+    - name: 커밋 메시지 수집
+      if: steps.pr.outputs.number != '' && inputs.check-commits == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ steps.pr.outputs.number }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        gh api "repos/${REPO}/pulls/${NUMBER}/commits" --paginate > "$WORKDIR/pr-commits.json.parts" || echo "[]" > "$WORKDIR/pr-commits.json.parts"
+        jq -s 'add // [] | map(.commit.message)' "$WORKDIR/pr-commits.json.parts" > "$WORKDIR/commits.json"
+
+    - name: PR 제목·본문 수집
+      if: steps.pr.outputs.number != '' && inputs.check-pr-text == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ steps.pr.outputs.number }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        gh api "repos/${REPO}/pulls/${NUMBER}" --jq '{title: .title, body: (.body // "")}' > "$WORKDIR/pr-text.json"
+
+    # 위반이 있어도 이 단계 자체는 항상 성공(exit 0)한다 — 종료 코드를 이 단계가 그대로
+    # 물려받으면, GitHub Actions 는 실패한 단계 뒤의 나머지 단계를(always()/failure() 로
+    # 명시하지 않는 한) 전부 건너뛴다. fail-on-findings 는 다 게시한 "뒤"에 마지막
+    # always() 단계에서 판정한다(요구사항 6).
+    - name: 오프라인 검사
+      id: lint
+      if: steps.pr.outputs.number != ''
+      shell: bash
+      env:
+        KIMCHI_PATTERNS: ${{ inputs.paths }}
+        HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+        HEAD_OK: ${{ steps.head.outputs.ok }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        ARGS=(--files "$WORKDIR/files.txt" --repo-root "${GITHUB_WORKSPACE}" --patterns "${KIMCHI_PATTERNS}" --out "$WORKDIR/findings.json")
+        [ -f "$WORKDIR/commits.json" ] && ARGS+=(--commits "$WORKDIR/commits.json")
+        [ -f "$WORKDIR/pr-text.json" ] && ARGS+=(--pr-text "$WORKDIR/pr-text.json")
+        [ "$HEAD_OK" = "true" ] && ARGS+=(--head-sha "$HEAD_SHA")
+
+        set +e
+        node "${{ github.action_path }}/scripts/action-lint.mjs" "${ARGS[@]}" --fail-on-findings true --mode annotations
+        echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+        set -e
+
+        FILES_COUNT=$(jq '.files | length' "$WORKDIR/findings.json")
+        COMMITS_COUNT=$(jq '.commits | length' "$WORKDIR/findings.json")
+        TITLE_COUNT=$(jq '.prText.title | length' "$WORKDIR/findings.json")
+        BODY_COUNT=$(jq '.prText.body | length' "$WORKDIR/findings.json")
+        PII_COUNT=$(jq '.pii | length' "$WORKDIR/findings.json")
+        echo "findings-count=$((FILES_COUNT + COMMITS_COUNT + TITLE_COUNT + BODY_COUNT))" >> "$GITHUB_OUTPUT"
+        echo "pii-count=$PII_COUNT" >> "$GITHUB_OUTPUT"
+
+    - name: 기존 kimchi 코멘트·스레드·리뷰 조회
+      id: existing
+      if: steps.pr.outputs.number != '' && inputs.mode == 'comment' && steps.perm.outputs.can-write == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ steps.pr.outputs.number }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        OWNER="${REPO%%/*}"
+        NAME="${REPO#*/}"
+        set +e
+
+        # 리뷰 스레드: 해결·낡음(isResolved/isOutdated) 여부와, 스레드를 연 코멘트가
+        # kimchi 봇인지 판정하는 데 필요한 author{login __typename}까지 받는다.
+        # GraphQL 은 REST 와 봇 계정 로그인 표기가 달라서(REST "github-actions[bot]",
+        # GraphQL login:"github-actions"+__typename:"Bot") 둘 다 있어야
+        # build-review.mjs의 isKimchiBot 이 판정할 수 있다. 문자열 변수(owner·name·id)는
+        # -f로, 정수 변수(number)만 -F로 넘긴다 — gh api graphql 은 -F 를 숫자·불리언으로
+        # 형 변환하려 시도해 문자열을 오염시킬 수 있다.
+        #
+        # 스레드는 100개보다 많을 수 있어(장수 PR) --paginate 로 전체를 받는다. gh는
+        # $endCursor 변수와 pageInfo{hasNextPage endCursor}가 있으면 커서를 자동으로
+        # 채워 가며 반복 호출한다 — 페이지마다 --jq 결과(배열)가 한 줄씩 나오므로
+        # jq -s 'add'로 한 배열로 합친다(PR files·commits 목록과 같은 방식).
+        THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}nodes{id isResolved isOutdated comments(first:50){nodes{body author{login __typename}}}}}}}}'
+        gh api graphql --paginate -f query="$THREADS_QUERY" -f owner="$OWNER" -f name="$NAME" -F number="$NUMBER" \
+          --jq '.data.repository.pullRequest.reviewThreads.nodes' \
+          > "$WORKDIR/review-threads.json.parts" 2>/dev/null || echo "[]" > "$WORKDIR/review-threads.json.parts"
+        jq -s 'add // []' "$WORKDIR/review-threads.json.parts" > "$WORKDIR/review-threads.json" 2>/dev/null \
+          || echo "[]" > "$WORKDIR/review-threads.json"
+
+        # 리뷰·PR 대화 코멘트는 페이지네이션 없이 마지막 100개만 본다(장수 PR의 극단적인
+        # 경우 더 오래된 항목을 놓칠 수 있다 — docs/design.md "알려진 한계" 참고). sticky
+        # 코멘트와 최근 kimchi 리뷰는 항상 이 액션이 최근에 올린 것이라 끝(last)에 있다
+        # — first:100(앞쪽) 대신 last:100(뒤쪽)을 써야 실제로 찾을 수 있다.
+        REVIEWS_QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviews(last:100){nodes{id body author{login __typename}}}}}}'
+        gh api graphql -f query="$REVIEWS_QUERY" -f owner="$OWNER" -f name="$NAME" -F number="$NUMBER" \
+          --jq '.data.repository.pullRequest.reviews.nodes' \
+          > "$WORKDIR/existing-reviews.json" 2>/dev/null || echo "[]" > "$WORKDIR/existing-reviews.json"
+
+        # sticky 요약 코멘트를 찾는 데 쓰는 PR 대화(issue 성격) 코멘트 목록.
+        SEARCH_QUERY='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(last:100){nodes{databaseId body author{login __typename}}}}}}'
+        gh api graphql -f query="$SEARCH_QUERY" -f owner="$OWNER" -f name="$NAME" -F number="$NUMBER" \
+          --jq '.data.repository.pullRequest.comments.nodes' \
+          > "$WORKDIR/existing-issue-comments.json" 2>/dev/null || echo "[]" > "$WORKDIR/existing-issue-comments.json"
+        exit 0
+
+    # findings.json 을 리뷰 페이로드로 바꾼다. 이 스크립트도 오프라인이다(불변식 10) —
+    # 새로 올릴 코멘트, 접어야 할 스레드, 접어야 할 이전 리뷰, sticky 코멘트 본문을
+    # 계산만 하고 아무것도 올리지 않는다.
+    - name: 리뷰 페이로드 구성
+      id: review
+      if: steps.pr.outputs.number != '' && inputs.mode == 'comment' && steps.perm.outputs.can-write == 'true'
+      shell: bash
+      env:
+        HEAD_SHA: ${{ steps.pr.outputs.head-sha }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        node "${{ github.action_path }}/scripts/build-review.mjs" \
+          --findings "$WORKDIR/findings.json" \
+          --pr-files "$WORKDIR/pr-files.json" \
+          --review-threads "$WORKDIR/review-threads.json" \
+          --existing-reviews "$WORKDIR/existing-reviews.json" \
+          --commit-id "$HEAD_SHA" \
+          --out "$WORKDIR/plan.json"
+        echo "has-review=$(jq '.review != null' "$WORKDIR/plan.json")" >> "$GITHUB_OUTPUT"
+
+    - name: 새 지적만 리뷰로 올리고, 이전 kimchi 리뷰는 접는다
+      if: steps.pr.outputs.number != '' && inputs.mode == 'comment' && steps.perm.outputs.can-write == 'true' && steps.review.outputs.has-review == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ steps.pr.outputs.number }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        set +e
+
+        jq '.review' "$WORKDIR/plan.json" > "$WORKDIR/review.json"
+        if gh api --method POST "repos/${REPO}/pulls/${NUMBER}/reviews" --input "$WORKDIR/review.json" >/dev/null; then
+          # 새 리뷰가 성공적으로 올라간 뒤에만 이전 kimchi 리뷰를 접는다(GraphQL
+          # minimizeComment — PullRequestReview 는 Minimizable 이다). 실패해도 job 은
+          # 계속 진행한다 — 코멘트를 접지 못하는 것이 리뷰를 아예 못 올리는 것보다 낫다.
+          jq -r '.toMinimizeReviewIds[]' "$WORKDIR/plan.json" | while read -r ID; do
+            [ -z "$ID" ] && continue
+            gh api graphql -f query='mutation($id:ID!){minimizeComment(input:{subjectId:$id,classifier:OUTDATED}){minimizedComment{isMinimized}}}' -f id="$ID" >/dev/null 2>&1 || true
+          done
+        else
+          echo "PR 리뷰 게시에 실패했습니다(권한 부족 등). annotations 만 남습니다." >&2
+        fi
+        exit 0
+
+    - name: 해소된 kimchi 스레드를 접는다
+      if: steps.pr.outputs.number != '' && inputs.mode == 'comment' && steps.perm.outputs.can-write == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        set +e
+        jq -r '.toResolveThreadIds[]' "$WORKDIR/plan.json" 2>/dev/null | while read -r TID; do
+          [ -z "$TID" ] && continue
+          gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id}}}' -f id="$TID" >/dev/null 2>&1 || true
+        done
+        exit 0
+
+    # sticky 요약 코멘트는 findings 유무와 무관하게 항상 그 자리에서 현재 상태로
+    # 갱신한다(요구사항 5) — 리뷰 본문은 짧은 포인터일 뿐이고 자세한 목록은 여기에 있다.
+    - name: sticky 요약 코멘트 갱신
+      if: steps.pr.outputs.number != '' && inputs.mode == 'comment' && steps.perm.outputs.can-write == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        NUMBER: ${{ steps.pr.outputs.number }}
+      run: |
+        WORKDIR="${{ steps.files.outputs.workdir }}"
+        set +e
+        BODY=$(jq -r '.stickyBody' "$WORKDIR/plan.json")
+        # GraphQL 은 이 봇 계정을 login:"github-actions"(대괄호 없음) + __typename:"Bot"
+        # 로 준다 — REST 표기("github-actions[bot]")와 다르다(build-review.mjs의
+        # isKimchiBot 과 같은 판정을 여기서도 그대로 맞춘다).
+        EXISTING=$(jq -r '[.[] | select(.author.login == "github-actions" and .author.__typename == "Bot") | select(.body | test("kimchi-claude-lint:summary"))][0].databaseId // empty' \
+          "$WORKDIR/existing-issue-comments.json" 2>/dev/null)
+        if [ -n "$EXISTING" ]; then
+          gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING}" -f body="$BODY" >/dev/null \
+            || echo "sticky 코멘트 갱신에 실패했습니다(권한 부족 등)." >&2
+        else
+          gh api --method POST "repos/${REPO}/issues/${NUMBER}/comments" -f body="$BODY" >/dev/null \
+            || echo "sticky 코멘트 작성에 실패했습니다(권한 부족 등)." >&2
+        fi
+        exit 0
+
+    # fail-on-findings 는 여기서만 판정한다 — 위의 모든 게시 단계가 이미 끝난 뒤,
+    # always() 로 걸어 앞선 단계의 성공·실패와 무관하게 항상 실행한다(요구사항 6).
+    - name: fail-on-findings 판정
+      if: always() && steps.pr.outputs.number != '' && inputs.fail-on-findings == 'true'
+      shell: bash
+      env:
+        LINT_EXIT: ${{ steps.lint.outputs.exit-code }}
+      run: |
+        if [ "$LINT_EXIT" != "0" ]; then
+          echo "::error::kimchi-claude 가 위반을 찾았습니다(fail-on-findings: true)." >&2
+          exit 1
+        fi

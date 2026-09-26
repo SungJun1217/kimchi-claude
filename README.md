@@ -35,6 +35,7 @@
 [고치는 것](#고치는-것) ·
 [동작 방식](#동작-방식) ·
 [훅](#산출물을-지키는-훅) ·
+[GitHub Action](#github-action으로-쓰기) ·
 [지식 스킬](#한국-개발-지식-스킬) ·
 [설치](#설치) ·
 [설정](#설정) ·
@@ -205,6 +206,71 @@
 두 언어가 반씩 섞여 있으면 끼어들지 않습니다. 코드 블록은 판정에서 뺍니다.
 
 사용자가 한국어로 쓰라고 하면 판정보다 그 말을 따릅니다.
+
+## GitHub Action으로 쓰기
+
+클로드 코드 없이도, 저장소 어디서든 PR에서 같은 검사를 받을 수 있습니다. 이 저장소가 자기
+자신의 액션을 쓰는 워크플로가 [`.github/workflows/kimchi-lint.yml`](.github/workflows/kimchi-lint.yml)입니다.
+
+```yaml
+name: kimchi-lint
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # PR 헤드 커밋을 명시합니다. 기본값(merge 커밋)을 체크아웃하면 base 쪽 변경이
+      # 섞여 들어와 줄 번호가 실제 PR과 어긋날 수 있습니다.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: SungJun1217/kimchi-claude@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`v0`은 가장 최근 `0.x.y` 릴리스를 가리키는 이동 태그입니다(릴리스마다 자동으로 옮겨집니다).
+운영 중인 워크플로에서 버전을 고정하고 싶으면 `@v0` 대신 `@0.18.0`처럼 구체적인 태그를 쓰십시오.
+
+변경된 문서, 커밋 메시지, PR 제목·본문을 훅과 같은 규칙으로 검사해 PR 리뷰로 알려 줍니다.
+치환 규칙(`검사` 칸이 `치환`인 것)은 그 줄을 통째로 고친 `suggestion` 코멘트까지 답니다.
+정규식 규칙은 문맥을 봐야 해서 지적만 하고 제안은 달지 않습니다 — 훅의 자동 교정과 같은 경계입니다.
+
+주민등록번호로 보이는 값을 찾으면 마스킹한 값만(`900101-*******`) 리뷰에 적고, 원문은 파일
+경로에 섞여 있어도 어디에도 싣지 않습니다.
+
+**재실행해도 리뷰가 쌓이지 않습니다.** PR을 다시 밀 때마다 지적 하나하나에 지문(fingerprint)을
+매겨, 이미 올라간 지적은 다시 올리지 않고 새로 생긴 지적만 추가로 올립니다. 고쳐서 더는 안
+걸리는 지적은 지우지 않고 리뷰 스레드를 "해결됨"으로 접어 이력을 남깁니다. 새 리뷰를 올릴
+때마다 이전 kimchi 리뷰는 접어(minimize) 눈에 띄지 않게 하고, 자세한 목록은 항상 같은 자리의
+sticky 코멘트 하나에 갱신합니다 — 걸리는 것이 없어지면 그 코멘트도 "걸리는 표현이 없습니다"로
+바뀝니다.
+
+| 입력 | 기본값 | 뜻 |
+|---|---|---|
+| `github-token` | `${{ github.token }}` | PR 파일·커밋 조회와 리뷰 게시에 쓰는 토큰 |
+| `paths` | 문서 확장자 다섯 가지 | 검사할 파일의 간이 glob 목록(쉼표 구분, `**`·`*`만 지원) |
+| `check-commits` | `true` | PR 커밋 메시지도 검사할지 |
+| `check-pr-text` | `true` | PR 제목·본문도 검사할지 |
+| `mode` | `comment` | `comment`(PR 리뷰) 또는 `annotations`(워크플로 로그의 `::warning`만) |
+| `fail-on-findings` | `false` | 위반이 있으면(문서·커밋·PR 텍스트·주민등록번호 모두 포함) 이 단계를 실패로 만들지 |
+
+fork PR과 Dependabot이 연 PR은 토큰이 읽기 전용이라 리뷰를 올릴 권한이 없습니다. 이때는 자동으로
+`annotations` 방식으로 내려가 워크플로 로그에만 남습니다. 권한이 있어 보이는데도 실제 게시가
+막히는 경우(조직 설정 등)에도 job 자체는 실패하지 않고 annotations만 남습니다. 검사 로직
+자체(`scripts/action-lint.mjs`, `scripts/build-review.mjs`)는 네트워크를 열지 않습니다 — 로컬
+파일만 읽고 JSON만 냅니다. PR 파일·스레드·리뷰 조회와 코멘트 게시에 쓰는 `gh`(REST·GraphQL)
+호출은 모두 `action.yml`의 셸 단계에 있습니다. 자세한 설계 근거는
+[설계 문서의 GitHub Action 절](docs/design.md#github-action-v0180)에 있습니다.
 
 ## 한국 개발 지식 스킬
 
