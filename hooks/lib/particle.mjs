@@ -8,6 +8,7 @@
 // 틀린 자동 교정은 없는 것보다 나쁘다.
 
 import { maskProtected, isIgnoredFile } from "./segment.mjs";
+import { groupCounted, formatGroupedList, MAX_LISTED } from "./format.mjs";
 
 // 받침을 세 가지로 나눈다. 있고 없음만으로는 모자라다.
 //
@@ -459,8 +460,9 @@ export function fixParticles(text, ext, extraDefs) {
 // 같은 오류가 문서에 수천 번 반복될 수 있다("commit를" × 1000). 종류별로 묶어 세지
 // 않으면 같은 줄이 그만큼 나열되어 메시지가 건수에 비례해 커진다(lint.mjs의
 // formatFindings와 같은 문제, 같은 해법). 목록은 종류 몇 가지만 보여 주고 나머지는
-// 개수로만 말한다 — pii.mjs의 MAX_LISTED와 같은 관례다.
-const MAX_LISTED_PARTICLES = 20;
+// 개수로만 말한다 — pii.mjs의 MAX_LISTED와 같은 관례다. 묶고 나열하는 부분은
+// format.mjs 하나로 모았다.
+const MAX_LISTED_PARTICLES = MAX_LISTED;
 
 /**
  * 사람이 읽을 메시지로 만든다. 같은 교정(같은 낱말 → 같은 고침)은 한 줄로 묶고 건수를
@@ -472,27 +474,19 @@ const MAX_LISTED_PARTICLES = 20;
 export function formatParticleErrors(found) {
   if (found.length === 0) return "";
 
-  const groups = new Map();
-  for (const hit of found) {
-    const key = `${hit.word}${hit.particle}\u0000${hit.correct}`;
-    const entry = groups.get(key);
-    if (entry) entry.count += 1;
-    else groups.set(key, { hit, count: 1 });
-  }
-  const entries = [...groups.values()];
-  const listed = entries.slice(0, MAX_LISTED_PARTICLES);
-  const rest = entries.length - listed.length;
+  const entries = groupCounted(found, (hit) => `${hit.word}${hit.particle}\u0000${hit.correct}`);
 
   const header =
     entries.length === found.length
       ? `영어 낱말 뒤 조사가 발음과 맞지 않는 곳 ${found.length}건입니다.`
       : `영어 낱말 뒤 조사가 발음과 맞지 않는 곳 ${entries.length}가지(총 ${found.length}건)입니다.`;
 
-  const lines = listed.map(
-    ({ hit, count }) =>
-      `- "${hit.matched}" → "${hit.word}${hit.correct}"${count > 1 ? ` (총 ${count}곳)` : ""}`
+  const lines = formatGroupedList(
+    entries,
+    ({ item: hit, count }) =>
+      `- "${hit.matched}" → "${hit.word}${hit.correct}"${count > 1 ? ` (총 ${count}곳)` : ""}`,
+    MAX_LISTED_PARTICLES
   );
-  if (rest > 0) lines.push(`- 외 ${rest}가지 더`);
 
   return [header, "", ...lines].join("\n");
 }

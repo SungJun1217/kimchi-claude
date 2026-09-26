@@ -15,6 +15,7 @@ import { findParticleErrors, fixParticles, formatParticleErrors } from "./partic
 import { looksKorean } from "./detect.mjs";
 import { isIgnoredFile, maskProtected, collectReferenceDefLabels, MASK } from "./segment.mjs";
 import { extractCommitTargets, escapeDoubleQuoted } from "./bash-commit.mjs";
+import { groupCounted, formatGroupedList, MAX_LISTED } from "./format.mjs";
 
 const PLUGIN_ROOT =
   process.env.CLAUDE_PLUGIN_ROOT || join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -240,27 +241,20 @@ function declaresIgnoreFrom(filePath, fileText) {
 // 같은 교정이 문서에 수천 번 반복될 수 있다(1.24M자 문서에서 실측: 3.6MB짜리 훅 JSON).
 // 종류별로 묶어 세지 않으면 systemMessage/additionalContext 가 건수에 비례해 커진다 —
 // particle.mjs의 formatParticleErrors, lint.mjs의 formatFindings와 같은 문제, 같은 해법이다.
-const MAX_LISTED_FIXES = 20;
+// 묶고 나열하는 부분은 format.mjs 하나로 모았다.
+const MAX_LISTED_FIXES = MAX_LISTED;
 
 function groupApplied(applied) {
-  const groups = new Map();
-  for (const item of applied) {
-    const key = `${item.matched}\u0000${item.replacement}`;
-    const entry = groups.get(key);
-    if (entry) entry.count += 1;
-    else groups.set(key, { item, count: 1 });
-  }
-  return [...groups.values()];
+  return groupCounted(applied, (item) => `${item.matched}\u0000${item.replacement}`);
 }
 
 function formatFixList(applied) {
   const entries = groupApplied(applied);
-  const listed = entries.slice(0, MAX_LISTED_FIXES);
-  const rest = entries.length - listed.length;
-  const lines = listed.map(
-    ({ item, count }) => `- "${item.matched}" → "${item.replacement}"${count > 1 ? ` (총 ${count}곳)` : ""}`
+  const lines = formatGroupedList(
+    entries,
+    ({ item, count }) => `- "${item.matched}" → "${item.replacement}"${count > 1 ? ` (총 ${count}곳)` : ""}`,
+    MAX_LISTED_FIXES
   );
-  if (rest > 0) lines.push(`- 외 ${rest}가지 더`);
   return lines.join("\n");
 }
 

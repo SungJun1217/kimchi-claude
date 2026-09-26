@@ -111,6 +111,7 @@ kimchi-claude/
 │       ├── lint.mjs               규칙 검사와 자동 교정. 조사 안전장치
 │       ├── latin-hada.mjs         로마자 동사에 하다를 붙인 표현("push합니다") 탐지. 경고 전용
 │       ├── particle.mjs           영어 낱말 뒤 조사를 발음으로 판정
+│       ├── format.mjs             같은 지적·교정을 묶어 세고 N가지만 나열하는 공통 로직
 │       ├── pii.mjs                주민등록번호 탐지
 │       ├── artifact.mjs           말투 판정. 훅 입출력은 다루지 않는다
 │       ├── bash-commit.mjs        git commit 명령에서 메시지 구간만 정확한 위치로 추출
