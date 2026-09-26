@@ -16,26 +16,20 @@ import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
+import { CODE_ONLY_PATTERNS } from "../hooks/lib/segment.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-export const MODE_PAGES = "pages";
-export const MODE_WIKI = "wiki";
+const MODE_PAGES = "pages";
+const MODE_WIKI = "wiki";
 
 // 스테이징 디렉터리에 실제로 올라가는 문서. 이 목록에 없는 상대 경로는 두 대상
 // 모두에서 저장소 원본으로 되돌아가는 절대 URL로 바뀐다.
 const STAGED_DOCS = {
-  "README.md": { pagesPath: "index.md", wikiPage: "Home" },
-  "docs/design.md": { pagesPath: "docs/design.md", wikiPage: "설계-문서" },
-  "CONTRIBUTING.md": { pagesPath: "CONTRIBUTING.md", wikiPage: "기여-안내" },
-  "SECURITY.md": { pagesPath: "SECURITY.md", wikiPage: "보안" },
-};
-
-const HEADER_SOURCE = {
-  Home: "README.md",
-  "설계-문서": "docs/design.md",
-  "기여-안내": "CONTRIBUTING.md",
-  보안: "SECURITY.md",
+  "README.md": { pagesPath: "index.md", wikiPage: "Home", title: "kimchi-claude" },
+  "docs/design.md": { pagesPath: "docs/design.md", wikiPage: "설계-문서", title: "설계 문서" },
+  "CONTRIBUTING.md": { pagesPath: "CONTRIBUTING.md", wikiPage: "기여-안내", title: "기여하기" },
+  "SECURITY.md": { pagesPath: "SECURITY.md", wikiPage: "보안", title: "보안 정책" },
 };
 
 const WIKI_HEADER = (path) =>
@@ -84,14 +78,28 @@ const LINK_PATTERN = /(\[[^\]]*\]\()([^)\s]+)(\))/g;
 const ATTR_PATTERN = /((?:src|srcset)=")([^"]+)(")/g;
 
 function rewritePlain(text, opts) {
-  return text
-    .replace(LINK_PATTERN, (all, open, target, close) => `${open}${resolvePath(target, opts)}${close}`)
-    .replace(ATTR_PATTERN, (all, open, target, close) => `${open}${resolvePath(target, opts)}${close}`);
+  const swap = (all, open, target, close) => `${open}${resolvePath(target, opts)}${close}`;
+  return text.replace(LINK_PATTERN, swap).replace(ATTR_PATTERN, swap);
 }
 
-// 펜스(```)와 인라인 코드 스팬(`…`) 은 예시 문자열이지 실제 링크가 아니므로 그대로 둔다.
-// 예: docs/design.md 의 "`[안내](url)`" 는 마크다운 링크 문법을 설명하는 예시일 뿐이다.
-const CODE_SEGMENT = /(```[\s\S]*?```|`[^`\n]+`)/;
+/** 펜스(```/~~~)와 인라인 코드 스팬(`…`)이 차지하는 구간. hooks/lib/segment.mjs 와 같은
+ * 정의를 쓴다 — 예: docs/design.md 의 "`[안내](url)`" 는 마크다운 링크 문법을 설명하는
+ * 예시일 뿐, 실제 링크가 아니다. */
+function findCodeRanges(text) {
+  const ranges = [];
+  for (const pattern of CODE_ONLY_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match[0].length === 0) {
+        pattern.lastIndex += 1;
+        continue;
+      }
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+  return ranges.sort((a, b) => a[0] - b[0]);
+}
 
 /**
  * 마크다운 문서의 상대 링크를 mode 에 맞춰 고쳐 쓴다. 코드 펜스·인라인 코드는 손대지 않는다.
@@ -99,17 +107,28 @@ const CODE_SEGMENT = /(```[\s\S]*?```|`[^`\n]+`)/;
  * @param {{ mode: "pages"|"wiki", repo: string, ref: string }} opts
  */
 export function rewriteLinks(markdown, opts) {
-  return markdown
-    .split(CODE_SEGMENT)
-    .map((segment, i) => (i % 2 === 1 ? segment : rewritePlain(segment, opts)))
-    .join("");
+  const ranges = findCodeRanges(markdown);
+  let out = "";
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    if (end <= cursor) continue;
+    const from = Math.max(start, cursor);
+    out += rewritePlain(markdown.slice(cursor, from), opts);
+    out += markdown.slice(from, end);
+    cursor = end;
+  }
+  out += rewritePlain(markdown.slice(cursor), opts);
+  return out;
 }
 
 function stageAssets(outDir) {
   const assetsOut = join(outDir, "assets");
   mkdirSync(assetsOut, { recursive: true });
-  const readme = readFileSync(join(ROOT, "README.md"), "utf8");
-  const names = [...new Set([...readme.matchAll(/assets\/([\w.-]+)/g)].map((hit) => hit[1]))];
+  const names = new Set();
+  for (const source of Object.keys(STAGED_DOCS)) {
+    const text = readFileSync(join(ROOT, source), "utf8");
+    for (const hit of text.matchAll(/assets\/([\w.-]+)/g)) names.add(hit[1]);
+  }
   for (const name of names) {
     copyFileSync(join(ROOT, "assets", name), join(assetsOut, name));
   }
@@ -124,20 +143,13 @@ theme: minima
 // jekyll-optional-front-matter 는 파일이 마크다운 제목으로 시작할 때만 front matter
 // 없이도 처리해 준다 — README.md 는 첫 줄이 `<div align="center">` 라 이 휴리스틱을
 // 못 만족할 수 있다. 플러그인 동작에 기대지 않고 앞머리를 직접 붙여 항상 .html로 빌드되게 한다.
-const PAGE_TITLE = {
-  "README.md": "kimchi-claude",
-  "docs/design.md": "설계 문서",
-  "CONTRIBUTING.md": "기여하기",
-  "SECURITY.md": "보안 정책",
-};
-
 function buildPages({ repo, ref, out }) {
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, "_config.yml"), CONFIG_YML);
   for (const [source, staged] of Object.entries(STAGED_DOCS)) {
     const text = readFileSync(join(ROOT, source), "utf8");
     const rewritten = rewriteLinks(text, { mode: MODE_PAGES, repo, ref });
-    const frontMatter = `---\ntitle: "${PAGE_TITLE[source]}"\n---\n\n`;
+    const frontMatter = `---\ntitle: "${staged.title}"\n---\n\n`;
     const destPath = join(out, staged.pagesPath);
     mkdirSync(dirname(destPath), { recursive: true });
     writeFileSync(destPath, frontMatter + rewritten);
@@ -147,15 +159,16 @@ function buildPages({ repo, ref, out }) {
 
 function buildWiki({ repo, ref, out }) {
   mkdirSync(out, { recursive: true });
-  const pages = [];
   for (const [source, staged] of Object.entries(STAGED_DOCS)) {
     const text = readFileSync(join(ROOT, source), "utf8");
     const rewritten = rewriteLinks(text, { mode: MODE_WIKI, repo, ref });
-    const withHeader = WIKI_HEADER(HEADER_SOURCE[staged.wikiPage]) + rewritten;
+    const withHeader = WIKI_HEADER(source) + rewritten;
     writeFileSync(join(out, `${staged.wikiPage}.md`), withHeader);
-    pages.push(staged.wikiPage);
   }
-  const sidebar = pages.map((name) => `- [[${name}]]`).join("\n") + "\n";
+  const sidebar =
+    Object.values(STAGED_DOCS)
+      .map((staged) => `- [[${staged.wikiPage}]]`)
+      .join("\n") + "\n";
   writeFileSync(join(out, "_Sidebar.md"), sidebar);
 }
 

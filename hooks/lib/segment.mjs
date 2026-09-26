@@ -386,7 +386,9 @@ function maskRanges(text, ranges) {
   return out + text.slice(cursor);
 }
 
-const CODE_ONLY_PATTERNS = [/```[\s\S]*?```/g, /~~~[\s\S]*?~~~/g, /`[^`\n]*`/g];
+// scripts/publish-docs.mjs 도 링크 재작성에서 이 패턴을 그대로 가져다 쓴다 — 펜스·인라인
+// 코드가 "검사에서 뺄 자리"라는 정의는 검사기든 퍼블리시 스크립트든 하나여야 한다.
+export const CODE_ONLY_PATTERNS = [/```[\s\S]*?```/g, /~~~[\s\S]*?~~~/g, /`[^`\n]*`/g];
 
 /**
  * 정의 줄을 찾기 전에 코드만 가려 둔 사본을 만든다. 울타리·인라인 코드 안의

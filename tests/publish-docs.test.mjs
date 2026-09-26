@@ -67,6 +67,12 @@ test("펜스 코드 블록 안의 예시 표는 손대지 않는다", () => {
   assert.equal(rewriteLinks(text, { mode: "wiki", ...OPTS }), text);
 });
 
+test("물결 펜스(~~~) 코드 블록 안의 예시 링크도 손대지 않는다", () => {
+  const text = "~~~markdown\n[예시](docs/design.md)\n~~~";
+  assert.equal(rewriteLinks(text, { mode: "pages", ...OPTS }), text);
+  assert.equal(rewriteLinks(text, { mode: "wiki", ...OPTS }), text);
+});
+
 test("절대 URL과 뱃지 링크는 두 대상 모두 그대로 둔다", () => {
   const text = "[test](https://img.shields.io/badge/test-D9532B)";
   assert.equal(rewriteLinks(text, { mode: "pages", ...OPTS }), text);
