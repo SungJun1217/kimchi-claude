@@ -405,3 +405,85 @@ test("fixParticles 는 대량 반복 문서에서도 값이 맞다", () => {
   assert.ok(!fixed.text.includes("commit를"), "고치지 않은 자리가 남았다");
   assert.equal((fixed.text.match(/commit을/g) || []).length, 500);
 });
+
+// ── 괄호 뒤 조사는 괄호 앞말을 따른다(연구 단위 R2) ──────────────
+//
+// NIKL 온라인가나다(327689, 296978, 302384, 316103)는 괄호 뒤 조사가 괄호 **안**이
+// 아니라 괄호 **앞**말을 따른다고 답한다. 개발 문서가 영어 원어를 괄호로 병기하는
+// 자리에서 흔히 틀린다 — "비밀 키 암호 기법(secret key cryptography)이"를
+// "...가"로 잘못 쓴다.
+
+test("한글 앞말 뒤 괄호는 그 한글의 받침으로 판정한다", () => {
+  const found = findParticleErrors("비밀 키 암호 기법(secret key cryptography)가 필요합니다.");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].word, "기법(secret key cryptography)");
+  assert.equal(found[0].particle, "가");
+  assert.equal(found[0].correct, "이");
+
+  assert.equal(
+    fixParticles("비밀 키 암호 기법(secret key cryptography)가 필요합니다.").text,
+    "비밀 키 암호 기법(secret key cryptography)이 필요합니다."
+  );
+
+  const found2 = findParticleErrors("캐시(cache)을 지웠습니다.");
+  assert.equal(found2.length, 1);
+  assert.equal(found2[0].correct, "를");
+  assert.equal(fixParticles("캐시(cache)을 지웠습니다.").text, "캐시(cache)를 지웠습니다.");
+});
+
+test("영어 앞말 뒤 괄호는 그 영어의 발음으로 판정한다", () => {
+  const found = findParticleErrors("API(application programming interface)을 호출합니다.");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].correct, "를");
+  assert.equal(
+    fixParticles("API(application programming interface)을 호출합니다.").text,
+    "API(application programming interface)를 호출합니다."
+  );
+});
+
+test("괄호 안이 한글이어도 앞말로 판정한다", () => {
+  // 괄호 앞말(API)만 보고, 괄호 안(응용 프로그래밍 인터페이스)은 보지 않는다.
+  // 이미 맞는 조사라 손대지 않아야 한다.
+  assert.deepEqual(findParticleErrors("API(응용 프로그래밍 인터페이스)를 호출합니다."), []);
+});
+
+test("맞는 조사가 붙은 괄호는 건드리지 않는다", () => {
+  assert.deepEqual(findParticleErrors("비밀 키 암호 기법(secret key cryptography)이 필요합니다."), []);
+  assert.deepEqual(findParticleErrors("캐시(cache)를 지웠습니다."), []);
+});
+
+test("괄호 안에 괄호가 또 있으면(중첩) 판정하지 않는다", () => {
+  assert.deepEqual(findParticleErrors("설정(예: A(B))을 확인합니다."), []);
+});
+
+test("빈 괄호는 판정하지 않는다", () => {
+  assert.deepEqual(findParticleErrors("빈 괄호()를 확인합니다."), []);
+});
+
+test("괄호 앞말이 순수 숫자면 판정하지 않는다", () => {
+  assert.deepEqual(findParticleErrors("3(three)이 필요합니다."), []);
+});
+
+test("괄호 앞말을 모르면(코드로 가려짐) 판정하지 않는다", () => {
+  assert.equal(findParticleErrors("`코드(code)를` 확인합니다.").length, 0);
+  assert.equal(
+    findParticleErrors(["```", "설정(config)를", "```"].join("\n")).length,
+    0,
+    "코드 블록 안은 건드리지 않는다"
+  );
+});
+
+test("여는 괄호가 줄 맨 앞이면(앞말이 없음) 판정하지 않는다", () => {
+  assert.deepEqual(findParticleErrors("설명:\n(참고)를 확인합니다."), []);
+});
+
+test("괄호 뒤 조사와 일반 조사가 한 문장에 섞여도 둘 다 잡고 위치가 맞다", () => {
+  const { text, applied } = fixParticles(
+    "commit를 올리기 전에 캐시(cache)을 지우고 module가 맞는지 봅니다."
+  );
+  assert.equal(
+    text,
+    "commit을 올리기 전에 캐시(cache)를 지우고 module이 맞는지 봅니다."
+  );
+  assert.equal(applied.length, 3);
+});
