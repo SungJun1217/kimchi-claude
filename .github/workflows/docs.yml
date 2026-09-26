@@ -1,0 +1,108 @@
+name: docs
+
+# GITHUB_TOKEN 으로 만든 릴리스는 다른 워크플로를 다시 트리거하지 않는다(release.yml 이
+# `gh release create` 를 쓴다) — 그래서 `release: types: [published]` 가 아니라 release.yml과
+# 같은 태그 push 를 트리거로 쓴다.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      # rules/, tests/fixtures/, evals/ 안에도 .md 가 있는데 그건 공개 문서가 아니다 —
+      # 저장소 전체를 Jekyll 에 넘기지 않고 공개할 문서만 스테이징 디렉터리로 골라낸다.
+      - name: 공개 문서를 스테이징 디렉터리로 고른다
+        run: |
+          node scripts/publish-docs.mjs \
+            --mode pages \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref_name }}" \
+            --out ./_site-src
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./_site-src
+          destination: ./_site-out
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site-out
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
+
+  wiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: 위키 페이지를 만든다
+        run: |
+          node scripts/publish-docs.mjs \
+            --mode wiki \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref_name }}" \
+            --out ./_wiki-src
+
+      - name: 위키 저장소를 내려받는다
+        id: clone
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git" _wiki; then
+            echo "cloned=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::위키 저장소를 못 받았다. 위키가 아직 초기화되지 않았을 수 있다 — 저장소 관리자가 Wiki 탭에서 첫 페이지를 한 번 만들어야 clone 대상 저장소(<repo>.wiki.git)가 생긴다."
+            echo "cloned=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 생성한 페이지로 덮어쓰고 밀어 넣는다
+        if: steps.clone.outputs.cloned == 'true'
+        working-directory: _wiki
+        run: |
+          # 생성하는 5개 파일만 덮어쓴다. 관리자가 웹에서 따로 만든 위키 페이지가
+          # 있어도 지우지 않는다.
+          cp ../_wiki-src/*.md .
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "바뀐 페이지가 없다"
+            exit 0
+          fi
+
+          git commit -m "docs: ${{ github.ref_name }} 기준으로 위키 페이지를 다시 만든다"
+          # 위키 저장소는 클론 시점의 기본 브랜치를 그대로 따라간다(전통적으로 master) —
+          # 브랜치 이름을 하드코딩하지 않고 clone 이 잡아 준 추적 브랜치로 그대로 민다.
+          git push

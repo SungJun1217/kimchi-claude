@@ -318,6 +318,10 @@ claude --plugin-dir ./kimchi-claude
 의존성이 없어서 Node만 있으면 `npm test`로 바로 시험을 돌릴 수 있습니다. 보안 취약점은
 [SECURITY.md](SECURITY.md)에 적은 대로 비공개 채널로 제보해 주세요.
 
+이 문서들은 저장소가 원본이고, 릴리스마다 [GitHub Pages](https://sungjun1217.github.io/kimchi-claude/)와
+[위키](https://github.com/SungJun1217/kimchi-claude/wiki)로 그대로 퍼블리시됩니다. Pages나 위키 쪽을 손으로
+고치지 말고 저장소에 PR을 보내 주세요.
+
 <div align="center">
 <br>
 <sub>🌶️ 잘 익은 말투는 티가 나지 않습니다.</sub>
