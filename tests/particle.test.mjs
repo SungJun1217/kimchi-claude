@@ -65,7 +65,7 @@ test("모르는 낱말은 판정하지 않는다", () => {
   // 규칙처럼 보이지만 갈린다. 추측하면 안 된다.
   assert.equal(hasFinalSound("foo"), null);
   assert.equal(hasFinalSound("mycompanyservice"), null);
-  assert.equal(hasFinalSound("MIDDLEWARE"), null, "네 글자를 넘는 대문자는 낱말로 읽힐 수 있다");
+  assert.equal(hasFinalSound("FRAMEWORK"), null, "네 글자를 넘는 대문자는 낱말로 읽힐 수 있다");
 });
 
 test("글자 뒤 여러 자리 숫자는 판정하지 않는다", () => {
@@ -195,10 +195,51 @@ test("정상 한국어 문서에서 오탐이 없다", () => {
     "JSON으로 바꿔 stream을 흘려보냅니다.",
     "module을 쪼개고 hook을 붙였습니다.",
     "kubernetes를 쓰는지 terraform을 쓰는지 모르겠습니다.",
+    "state를 바꾸고 props를 내려받아 target을 갱신합니다.",
+    "race condition을 피하려고 deadlock을 검사합니다.",
+    "latency를 줄이고 throughput을 늘렸습니다.",
   ];
   for (const sentence of clean) {
     assert.deepEqual(findParticleErrors(sentence), [], sentence);
   }
+});
+
+test("라틴 문자로 쓰기로 한 개발 명사 뒤 조사도 판정한다", () => {
+  // 0.15.0 이후 문체가 상태/타깃 같은 개발 명사를 라틴 문자로 남기라고 하면서
+  // 이 낱말들 뒤 조사가 판정 불가로 남았다 — 그 구멍을 메운다.
+  assert.equal(correctParticle("state", "을"), "를", "스테이트");
+  assert.equal(correctParticle("target", "를"), "을", "타깃/타겟 — ㅅ");
+  assert.equal(correctParticle("deadlock", "를"), "을", "데드락 — ㄱ");
+  assert.equal(correctParticle("directory", "을"), "를", "디렉터리");
+  assert.equal(correctParticle("condition", "를"), "을", "(race) 컨디션 — ㄴ");
+  assert.equal(correctParticle("latency", "을"), "를", "레이턴시");
+  assert.equal(correctParticle("throughput", "를"), "을", "스루풋 — ㅅ");
+
+  assert.equal(correctParticle("state", "를"), null, "이미 맞다");
+  assert.equal(correctParticle("target", "을"), null, "이미 맞다");
+  assert.equal(correctParticle("directory", "를"), null, "이미 맞다");
+  assert.equal(correctParticle("condition", "을"), null, "이미 맞다");
+
+  // 나머지 항목도 한 줄씩 고정한다. 받침 분류를 잘못 바꾸면 조사를 틀리게 고친다.
+  const withFinal = ["regression", "limit", "return", "degradation", "sanitization"];
+  const noFinal = ["props", "query", "handler", "middleware", "reducer", "effect", "truth", "check", "hatch", "change"];
+  for (const word of withFinal) assert.equal(correctParticle(word, "를"), "을", word);
+  for (const word of noFinal) assert.equal(correctParticle(word, "을"), "를", word);
+
+  const found = findParticleErrors(
+    "state을 바꿀 때 race condition를 조심하고 deadlock를 피해야 latency을 낮춘다."
+  );
+  assert.deepEqual(
+    found.map((hit) => `${hit.word}${hit.particle}→${hit.word}${hit.correct}`),
+    ["state을→state를", "condition를→condition을", "deadlock를→deadlock을", "latency을→latency를"]
+  );
+
+  assert.equal(findParticleErrors("`state을 이렇게 쓴 예시`").length, 0, "코드 안은 건드리지 않는다");
+  assert.equal(
+    findParticleErrors(["```", "target를", "```"].join("\n")).length,
+    0,
+    "코드 블록 안은 건드리지 않는다"
+  );
 });
 
 test("ㄹ 받침 뒤에는 으로 대신 로를 쓴다", () => {

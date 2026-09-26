@@ -272,6 +272,32 @@ const LEXICON = {
   rds: NO_FINAL, // 알디에스
   sqs: NO_FINAL, // 에스큐에스
   vpc: NO_FINAL, // 브이피씨
+
+  // 라틴 문자 그대로 쓰기로 한 개발 명사(0.15.0 이후 문체가 유지하라고 하는 낱말들).
+  // 여러 낱말로 된 용어(race condition, sanity check 등)도 조사는 마지막 낱말에만
+  // 붙으므로 그 낱말만 올린다 — TOKEN_WITH_PARTICLE 이 한 낱말만 잡기 때문이다.
+  state: NO_FINAL, // 스테이트
+  props: NO_FINAL, // 프롭스
+  target: OTHER_FINAL, // 타깃/타겟 — 둘 다 ㅅ
+  directory: NO_FINAL, // 디렉터리
+  query: NO_FINAL, // 쿼리
+  handler: NO_FINAL, // 핸들러
+  middleware: NO_FINAL, // 미들웨어
+  reducer: NO_FINAL, // 리듀서
+  condition: OTHER_FINAL, // (race) 컨디션 — ㄴ
+  deadlock: OTHER_FINAL, // 데드락 — ㄱ
+  latency: NO_FINAL, // 레이턴시
+  throughput: OTHER_FINAL, // 스루풋 — ㅅ
+  effect: NO_FINAL, // (side) 이펙트
+  regression: OTHER_FINAL, // 리그레션 — ㄴ
+  truth: NO_FINAL, // (source of) 트루스
+  check: NO_FINAL, // (sanity) 체크
+  limit: OTHER_FINAL, // (rate) 리밋 — ㅅ
+  hatch: NO_FINAL, // (escape) 해치
+  return: OTHER_FINAL, // (early) 리턴 — ㄴ
+  change: NO_FINAL, // (breaking) 체인지
+  degradation: OTHER_FINAL, // (graceful) 디그레데이션 — ㄴ
+  sanitization: OTHER_FINAL, // 새니타이제이션 — ㄴ
 };
 
 /**
