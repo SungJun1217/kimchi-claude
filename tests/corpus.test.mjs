@@ -133,8 +133,9 @@ test("치환 규칙은 자기 자신을 다시 잡지 않는다", () => {
   const looping = [];
   for (const rule of rules) {
     if (rule.check !== CHECK_SUBSTITUTE) continue;
-    // 규칙 하나만 담은 배열이다 — latin-hada까지 섞이면 이 규칙과 무관한 매치로 오판할 수 있다.
-    if (lint(rule.good, [rule], {}, { latinHada: false }).length > 0) {
+    // 규칙 하나만 담은 배열이다 — builtins(latin-hada 등)는 loadRules()가 따로 내보내고
+    // rules에는 실려 있지 않으므로 여기서는 섞여 들어오지 않는다.
+    if (lint(rule.good, [rule]).length > 0) {
       looping.push(`"${rule.bad}" → "${rule.good}"`);
     }
   }
@@ -181,9 +182,9 @@ test("규칙이 겨냥한 나쁜 문장은 실제로 걸린다", () => {
   for (const rule of rules) {
     if (rule.check === "프롬프트") continue;
     if (toPattern(rule.bad) === null) continue;
-    // 규칙 하나만 담은 배열이다 — latin-hada가 섞이면 이 규칙이 진짜로 잡히는지와
-    // 무관하게 길이가 0보다 커져 "잘 잡힌다"는 오판이 나올 수 있다.
-    if (lint(`앞말 ${rule.bad} 뒷말`, [rule], {}, { latinHada: false }).length === 0) {
+    // 규칙 하나만 담은 배열이다 — builtins는 섞여 들어오지 않으므로(위 시험과 같은 이유)
+    // 여기서 걸리는지는 오로지 이 규칙 자신에게 달려 있다.
+    if (lint(`앞말 ${rule.bad} 뒷말`, [rule]).length === 0) {
       silent.push(rule.bad);
     }
   }

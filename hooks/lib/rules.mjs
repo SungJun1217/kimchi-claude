@@ -8,20 +8,23 @@
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { CHECKS } from "./checks.mjs";
+import { LATIN_HADA_RULE } from "./latin-hada.mjs";
 
-// 검사 칸의 세 값은 세 가지 실제 능력에 대응한다.
-//   치환   — 정규식으로 잡히고, 쓸 것으로 그대로 바꿔도 뜻이 상하지 않는다. 자동 교정 대상
-//   정규식 — 잡을 수는 있지만 문맥을 봐야 고칠 수 있다. 경고만 한다
-//   프롬프트 — 문자열로 잡을 수 없다. 출력 스타일만이 막을 수 있다
-export const CHECK_SUBSTITUTE = "치환";
-export const CHECK_REGEX = "정규식";
-export const CHECK_PROMPT = "프롬프트";
-export const CHECKS = [CHECK_SUBSTITUTE, CHECK_REGEX, CHECK_PROMPT];
-
-// 치환과 정규식은 둘 다 린터가 문자열로 찾는다.
-export const SCANNABLE_CHECKS = [CHECK_SUBSTITUTE, CHECK_REGEX];
+// 검사 칸 상수는 checks.mjs 가 원본이다 — latin-hada.mjs 도 이 값을 쓰는데, 여기서
+// 정의하면 latin-hada.mjs 를 불러오는 위 import 와 순환 참조가 된다(checks.mjs
+// 상단 설명 참고). 이 파일을 불러 쓰던 곳은 그대로 rules.mjs 에서 이름을 가져오면
+// 되도록 다시 내보낸다.
+export { CHECK_SUBSTITUTE, CHECK_REGEX, CHECK_PROMPT, CHECKS, SCANNABLE_CHECKS } from "./checks.mjs";
 
 export const PRIORITIES = ["핵심", "보통", "참고"];
+
+// rules/*.md 표로 옮길 수 없는 검사(latin-hada.mjs 상단 설명 참고)를 loadRules() 가
+// 함께 내보낸다. 규칙표 파싱과 분리해 둔 것은, 스타일 본문(build-style.mjs)·README
+// 규칙 수·코퍼스 표 시험(corpus.test.mjs)처럼 "표에 적힌 규칙만" 봐야 하는 소비자가
+// rules 필드만 그대로 쓰면 되고, 훅처럼 "실제로 검사하는 전체 규칙"이 필요한 쪽만
+// builtins 를 더해 쓰면 되게 하려는 것이다.
+const BUILTIN_RULES = [LATIN_HADA_RULE];
 
 // 이유 칸 맨 앞에 적는 명시 표지. lint.mjs 가 이유의 낱말(예: "표기")을 문자열로 매칭해
 // 경계 검사를 켜고 끄던 것을 대신한다 — 이유를 다듬어 적다 보면 매칭 낱말이 우연히
@@ -153,11 +156,17 @@ export function parseTable(markdown, source = "") {
 
 /**
  * rules 디렉터리의 모든 마크다운을 읽어 규칙을 모은다.
+ *
+ * builtins 는 rulesDir 과 무관하게 늘 같다(rules/*.md 표로 표현할 수 없는 검사라 파일이
+ * 아니라 코드로 있다) — build-style.mjs·corpus.test.mjs·import-corpus.mjs 처럼 표
+ * 자체만 다루는 소비자는 rules 만 쓰고 builtins 는 무시하면 되고, artifact.loadToneRules()
+ * 처럼 실제 검사에 쓰는 전체 집합이 필요한 소비자만 [...rules, ...builtins] 로 합친다.
+ *
  * @param {string} rulesDir
- * @returns {{rules: object[], skipped: number, files: string[]}}
+ * @returns {{rules: object[], builtins: object[], skipped: number, files: string[]}}
  */
 export function loadRules(rulesDir) {
-  if (!existsSync(rulesDir)) return { rules: [], skipped: 0, files: [] };
+  if (!existsSync(rulesDir)) return { rules: [], builtins: BUILTIN_RULES, skipped: 0, files: [] };
 
   const files = readdirSync(rulesDir)
     .filter((name) => name.endsWith(".md"))
@@ -178,7 +187,7 @@ export function loadRules(rulesDir) {
     skipped += parsed.skipped;
   }
 
-  return { rules, skipped, files };
+  return { rules, builtins: BUILTIN_RULES, skipped, files };
 }
 
 // 린터의 적용 범위: 커밋 메시지와 문서 파일. **대화는 보지 못한다.**
