@@ -621,3 +621,50 @@ test("\\s 가 받던 공백 구분자는 모두 잡는다", () => {
     assert.equal(skillFind(text).length, 1, JSON.stringify(space));
   }
 });
+
+
+// [보안 회귀] redactText가 hit.column(줄 안에서의 열)을 text 전체의 색인처럼 써서,
+// 둘째 줄 이후의 번호가 첫째 줄의 엉뚱한 자리에 꽂혀 원문을 깨뜨리고(그 자리 글자가
+// 사라지거나 밀림) 정작 뒷줄의 진짜 번호는 전혀 가려지지 않던 결함(실측).
+test("redactText는 여러 줄 문서에서 각 줄의 번호를 그 줄 자리에서 가린다", () => {
+  const text = "첫 줄입니다.\n번호 900101-1234567 입니다.";
+  const redacted = redactText(text);
+  assert.equal(redacted, "첫 줄입니다.\n번호 900101-******* 입니다.");
+  assert.equal(/1234567/.test(redacted), false);
+});
+
+test("redactText는 여러 줄에 걸친 여러 건을 모두, 각자의 줄에서 가린다", () => {
+  const text = "900101-1234567\n괜찮은 줄\n880505-2345678";
+  const redacted = redactText(text);
+  assert.equal(redacted, "900101-*******\n괜찮은 줄\n880505-*******");
+  assert.equal(/1234567|2345678/.test(redacted), false);
+});
+
+test("redactText는 CRLF 줄바꿈에서도 둘째 줄 이후의 번호를 그 자리에서 가린다", () => {
+  const text = "첫 줄\r\n900101-1234567 검증\r\n마지막 줄";
+  const redacted = redactText(text);
+  assert.equal(redacted, "첫 줄\r\n900101-******* 검증\r\n마지막 줄");
+  assert.equal(/1234567/.test(redacted), false);
+});
+
+test("redactText는 전각 숫자가 섞인 둘째 줄 이후의 번호도 정확한 길이로 가린다", () => {
+  // 전각 숫자(０-９)는 buildClean이 ASCII로 접어 매치하지만, 실제로 잘라내는
+  // 길이는 원문(전각 그대로) 기준이어야 한다 — 이 시험은 그 길이 계산이 둘째 줄
+  // 이후에서도(절대 위치로 바꾼 뒤에도) 무너지지 않는지 본다.
+  const text = "첫 줄입니다.\n번호 ９００１０１-1234567 입니다.";
+  const redacted = redactText(text);
+  assert.equal(/1234567/.test(redacted), false, "뒷자리 숫자가 새어 나오면 안 된다");
+  assert.equal(/[０-９]/.test(redacted), false, "전각 앞자리도 가려져야 한다");
+  assert.match(redacted, /900101-\*+/);
+});
+
+// [보안 회귀] kimchi-allow-rrn은 저장소 관리자가 자기 문서에 남기는 표시다. 신뢰할 수
+// 없는 외부 입력(이슈 본문 등)이 이 표시로 검사를 피해 실제 번호를 그대로 공개
+// 코멘트에 실어 보내면 안 된다 — ignoreAllowLine으로 그 표시를 무시할 수 있어야 한다.
+test("ignoreAllowLine을 켜면 kimchi-allow-rrn 표시가 있어도 그대로 찾고 가린다", () => {
+  const text = "900101-1234567 // kimchi-allow-rrn";
+  assert.equal(findResidentNumbers(text).length, 0, "기본값은 여전히 표시를 존중한다");
+  assert.equal(findResidentNumbers(text, { ignoreAllowLine: true }).length, 1);
+  assert.equal(redactText(text), text, "기본값은 그대로 둔다");
+  assert.equal(/1234567/.test(redactText(text, { ignoreAllowLine: true })), false);
+});

@@ -264,6 +264,50 @@ test("경로가 평범하면 pathHasPii가 꺼져 있다", () => {
   });
 });
 
+// [보안 회귀] 커밋 메시지·PR 제목·본문은 fork PR 기여자가 통제하는 자유 텍스트다.
+// kimchi-allow-rrn은 저장소 관리자가 자기 문서에 남기는 opt-out이지, 신뢰할 수 없는
+// 기여자가 실제 번호를 검사망 밖으로 빼돌리는 수단이 되면 안 된다 — 이 세 대상은
+// ignoreAllowLine: true로 검사해야 한다.
+test("커밋 메시지에 kimchi-allow-rrn을 붙여도 검사를 피하지 못한다", () => {
+  withTempDir((dir) => {
+    const filesList = join(dir, "files.txt");
+    writeFileSync(filesList, "");
+    const commitsJson = join(dir, "commits.json");
+    writeFileSync(commitsJson, JSON.stringify(["880505-2345678 // kimchi-allow-rrn"]));
+    const output = runActionLint(["--files", filesList, "--repo-root", dir, "--commits", commitsJson]);
+    assert.equal(output.pii.length, 1, "kimchi-allow-rrn 표시로 커밋 메시지의 번호를 놓치면 안 된다");
+    assert.equal(/2345678/.test(JSON.stringify(output)), false);
+  });
+});
+
+test("PR 제목·본문에 kimchi-allow-rrn을 붙여도 검사를 피하지 못한다", () => {
+  withTempDir((dir) => {
+    const filesList = join(dir, "files.txt");
+    writeFileSync(filesList, "");
+    const prTextJson = join(dir, "pr-text.json");
+    writeFileSync(
+      prTextJson,
+      JSON.stringify({ title: "880505-2345678 // kimchi-allow-rrn", body: "770606-1234567 // kimchi-allow-rrn" })
+    );
+    const output = runActionLint(["--files", filesList, "--repo-root", dir, "--pr-text", prTextJson]);
+    assert.equal(output.pii.length, 2, "kimchi-allow-rrn 표시로 PR 제목·본문의 번호를 놓치면 안 된다");
+    assert.equal(/2345678|1234567/.test(JSON.stringify(output)), false);
+  });
+});
+
+// 파일 내용은 여전히 kimchi-allow-rrn을 존중한다 — 이 저장소 자신의 문서·규칙표가
+// 형식만 맞는 예시에 그 표시를 정당하게 쓰는 관례라(dogfooding), 여기까지 끄면
+// 저장소 스스로의 PR에서 오탐이 늘어난다.
+test("파일 내용의 kimchi-allow-rrn은 여전히 존중한다(관리자 문서의 정당한 예시)", () => {
+  withTempDir((dir) => {
+    writeFileSync(join(dir, "a.md"), "880505-2345678 // kimchi-allow-rrn\n");
+    const filesList = join(dir, "files.txt");
+    writeFileSync(filesList, "a.md\n");
+    const output = runActionLint(["--files", filesList, "--repo-root", dir]);
+    assert.equal(output.pii.length, 0, "파일 내용은 여전히 kimchi-allow-rrn 표시를 존중해야 한다");
+  });
+});
+
 test("걸리는 것이 없으면 빈 결과를 낸다", () => {
   withTempDir((dir) => {
     writeFileSync(join(dir, "a.md"), "캐시를 한 번만 계산하도록 고쳤습니다.\n");

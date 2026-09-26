@@ -242,8 +242,8 @@ export function findingsForText(text, rules) {
   }));
 }
 
-function piiHits(text, label, extra = {}) {
-  return findResidentNumbers(text).map((hit) => ({
+function piiHits(text, label, extra = {}, options = {}) {
+  return findResidentNumbers(text, options).map((hit) => ({
     ...extra,
     line: hit.line,
     column: hit.column,
@@ -346,10 +346,18 @@ async function main() {
     }
   }
 
+  // 커밋 메시지·PR 제목·본문은 fork PR 기여자가 그대로 쓰는 자유 텍스트다 —
+  // kimchi-allow-rrn 표시로 검사를 피해 실제 번호를 흘려보내는 수단으로 못 쓰게
+  // ignoreAllowLine을 켠다(triage-report.mjs와 같은 이유, hooks/lib/pii.mjs 참고).
+  // 파일 경로·내용(위 328~329행)은 그대로 둔다 — 이 저장소 자신의 문서·규칙표가
+  // 형식만 맞는 예시에 그 표시를 정당하게 쓰는 관례라, 여기까지 끄면 저장소 스스로의
+  // PR에서 오탐이 늘어난다.
+  const untrustedTextPii = { ignoreAllowLine: true };
+
   const commits = readJson(args.commits ? resolve(String(args.commits)) : null, []);
   const commitFindings = (Array.isArray(commits) ? commits : []).flatMap((message, index) => {
     if (typeof message !== "string") return [];
-    pii.push(...piiHits(message, `커밋 ${index + 1}`, { commitIndex: index }));
+    pii.push(...piiHits(message, `커밋 ${index + 1}`, { commitIndex: index }, untrustedTextPii));
     return findingsForText(message, rules).map((finding) => ({ commitIndex: index, ...finding }));
   });
 
@@ -357,11 +365,11 @@ async function main() {
   const prTextFindings = { title: [], body: [] };
   if (prText && typeof prText === "object") {
     if (typeof prText.title === "string") {
-      pii.push(...piiHits(prText.title, "PR 제목", { field: "title" }));
+      pii.push(...piiHits(prText.title, "PR 제목", { field: "title" }, untrustedTextPii));
       prTextFindings.title = findingsForText(prText.title, rules);
     }
     if (typeof prText.body === "string") {
-      pii.push(...piiHits(prText.body, "PR 본문", { field: "body" }));
+      pii.push(...piiHits(prText.body, "PR 본문", { field: "body" }, untrustedTextPii));
       prTextFindings.body = findingsForText(prText.body, rules);
     }
   }
