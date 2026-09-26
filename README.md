@@ -272,6 +272,20 @@ fork PR과 Dependabot이 연 PR은 토큰이 읽기 전용이라 리뷰를 올�
 호출은 모두 `action.yml`의 셸 단계에 있습니다. 자세한 설계 근거는
 [설계 문서의 GitHub Action 절](docs/design.md#github-action-v0180)에 있습니다.
 
+## Claude 봇
+
+이 저장소는 소유자의 Claude 구독으로 돌아가는 봇 두 개를 둡니다([`.github/workflows/claude.yml`](.github/workflows/claude.yml),
+[`.github/workflows/claude-code-review.yml`](.github/workflows/claude-code-review.yml)).
+
+- 이슈나 PR 코멘트에 `@claude`를 달면 답합니다. 공개 저장소라 아무나 부르면 소유자의 구독
+  쿼터를 낭비할 수 있어, 소유자(OWNER)·멤버(MEMBER)·협력자(COLLABORATOR)가 남긴 코멘트에만
+  응답합니다.
+- PR이 `ready_for_review` 상태가 되거나 `claude-review` 라벨을 붙이면 자동으로 코드 리뷰를
+  답니다. draft PR과 fork PR(시크릿이 없습니다), dependabot 등 bot이 연 PR, 신뢰할 수 없는
+  기고자의 PR은 건너뜁니다.
+- 두 봇 모두 이 저장소 자신(kimchi-claude 플러그인)을 얹어서 돌기 때문에, 한국어로 답할 때
+  이 문서에서 설명한 말투를 씁니다.
+
 ## 한국 개발 지식 스킬
 
 한국 서비스를 만들 때 클로드가 번번이 틀리는 것들을 미리 알려 둡니다. **설명의 절반은 직접
