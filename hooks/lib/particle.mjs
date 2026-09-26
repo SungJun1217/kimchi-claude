@@ -379,6 +379,102 @@ export function correctParticle(word, particle) {
   return correct === particle ? null : correct;
 }
 
+/**
+ * 받침 종류를 이미 알고 있을 때 조사가 맞는지 본다. correctParticle과 괄호 뒤 조사
+ * 판정(findParenParticleErrors)이 함께 쓴다 — 받침을 얻는 방법만 다르다(영어는 발음
+ * 사전, 괄호 앞 한글은 종성 코드).
+ *
+ * @param {""|"ㄹ"|"other"} final
+ * @param {string} particle
+ * @returns {string|null}
+ */
+function correctForFinal(final, particle) {
+  const pair = PAIRS.find(([withFinal, without]) => particle === withFinal || particle === without);
+  if (pair === undefined) return null;
+  const usesShortForm = final === NO_FINAL || (final === RIEUL && pair[1].endsWith("로"));
+  const correct = usesShortForm ? pair[1] : pair[0];
+  return correct === particle ? null : correct;
+}
+
+// 한글 음절 코드에서 종성(받침) 색인. lint.mjs의 finalConsonantClass와 같은 상수다 —
+// lint.mjs가 이미 particle.mjs를 임포트하므로(particleHeads 등) 거꾸로 임포트하면
+// 순환 참조가 생긴다. 상수 네 개뿐이라 각자 갖는 편이 회로를 끊는 것보다 싸다.
+const HANGUL_START = 0xac00;
+const HANGUL_END = 0xd7a3;
+const JAMO_COUNT = 28;
+const RIEUL_FINAL_INDEX = 8;
+
+/**
+ * 괄호 앞 한글 낱말의 끝 음절 받침을 판정한다. 한글이 아니면 null.
+ *
+ * @param {string} ch 한 글자
+ * @returns {""|"ㄹ"|"other"|null}
+ */
+function hangulFinalOf(ch) {
+  if (typeof ch !== "string" || ch.length === 0) return null;
+  const code = ch.charCodeAt(0);
+  if (code < HANGUL_START || code > HANGUL_END) return null;
+  const finalIndex = (code - HANGUL_START) % JAMO_COUNT;
+  if (finalIndex === 0) return NO_FINAL;
+  if (finalIndex === RIEUL_FINAL_INDEX) return RIEUL;
+  return OTHER_FINAL;
+}
+
+const HANGUL_SYLLABLE = /[가-힣]/;
+const ALNUM = /[A-Za-z0-9]/;
+
+/**
+ * 닫는 괄호 바로 앞, 여는 괄호 바로 앞의 낱말이 받침을 판정할 수 있는지 본다.
+ * 판정할 수 없으면(빈 낱말, 여는 괄호가 줄 맨 앞, 코드로 가려진 자리, 순수 숫자) null —
+ * NIKL 온라인가나다는 괄호 뒤 조사가 괄호 안이 아니라 괄호 앞말을 따른다고 답한다
+ * (327689, 296978, 302384, 316103). 개발 문서에서 영어 원어를 괄호로 병기하는 자리에
+ * 흔히 나온다: "암호 기법(secret key cryptography)이".
+ *
+ * @param {string} masked maskProtected를 거친 글 — 코드/링크는 이미 센티넬로 덮여 있다.
+ * @param {number} openIdx 여는 괄호 "(" 의 위치
+ * @returns {{start: number, final: ""|"ㄹ"|"other"}|null}
+ */
+function wordBeforeParen(masked, openIdx) {
+  if (openIdx <= 0) return null;
+  const prev = masked[openIdx - 1];
+
+  if (HANGUL_SYLLABLE.test(prev)) {
+    let start = openIdx - 1;
+    while (start > 0 && HANGUL_SYLLABLE.test(masked[start - 1])) start -= 1;
+    return { start, final: hangulFinalOf(prev) };
+  }
+
+  if (ALNUM.test(prev)) {
+    let start = openIdx - 1;
+    while (start > 0 && ALNUM.test(masked[start - 1])) start -= 1;
+    const run = masked.slice(start, openIdx);
+    // 순수 숫자는 괄호 앞에서는 판정하지 않는다 — "3(three)" 처럼 숫자와 영어 원어가
+    // 함께 괄호로 병기되는 자리는 근거로 삼은 조사(온라인가나다 항목들)가 다루지 않아
+    // 모호하다고 본다. 낱말 하나가 여러 글자로 된 경우(S3, v1)는 그대로 finalSoundOf에
+    // 맡긴다 — 이미 아는 자리다.
+    if (DIGIT_TOKEN.test(run)) return null;
+    const final = finalSoundOf(run);
+    return final === null ? null : { start, final };
+  }
+
+  return null;
+}
+
+/**
+ * 닫는 괄호 바로 앞에서 여는 괄호를 찾는다. 중첩되었거나(괄호 안에 괄호가 또 있음)
+ * 안 닫혔으면 null — 중첩은 "괄호 앞말"이 어느 괄호의 앞말인지 모호해 판정하지 않는다
+ * (불변식 5).
+ *
+ * @param {string} masked
+ * @param {number} closeIdx 닫는 괄호 ")" 의 위치
+ * @returns {number|null}
+ */
+function findSimpleOpenParen(masked, closeIdx) {
+  let i = closeIdx - 1;
+  while (i >= 0 && masked[i] !== "(" && masked[i] !== ")") i -= 1;
+  return i >= 0 && masked[i] === "(" ? i : null;
+}
+
 // 긴 조사를 먼저 시도해야 한다. `으로서` 를 `으로` 로 자르면 남은 `서` 때문에 어긋난다.
 // PAIRS 가 이미 긴 것부터 적혀 있으므로 그 순서를 그대로 쓴다.
 //
@@ -394,6 +490,41 @@ const TOKEN_WITH_PARTICLE = new RegExp(
   `([A-Za-z][A-Za-z0-9]*|\\d+)(${PARTICLE_ALTERNATION})(?![가-힣])`,
   "g"
 );
+
+// 닫는 괄호 바로 뒤에 조사가 오는 자리. TOKEN_WITH_PARTICLE과 같은 조사 목록을 쓰되
+// 앞말이 영어 낱말/숫자가 아니라 괄호라는 점만 다르다.
+const PAREN_PARTICLE = new RegExp(`\\)(${PARTICLE_ALTERNATION})(?![가-힣])`, "g");
+
+/**
+ * 글에서 "낱말(원어)조사" 형태의 틀린 자리를 찾는다. findParticleErrors가 합쳐서 쓴다.
+ *
+ * @param {string} masked maskProtected를 거친 글
+ * @param {string} original 위치가 같은 원문 — 메시지·교정에 실제 글자를 보여주려고 쓴다.
+ * @returns {{matched: string, word: string, particle: string, correct: string, index: number}[]}
+ */
+function findParenParticleErrors(masked, original) {
+  const found = [];
+  PAREN_PARTICLE.lastIndex = 0;
+  let match;
+  while ((match = PAREN_PARTICLE.exec(masked)) !== null) {
+    const closeIdx = match.index; // match[0]이 ")"로 시작하므로 match.index가 그 위치다.
+    const particle = match[1];
+
+    const openIdx = findSimpleOpenParen(masked, closeIdx);
+    if (openIdx === null) continue; // 중첩되었거나 안 닫힌 괄호
+    if (openIdx + 1 === closeIdx) continue; // 빈 괄호
+
+    const info = wordBeforeParen(masked, openIdx);
+    if (info === null) continue;
+
+    const correct = correctForFinal(info.final, particle);
+    if (correct === null) continue;
+
+    const word = original.slice(info.start, closeIdx + 1); // "낱말(원어)" 그대로
+    found.push({ matched: word + particle, word, particle, correct, index: info.start });
+  }
+  return found;
+}
 
 /**
  * 글에서 조사가 틀린 자리를 찾는다.
@@ -425,6 +556,12 @@ export function findParticleErrors(text, mask = {}) {
     if (correct === null) continue;
     found.push({ matched, word, particle, correct, index: match.index });
   }
+
+  // "낱말(원어)조사"는 앞말 자리가 다르지만 겹치지 않는다 — TOKEN_WITH_PARTICLE은 영어
+  // 낱말 뒤에 조사가 곧장 붙는 자리만 잡고, 괄호가 끼어 있으면 애초에 매치하지 않는다.
+  // fixParticles가 뒤에서부터 안전하게 이어 붙이려면 index 오름차순이어야 해 합친 뒤 정렬한다.
+  found.push(...findParenParticleErrors(masked, text));
+  found.sort((a, b) => a.index - b.index);
 
   return found;
 }
