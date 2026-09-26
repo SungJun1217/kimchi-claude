@@ -49,11 +49,15 @@ jobs:
 
           if [ -n "$PREV_TAG" ]; then
             echo "이전 태그: $PREV_TAG"
-            BODY=$(git log --no-merges --format='- %s' "${PREV_TAG}..${TAG}")
+            RANGE="${PREV_TAG}..${TAG}"
           else
             echo "이전 태그가 없다 — 전체 이력에서 뽑는다"
-            BODY=$(git log --no-merges --format='- %s' "${TAG}")
+            RANGE="${TAG}"
           fi
+
+          # 버전 커밋("0.x.y — …")만 모은다. Dependabot 커밋("ci: bump …")처럼 버전 없이
+          # 따라 들어온 커밋은 그 위의 버전 커밋이 이미 설명한다.
+          BODY=$(git log --no-merges --format='%s' "$RANGE" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+ — ' | sed 's/^/- /' || true)
 
           if [ -z "$BODY" ]; then
             BODY="(버전 커밋을 찾지 못했다)"
