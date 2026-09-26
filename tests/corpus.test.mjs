@@ -495,3 +495,70 @@ test("파일들을은 이제 정규식이라 수량 표현 없이는 자동 교�
   // 수량 표현이 있는 핵심 행(여러 파일들을 → 여러 파일을)은 여전히 치환이다.
   assert.equal(applyFixes("여러 파일들을 수정했습니다.", rules).text, "여러 파일을 수정했습니다.");
 });
+
+test("사물 존대 고정 구절은 치환되고, 사람 주어는 그대로 둔다", () => {
+  const fixes = [
+    ["이 옵션은 품절이십니다.", "이 옵션은 품절입니다."],
+    ["이 사이즈는 품절이세요.", "이 사이즈는 품절이에요."],
+    ["사이즈가 없으십니다.", "사이즈가 없습니다."],
+  ];
+  for (const [input, expected] of fixes) {
+    assert.equal(applyFixes(input, rules).text, expected, input);
+  }
+
+  // 사물 존대 규칙은 고정된 구절만 겨눈다 — 사람이 주어인 문장, 신체·소유물을 주어로 한
+  // 간접 존대는 규칙표에 없어 건드리지 않는다(불변식 5, 국립국어원 표준 언어 예절 2011의
+  // 간접 존대 인정).
+  const untouched = ["선생님께서 나오셨습니다.", "선생님, 넥타이가 멋있으시네요.", "걱정이 많으시다."];
+  for (const sentence of untouched) {
+    assert.equal(applyFixes(sentence, rules).text, sentence, sentence);
+  }
+});
+
+test("포장이세요?는 정규식이라 구조가 바뀌는 대체 표현만 안내하고 자동 교정하지 않는다", () => {
+  const sentence = "포장이세요?";
+  assert.ok(lint(sentence, rules).length > 0, `"${sentence}" 가 걸리지 않는다`);
+  assert.equal(applyFixes(sentence, rules).text, sentence, "정규식인데 자동 교정됐다");
+});
+
+test("-(으)실게요는 정규식으로 경고만 하고, 동사에 따라 다른 대체 표현을 안내한다", () => {
+  const cases = ["설치하실게요.", "확인하실게요.", "클릭하실게요.", "입력하실게요.", "쓰실게요."];
+  for (const sentence of cases) {
+    assert.ok(lint(sentence, rules).length > 0, `"${sentence}" 가 걸리지 않는다`);
+    assert.equal(applyFixes(sentence, rules).text, sentence, `"${sentence}" 가 자동 교정됐다 — 정규식이어야 한다`);
+  }
+
+  // 화자의 약속을 나타내는 -ㄹ게요 자체는 걸리지 않는다. -시-가 없으면 사물 존대·과잉
+  // 존대 문제가 아니다.
+  for (const sentence of ["갈게요.", "볼게요."]) {
+    assert.equal(lint(sentence, rules).filter((f) => f.bad === "~실게요").length, 0, sentence);
+  }
+});
+
+test("컨펌받다는 확인받다로 치환되고, 컨펌 단독은 여전히 정규식으로 경고만 한다", () => {
+  assert.equal(applyFixes("컨펌받았습니다.", rules).text, "확인받았습니다.");
+  assert.equal(applyFixes("컨펌받을 예정입니다.", rules).text, "확인받을 예정입니다.");
+
+  const sentence = "이 문서는 팀장님 컨펌 부탁드립니다.";
+  assert.ok(lint(sentence, rules).some((f) => f.bad === "컨펌 부탁드립니다"));
+});
+
+test("딜레이됐습니다는 치환되고, 딜레이되다의 다른 활용형은 정규식으로 경고만 한다", () => {
+  assert.equal(applyFixes("일정이 딜레이됐습니다.", rules).text, "일정이 지연됐습니다.");
+
+  const sentence = "일정이 딜레이되고 있습니다.";
+  assert.ok(lint(sentence, rules).length > 0, `"${sentence}" 가 걸리지 않는다`);
+  assert.equal(applyFixes(sentence, rules).text, sentence, "정규식인데 자동 교정됐다");
+});
+
+test("킥오프 회의·미팅은 정규식으로 경고하고, 단독 킥오프는 여전히 개발 용어로 둔다", () => {
+  for (const sentence of ["킥오프 회의를 잡겠습니다.", "킥오프 미팅을 잡겠습니다."]) {
+    assert.ok(lint(sentence, rules).some((f) => f.good === "첫 회의"), `"${sentence}" 가 걸리지 않는다`);
+    assert.equal(applyFixes(sentence, rules).text, sentence, "정규식인데 자동 교정됐다");
+  }
+
+  // 단독 킥오프(명사)는 국립국어원 다듬은 말에 없어 규칙에 없다 — 이 문장에서 "회의"·
+  // "미팅" 행에는 걸리지 않는다.
+  const noun = "킥오프는 다음 주 월요일입니다.";
+  assert.equal(lint(noun, rules).filter((f) => f.good === "첫 회의").length, 0, noun);
+});
