@@ -1,0 +1,115 @@
+name: triage
+
+# 오탐(false-positive)·놓친 표현(missed-expression) 이슈가 열리거나 수정되면 그 문장을
+# 현재 규칙으로 재현해 코멘트를 남기고 라벨을 맞춘다(scripts/triage-report.mjs, 오프라인).
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # 이 두 양식만 라벨을 미리 붙여 연다(.github/ISSUE_TEMPLATE/false-positive.yml,
+    # missed-expression.yml) — 다른 이슈(버그·질문 등)에는 돌지 않는다.
+    if: |
+      contains(github.event.issue.labels.*.name, 'false-positive') ||
+      contains(github.event.issue.labels.*.name, 'missed-expression')
+    runs-on: ubuntu-latest
+    steps:
+      # "현재 규칙"은 항상 최신 릴리스(main) 기준이어야 한다 — 이슈 이벤트에는 이
+      # 워크플로가 어느 브랜치를 봐야 하는지 알려주는 ref가 없으므로(pull_request와
+      # 달리 head/base가 없다), 기본 체크아웃(어느 브랜치가 저장소 기본 브랜치로
+      # 설정됐는지에 기댄다)에 맡기지 않고 main을 명시한다.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      # 이슈 제목·본문을 절대 셸 문자열로 보간하지 않는다 — 신뢰할 수 없는 입력이다.
+      # GITHUB_EVENT_PATH에 이미 이번 이벤트 페이로드가 파일로 있으니, jq로 그 파일에서
+      # 곧바로 body.txt를 뽑는다(네트워크 호출도 없다).
+      - name: 이슈 본문을 파일로 뽑고 템플릿을 가른다
+        id: prep
+        run: |
+          WORKDIR="${RUNNER_TEMP}/kimchi-triage"
+          mkdir -p "$WORKDIR"
+          jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" > "$WORKDIR/body.txt"
+
+          if jq -e '[.issue.labels[].name] | index("missed-expression")' "$GITHUB_EVENT_PATH" >/dev/null; then
+            echo "template=missed-expression" >> "$GITHUB_OUTPUT"
+          else
+            echo "template=false-positive" >> "$GITHUB_OUTPUT"
+          fi
+          echo "workdir=$WORKDIR" >> "$GITHUB_OUTPUT"
+
+      - name: 현재 규칙으로 재현한다
+        run: |
+          node scripts/triage-report.mjs \
+            --body "${{ steps.prep.outputs.workdir }}/body.txt" \
+            --template "${{ steps.prep.outputs.template }}" \
+            --repo "${{ github.repository }}" \
+            --out "${{ steps.prep.outputs.workdir }}/result.json" \
+            --comment-out "${{ steps.prep.outputs.workdir }}/comment.md"
+
+      # 이 액션 봇이 이미 단 코멘트가 있으면(숨은 마커로 찾는다) 새로 달지 않고 그
+      # 자리에서 갱신한다 — 이슈를 편집할 때마다 코멘트가 쌓이면 스레드를 읽기 어렵다.
+      - name: 기존 kimchi 코멘트를 찾는다
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | test("kimchi-claude-triage")) | .id' \
+            > "${{ steps.prep.outputs.workdir }}/existing-ids.txt" 2>/dev/null
+          ID=$(tail -n 1 "${{ steps.prep.outputs.workdir }}/existing-ids.txt")
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: 코멘트를 올리거나 갱신한다
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          COMMENT="${{ steps.prep.outputs.workdir }}/comment.md"
+          if [ -n "${{ steps.existing.outputs.id }}" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/${{ steps.existing.outputs.id }}" \
+              -F body=@"$COMMENT" >/dev/null \
+              || echo "::warning::triage 코멘트 갱신에 실패했습니다." >&2
+          else
+            gh api --method POST "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments" \
+              -F body=@"$COMMENT" >/dev/null \
+              || echo "::warning::triage 코멘트 작성에 실패했습니다." >&2
+          fi
+          exit 0
+
+      # result.json의 labels.add/remove를 그대로 적용한다. 라벨이 저장소에 아직 없으면
+      # (.github/labels.yml 참고 — 관리자가 gh label create로 미리 만들어 둬야 한다)
+      # gh issue edit가 실패하는데, 라벨 하나를 못 붙였다고 job 전체를 실패시키지 않는다.
+      - name: 라벨을 맞춘다
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          RESULT="${{ steps.prep.outputs.workdir }}/result.json"
+          jq -r '.labels.add[]' "$RESULT" | while read -r LABEL; do
+            [ -z "$LABEL" ] && continue
+            gh issue edit "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --add-label "$LABEL" \
+              || echo "::warning::라벨 추가에 실패했습니다: $LABEL" >&2
+          done
+          jq -r '.labels.remove[]' "$RESULT" | while read -r LABEL; do
+            [ -z "$LABEL" ] && continue
+            gh issue edit "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --remove-label "$LABEL" \
+              || true # 애초에 안 붙어 있던 라벨을 떼려는 시도는 흔하다. 조용히 넘어간다.
+          done
+          exit 0

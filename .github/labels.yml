@@ -9,6 +9,15 @@
 - name: missed-expression
   color: "d73a4a"
   description: 규칙표에 없어서 걸러지지 않은 어색한 표현이다
+- name: reproduced
+  color: "d73a4a"
+  description: triage 봇이 현재 규칙으로 재현했다(오탐이면 아직 걸리고, 놓친 표현이면 아직 안 잡힌다)
+- name: not-reproduced
+  color: "0e8a16"
+  description: triage 봇이 현재 규칙으로 재현하지 못했다(이미 고쳐졌을 수 있다)
+- name: needs-info
+  color: "d876e3"
+  description: 이슈 본문에 주민등록번호로 보이는 값이 있어 가상의 값으로 다시 적어 달라고 요청했다
 - name: rules
   color: "0e8a16"
   description: rules/ 아래 규칙표에 관련된 일이다

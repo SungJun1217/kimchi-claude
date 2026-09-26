@@ -245,21 +245,26 @@ function scanLine(rawLine, pathOnly) {
  * 글에서 주민등록번호로 보이는 것을 찾는다.
  *
  * @param {string} text
- * @param {{pathOnly?: boolean}} [options] pathOnly 면 파일 경로 전용 규칙을 쓴다
- *   (대시로 이은 형태만, 앞에 글자·숫자·밑줄·점이 없을 때만 — 파일 이름 관례에서
- *   나는 오탐을 줄인다).
+ * @param {{pathOnly?: boolean, ignoreAllowLine?: boolean}} [options] pathOnly 면 파일
+ *   경로 전용 규칙을 쓴다(대시로 이은 형태만, 앞에 글자·숫자·밑줄·점이 없을 때만 —
+ *   파일 이름 관례에서 나는 오탐을 줄인다). ignoreAllowLine 이 참이면 kimchi-allow-rrn
+ *   표시가 있는 줄도 그대로 검사한다 — 이 표시는 저장소 관리자가 자기 문서에 형식만
+ *   맞는 예시를 남길 때 쓰는 것이지, 신뢰할 수 없는 외부 입력(이슈·PR 본문)에서 같은
+ *   표시로 검사를 피해 실제 번호를 공개된 곳(봇 코멘트 등)에 그대로 실어 보내는
+ *   수단으로 쓰이면 안 된다.
  * @returns {{matched: string, line: number, column: number, length: number}[]}
  */
 export function findResidentNumbers(text, options = {}) {
   if (typeof text !== "string" || text.length === 0) return [];
   const pathOnly = Boolean(options.pathOnly);
+  const ignoreAllowLine = Boolean(options.ignoreAllowLine);
 
   const found = [];
   const lines = text.split("\n");
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    if (ALLOW_LINE.test(line)) continue;
+    if (!ignoreAllowLine && ALLOW_LINE.test(line)) continue;
 
     for (const hit of scanLine(line, pathOnly)) {
       found.push({ matched: hit.matched, line: index + 1, column: hit.codePointIndex + 1, length: hit.length });
@@ -291,8 +296,18 @@ export function redact(value) {
  * 있었으면 clean 문자열에서 뽑은 matched 보다 원문 구간이 더 길어서, matched 길이만
  * 지우면 뒷부분 숫자가 그대로 남는다.
  *
+ * hit.column은 findResidentNumbers가 "그 줄 안에서" 세는 코드 포인트 열이다 — text
+ * 전체에 대한 색인이 아니다. 한 줄짜리 입력(파일 경로, 커밋 메시지 한 줄)은 우연히
+ * 둘째 줄이 없어 column을 그대로 text 전체의 색인처럼 써도 맞았지만, 여러 줄
+ * 문서에서는 둘째 줄 이후의 hit이 첫째 줄의 엉뚱한 자리에 꽂혀 원문이 깨지고, 정작
+ * 뒤에 있던 진짜 번호는 전혀 가려지지 않는 결함이 있었다(실측). 줄마다 코드 포인트
+ * 길이를 누적해 절대 위치로 바꾼 뒤에만 자른다 — `\r\n`의 `\r`도 그 줄의 마지막
+ * 문자로 그대로 포함되므로(text.split("\n")만 쓰고 `\r`을 따로 떼지 않는다)
+ * findResidentNumbers가 센 열과 어긋나지 않는다.
+ *
  * @param {string} text
- * @param {{pathOnly?: boolean}} [options]
+ * @param {{pathOnly?: boolean, ignoreAllowLine?: boolean}} [options] findResidentNumbers에
+ *   그대로 넘긴다.
  * @returns {string}
  */
 export function redactText(text, options = {}) {
@@ -300,11 +315,20 @@ export function redactText(text, options = {}) {
   const found = findResidentNumbers(text, options);
   if (found.length === 0) return text;
 
+  const lines = text.split("\n");
+  const lineStart = [0];
+  for (const line of lines) {
+    lineStart.push(lineStart[lineStart.length - 1] + Array.from(line).length + 1); // +1: 줄바꿈 자신
+  }
+
   const chars = Array.from(text);
+  const withAbsoluteStart = found.map((hit) => ({
+    ...hit,
+    absoluteStart: lineStart[hit.line - 1] + (hit.column - 1),
+  }));
   // 뒤에서부터 갈아 끼워야 앞쪽 자리(코드 포인트 색인)가 밀리지 않는다.
-  for (const hit of [...found].sort((a, b) => b.column - a.column)) {
-    const start = hit.column - 1;
-    chars.splice(start, hit.length, redact(hit.matched));
+  for (const hit of withAbsoluteStart.sort((a, b) => b.absoluteStart - a.absoluteStart)) {
+    chars.splice(hit.absoluteStart, hit.length, redact(hit.matched));
   }
   return chars.join("");
 }
