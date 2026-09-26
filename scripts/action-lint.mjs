@@ -180,8 +180,9 @@ export function findingsForTarget(target, rules) {
   // 원문이 NFC 가 아니면(드묾 — 대개 macOS 로 만든 파일) 줄·칸이 조금 어긋날 수 있다.
   // applyFixes 자신도 같은 이유로 NFD 입력에는 자동 교정을 걸지 않는다.
   const normalized = target.text.normalize("NFC");
-  const findings = lint(normalized, rules, target.ext, target.refDefs ?? null);
-  const { applied } = applyFixes(normalized, rules, target.ext, target.refDefs ?? null);
+  const mask = { ext: target.ext, refDefs: target.refDefs ?? null };
+  const findings = lint(normalized, rules, mask);
+  const { applied } = applyFixes(normalized, rules, mask);
   const appliedByIndex = new Map(applied.map((hit) => [hit.index, hit]));
 
   const lines = normalized.split("\n");
@@ -229,8 +230,9 @@ export function findingsForTarget(target, rules) {
 export function findingsForText(text, rules) {
   if (!looksKorean(text)) return [];
   const normalized = text.normalize("NFC");
-  const findings = lint(normalized, rules, undefined, null);
-  const { applied } = applyFixes(normalized, rules, undefined, null);
+  const mask = { refDefs: null };
+  const findings = lint(normalized, rules, mask);
+  const { applied } = applyFixes(normalized, rules, mask);
   const appliedByIndex = new Map(applied.map((hit) => [hit.index, hit]));
   return findings.map((finding) => ({
     bad: finding.matched,

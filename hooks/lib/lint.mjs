@@ -708,10 +708,11 @@ function capPerRule(findings) {
  *
  * @param {string} text
  * @param {object[]} rules
- * @param {string} [ext] 문서 확장자(점 없이, 소문자). 블록형 가리개(들여쓰기 코드, rST, AsciiDoc)의
- *   범위를 정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
- * @param {Set<string>|null} [extraDefs] maskProtected에 그대로 전달한다. Edit/MultiEdit
- *   조각 밖의 참조식 링크 정의 라벨.
+ * @param {{ext?: string, refDefs?: Set<string>|null}} [mask] maskProtected에 그대로 전달한다.
+ *   ext: 문서 확장자(점 없이, 소문자). 블록형 가리개(들여쓰기 코드, rST, AsciiDoc)의 범위를
+ *   정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
+ *   refDefs: Edit/MultiEdit 조각 밖의 참조식 링크 정의 라벨. artifact.mjs의 target을
+ *   그대로 넘겨도 된다 — target에 이미 {ext, refDefs}가 실려 있다.
  * @param {{exhaustive?: boolean, latinHada?: boolean}} [options]
  *   exhaustive를 true로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)도, 원시 매치·반복
  *   상한(MAX_RAW_HITS_PER_RULE/MAX_PATTERN_ITERATIONS)도 적용하지 않는다 — applyFixes가
@@ -724,7 +725,8 @@ function capPerRule(findings) {
  *   섞여 들어오면 안 되기 때문이다(전체 규칙 집합을 검사하는 게 아니다).
  * @returns {object[]}
  */
-export function lint(text, rules, ext, extraDefs, options = {}) {
+export function lint(text, rules, mask = {}, options = {}) {
+  const { ext, refDefs } = mask;
   const { exhaustive = false, latinHada = true } = options;
 
   if (typeof text !== "string" || text.length === 0) return [];
@@ -736,7 +738,7 @@ export function lint(text, rules, ext, extraDefs, options = {}) {
   // 매치하면 하나도 안 잡힌다. 정규화한 사본으로 찾아야 두 형태 모두에서 같은 결과가
   // 나온다. text가 이미 NFC면 normalized === text라 아래 로직에 변화가 없다.
   const normalized = text.normalize("NFC");
-  const masked = maskProtected(normalized, ext, extraDefs);
+  const masked = maskProtected(normalized, { ext, refDefs });
   const findings = [];
 
   // exhaustive면 masked.length + 1로 넉넉히 잡는다 — 매치 하나가 최소 두 자를 먹거나
@@ -801,11 +803,10 @@ export function lint(text, rules, ext, extraDefs, options = {}) {
  *
  * @param {string} text
  * @param {object[]} rules
- * @param {string} [ext] lint() 에 그대로 전달한다.
- * @param {Set<string>|null} [extraDefs] lint() 에 그대로 전달한다.
+ * @param {{ext?: string, refDefs?: Set<string>|null}} [mask] lint() 에 그대로 전달한다.
  * @returns {{text: string, applied: object[], skipped: object[]}}
  */
-export function applyFixes(text, rules, ext, extraDefs) {
+export function applyFixes(text, rules, mask = {}) {
   const applied = [];
   const skipped = [];
 
@@ -821,7 +822,7 @@ export function applyFixes(text, rules, ext, extraDefs) {
   // 불일치가 생긴다(실측, 0.14.13). exhaustive: true로 보고 상한도 원시 매치·반복 상한도 끈다.
   // latin-hada는 항상 check가 정규식이라(latin-hada.mjs 상단 설명) 아래 필터에서 어차피
   // 버려진다 — latinHada: false로 그 스캔 자체를 건너뛴다.
-  const candidates = lint(text, rules, ext, extraDefs, { exhaustive: true, latinHada: false }).filter(
+  const candidates = lint(text, rules, mask, { exhaustive: true, latinHada: false }).filter(
     (finding) => finding.check === CHECK_SUBSTITUTE
   );
 
