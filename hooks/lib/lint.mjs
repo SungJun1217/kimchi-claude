@@ -7,6 +7,7 @@ import { maskProtected, isIgnoredFile } from "./segment.mjs";
 import { particleHeads, RIEUL, OTHER_FINAL, NO_FINAL } from "./particle.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
 import { findLatinVerbHada } from "./latin-hada.mjs";
+import { groupCounted, formatGroupedList } from "./format.mjs";
 
 // 규칙의 "쓰지 말 것" 칸에서 ~ 는 "앞뒤에 무엇이 붙든"을 뜻한다.
 const WILDCARD = "~";
@@ -906,31 +907,33 @@ export function applyFixes(text, rules, ext, extraDefs) {
 export function formatFindings(findings, label = "") {
   if (findings.length === 0) return "";
 
-  const seen = new Set();
-  const rows = [];
-  for (const finding of findings) {
-    const key = `${finding.bad}\u0000${finding.good}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push(finding);
-  }
+  // 같은 규칙(bad+good)이 여러 번 걸려도 한 줄만 남긴다. 묶는 부분은 artifact.mjs의
+  // 자동 교정 목록, particle.mjs의 조사 오류 목록과 같은 format.mjs를 쓴다 — 다만
+  // 여기는 목록에 상한을 두지 않는다(max: Infinity). 이유는 지적이 자동으로 고쳐지지
+  // 않고 사람이 읽어야 하는 경고라, 개수보다 종류를 다 보여 주는 쪽이 낫기 때문이다.
+  const entries = groupCounted(findings, (finding) => `${finding.bad}\u0000${finding.good}`);
 
-  // 아래에 나열하는 줄 수(rows.length, 중복 제거)와 첫 문장의 건수가 같은 값이어야
+  // 아래에 나열하는 종류 수(entries.length, 중복 제거)와 첫 문장의 건수가 같은 값이어야
   // "3건을 찾았습니다" 인데 줄이 2개인 것처럼 세는 것과 보여 주는 것이 어긋나지 않는다.
   // 실제 등장 횟수(findings.length)가 더 많으면 괄호로 총 등장 횟수를 덧붙인다.
   const header =
-    rows.length === findings.length
-      ? `어색한 표현 ${rows.length}가지를 찾았습니다.`
-      : `어색한 표현 ${rows.length}가지(총 ${findings.length}곳)를 찾았습니다.`;
+    entries.length === findings.length
+      ? `어색한 표현 ${entries.length}가지를 찾았습니다.`
+      : `어색한 표현 ${entries.length}가지(총 ${findings.length}곳)를 찾았습니다.`;
 
   const lines = [label ? `${label}에서 ${header}` : header, ""];
-
-  for (const finding of rows) {
-    const reason = finding.why ? ` (${finding.why})` : "";
-    // 쓸 것을 적힌 그대로 보여 준다. "~될", "~습니다"처럼 어미를 적는 물결표는
-    // 한국어에서 자연스러운 표기이므로 지우면 오히려 읽기 어려워진다.
-    lines.push(`- "${finding.matched}" → "${finding.good}"${reason}`);
-  }
+  lines.push(
+    ...formatGroupedList(
+      entries,
+      ({ item: finding }) => {
+        const reason = finding.why ? ` (${finding.why})` : "";
+        // 쓸 것을 적힌 그대로 보여 준다. "~될", "~습니다"처럼 어미를 적는 물결표는
+        // 한국어에서 자연스러운 표기이므로 지우면 오히려 읽기 어려워진다.
+        return `- "${finding.matched}" → "${finding.good}"${reason}`;
+      },
+      Infinity
+    )
+  );
 
   return lines.join("\n");
 }
