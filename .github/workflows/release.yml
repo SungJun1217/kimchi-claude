@@ -79,3 +79,32 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --notes "$BODY"
           fi
+
+      # GitHub Action(action.yml)을 쓰는 쪽은 `uses: SungJun1217/kimchi-claude@v0` 처럼
+      # 세부 버전 없이 메이저 태그를 참조하는 것이 관례다. 아직 1.0.0 이 아니라서(전부
+      # 0.x) 메이저 태그가 없으면 그 관례를 못 따른다 — "v0" 을 이동 태그로 두고 릴리스마다
+      # 이번 태그로 강제 이동시킨다. contents: write 권한은 위에서 이미 받았다.
+      #
+      # 두 가지를 지킨다. 메이저 버전이 0인 태그(v0.x.y)에만 옮긴다 — 언젠가 v1.0.0을
+      # 내면 이 스텝이 v0를 계속 건드릴 이유가 없다(위 버전 일치 검사가 이미 그 태그를
+      # 걸러 주지만, 이 스텝만 따로 읽어도 조건이 분명하도록 다시 확인한다). 그리고
+      # 기존 v0가 있으면 이번 태그의 조상인지 본다 — 과거 버전을 뒤늦게 다시 릴리스하는
+      # 경우(hotfix 태그를 옛 브랜치에 붙이는 등) v0가 최신 릴리스보다 뒤로 가면 안 된다.
+      - name: 이동 태그 v0 를 이번 릴리스로 옮긴다
+        run: |
+          if [[ "$TAG" != v0.* ]]; then
+            echo "메이저 버전이 0이 아니라(v0.* 형태가 아니라) v0 태그를 옮기지 않습니다: $TAG"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify refs/tags/v0 >/dev/null; then
+            if git merge-base --is-ancestor v0 "$TAG"; then
+              git tag -f v0 "$TAG"
+              git push -f origin v0
+            else
+              echo "::notice::v0 태그가 가리키는 커밋이 이번 태그($TAG)의 조상이 아니라 옮기지 않습니다(과거 버전 재릴리스 등)."
+            fi
+          else
+            git tag -f v0 "$TAG"
+            git push -f origin v0
+          fi

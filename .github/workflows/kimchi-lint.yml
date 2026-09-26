@@ -1,0 +1,32 @@
+name: kimchi-lint
+
+# 이 저장소가 자기 자신의 액션을 쓴다(`uses: ./`) — 액션이 실제로 동작하는지 이 저장소의
+# PR로 매번 확인한다. fork PR 은 토큰이 읽기 전용이라 action.yml 이 자동으로 annotations
+# 로만 알린다(README "GitHub Action으로 쓰기" 참고).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: kimchi-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # PR 헤드 커밋을 명시한다 — 기본값(merge 커밋)을 체크아웃하면 base 쪽 변경이
+      # 섞여 들어와 줄 번호가 실제 PR 과 어긋날 수 있다(action.yml 이 --head-sha 로
+      # 한 번 더 확인하지만, 얕은 클론이 기본이라 이 저장소가 직접 맞는 커밋을
+      # 받아 두는 편이 더 빠르고 확실하다).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
