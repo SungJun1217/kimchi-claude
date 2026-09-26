@@ -21,6 +21,33 @@ const CLOSERS = `)\\]"'」】）,.:;!?`; // ) ] " ' 」 】 ） , . : ; ! ?
 const PARTICLES = "을|를|이|가|은|는|과|와|도|의|에서|에게|으로|로서|로써|로|까지|부터|이나|나|이란|란";
 const TAIL = String.raw`(?:[${CLOSERS}]*(?:${PARTICLES})?)(?=\s|$)`;
 
+/**
+ * 정규식들을 text에 돌려 겹치지 않는 매치 구간을 모은다. 빈 문자열 매치는 무한 루프를
+ * 막으려고 한 글자 건너뛴다(패턴 자체가 빈 매치를 낼 수 있는 경우 대비 — 현재 패턴들은
+ * 실제로 빈 매치를 내지 않지만 다음에 추가되는 패턴이 안전하게 이 함수를 쓰게 해 둔다).
+ * accept(match)를 주면 매치 안쪽 조건(로그·프롬프트 줄의 콜론 뒤 내용 등)을 본 것만 담는다.
+ */
+function collectRanges(text, patterns, accept) {
+  const ranges = [];
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match[0].length === 0) {
+        pattern.lastIndex += 1;
+        continue;
+      }
+      if (!accept || accept(match)) ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+  return ranges;
+}
+
+// 참조 정의 줄 `[label]: url "title"` 전체. 라벨을 캡처해 둬서 findReferenceLabelRanges가
+// 정의된 라벨 집합을 모을 때도 이 정규식을 그대로 쓴다 — ALWAYS_PATTERNS 쪽은 라벨이
+// 필요 없어 캡처만 뺀 버전을 이 소스에서 파생시킨다(아래).
+const REF_DEF_LINE = /^ {0,3}\[([^\]\n]+)\]:[ \t]+\S[^\n]*$/gm;
+
 // 순서가 중요하다. 울타리 코드 블록을 먼저 덮어야 그 안의 백틱이 인라인 코드로 잘못 잡히지 않는다.
 //
 // 여기 있는 패턴은 대상 종류를 가리지 않고 항상 적용한다 — 커밋 메시지에도, 어떤 문서
@@ -51,8 +78,9 @@ const ALWAYS_PATTERNS = [
   // 끝까지 밀었다 되돌리는 이차 비용이 났다(실측 5.7초). 괄호·대괄호가 나오면 그 자리에서
   // 바로 실패하므로 더 되돌릴 게 없다. 길이도 2000자로 한 번 더 막는다.
   /\]\([^()\]\n]{0,2000}\)/g,
-  // 참조 정의 줄 `[label]: url "title"` 전체.
-  /^ {0,3}\[[^\]\n]+\]:[ \t]+\S[^\n]*$/gm,
+  // 참조 정의 줄 `[label]: url "title"` 전체. REF_DEF_LINE에서 캡처 그룹만 뺀 버전 — 소스가
+  // 둘이면 한쪽만 고치고 잊는 사고가 난다.
+  new RegExp(REF_DEF_LINE.source.replace("(", "(?:"), "gm"),
   // 한 줄짜리 `$(...)` 명령 치환. 중첩 괄호는 다루지 않는다 — 그런 경우까지 정확히 가르려면
   // bash-commit.mjs 수준의 셸 파서가 필요하다.
   /\$\([^()\n]*\)/g,
@@ -94,8 +122,9 @@ function findHangulAsciiJoinRanges(text) {
 
 // 문서 확장자별로만 적용하는 블록형 가리개. 커밋 메시지(ext 없음)에는 무엇도 걸리지 않는다 —
 // 커밋 메시지에 "    컨텐츠 정리"처럼 앞에 공백 몇 칸이 붙었다고 코드로 볼 이유가 없다.
-const INDENTED_CODE_EXTS = new Set(["md", "mdx", "markdown"]);
-const PRE_CODE_EXTS = new Set(["md", "mdx", "markdown"]);
+// 들여쓰기 코드·pre/code 태그·참조식 링크·프런트매터는 전부 "마크다운이다"라는 같은 판단을
+// 쓴다 — 따로 둔 두 집합이 갈라질 일이 없어 하나로 합친다.
+const MARKDOWN_EXTS = new Set(["md", "mdx", "markdown"]);
 const RST_EXTS = new Set(["rst"]);
 const ASCIIDOC_EXTS = new Set(["adoc"]);
 
@@ -148,13 +177,7 @@ function isMostlyNonHangul(text) {
 const LOG_LINE = /^[ \t]*(?:>[ \t]*)?(?:[-*+][ \t]+)?(?:[A-Z][A-Za-z]*(?:Error|Exception)|Error|ERROR|FATAL|Fatal|fatal|WARN|WARNING|Warning|warning|error|panic|Traceback)(?:\[[^\]\n]*\])?:[ \t]([^\n]*)/gm;
 
 function findLogLineRanges(text) {
-  const ranges = [];
-  LOG_LINE.lastIndex = 0;
-  let m;
-  while ((m = LOG_LINE.exec(text)) !== null) {
-    if (isMostlyNonHangul(m[1])) ranges.push([m.index, m.index + m[0].length]);
-  }
-  return ranges;
+  return collectRanges(text, [LOG_LINE], (m) => isMostlyNonHangul(m[1]));
 }
 
 // 울타리 없는 셸 프롬프트 한 줄(`$ npm test`). "$ 5를 내면 컨텐츠를 받습니다"처럼 공백
@@ -162,14 +185,7 @@ function findLogLineRanges(text) {
 const PROMPT_LINE = /^[ \t]*\$ ([^\n]*)/gm;
 
 function findPromptLineRanges(text) {
-  const ranges = [];
-  PROMPT_LINE.lastIndex = 0;
-  let m;
-  while ((m = PROMPT_LINE.exec(text)) !== null) {
-    if (/^[0-9]/.test(m[1])) continue;
-    ranges.push([m.index, m.index + m[0].length]);
-  }
-  return ranges;
+  return collectRanges(text, [PROMPT_LINE], (m) => !/^[0-9]/.test(m[1]));
 }
 
 // 빈 줄 뒤에 4칸 들여쓰기나 탭으로 시작하는 줄이 이어지면 마크다운의 들여쓰기 코드 블록 —
@@ -356,8 +372,8 @@ function findFrontmatterRanges(text) {
 // 실제로 `[설정 안내][타겟]` 이 `[설정 안내][타깃]`으로 바뀌고 `[타겟]:` 정의는 그대로
 // 남아 죽은 링크가 됐다. 정의가 있는 라벨만 가려 그 부분만 검사에서 뺀다. 링크 텍스트
 // (`[글 내용]`)는 라벨이 아니므로 계속 검사한다. 마크다운 계열(md/mdx/markdown)에서만
-// 본다 — 참조식 링크 자체가 마크다운 전용 문법이다.
-const REF_DEF_LINE = /^ {0,3}\[([^\]\n]+)\]:[ \t]+\S[^\n]*$/gm;
+// 본다 — 참조식 링크 자체가 마크다운 전용 문법이다. REF_DEF_LINE은 파일 위쪽에서 정의한다
+// (ALWAYS_PATTERNS의 캡처 없는 버전이 그 소스를 그대로 빌려 쓴다).
 // 대괄호 안 문자 집합에서 "["·"]" 둘 다 빼고 길이도 999자로 막는다. "["를 수만 개 이어
 // 붙인 입력에서 시작마다 문자열 끝까지 밀었다 되돌리는 이차 비용이 났다(실측 36초) —
 // 정의가 하나라도 있으면 이 패턴들이 전체 글에서 돈다.
@@ -391,38 +407,29 @@ function maskRanges(text, ranges) {
 export const CODE_ONLY_PATTERNS = [/```[\s\S]*?```/g, /~~~[\s\S]*?~~~/g, /`[^`\n]*`/g];
 
 /**
+ * 코드로 보고 가릴 구간만 모은다. 정의 줄 스캔(maskCodeForDefScan)과 maskProtected가
+ * 둘 다 필요로 하는 부분 집합이라 여기 하나로 둔다 — maskProtected는 이미 알고 있는
+ * 결과를 넘겨받아 다시 계산하지 않는다.
+ */
+function codeRanges(text, ext) {
+  const ranges = collectRanges(text, CODE_ONLY_PATTERNS);
+  if (MARKDOWN_EXTS.has(ext)) {
+    ranges.push(...collectRanges(text, PRE_CODE_PATTERNS));
+    ranges.push(...findIndentedBlockRanges(text));
+  }
+  return ranges;
+}
+
+/**
  * 정의 줄을 찾기 전에 코드만 가려 둔 사본을 만든다. 울타리·인라인 코드 안의
  * `` `[타겟]` `` 나 펜스 안 ` ```\n[타겟]: x\n``` `는 진짜 정의가 아니다 — 코드 예시로
  * 인용했을 뿐인데 실제 정의로 세면 그 라벨을 쓰는 모든 자리가 부당하게 검사에서 빠진다.
+ *
+ * @param {(number[])[]} [precomputed] maskProtected가 이미 구한 codeRanges 결과. 없으면
+ *   새로 구한다(collectReferenceDefLabels처럼 codeRanges를 따로 안 가진 호출자용).
  */
-function maskCodeForDefScan(text, ext) {
-  const ranges = [];
-  for (const pattern of CODE_ONLY_PATTERNS) {
-    pattern.lastIndex = 0;
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      if (match[0].length === 0) {
-        pattern.lastIndex += 1;
-        continue;
-      }
-      ranges.push([match.index, match.index + match[0].length]);
-    }
-  }
-  if (INDENTED_CODE_EXTS.has(ext)) ranges.push(...findIndentedBlockRanges(text));
-  if (PRE_CODE_EXTS.has(ext)) {
-    for (const pattern of PRE_CODE_PATTERNS) {
-      pattern.lastIndex = 0;
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        if (match[0].length === 0) {
-          pattern.lastIndex += 1;
-          continue;
-        }
-        ranges.push([match.index, match.index + match[0].length]);
-      }
-    }
-  }
-  return maskRanges(text, ranges);
+function maskCodeForDefScan(text, ext, precomputed) {
+  return maskRanges(text, precomputed || codeRanges(text, ext));
 }
 
 function scanDefLabels(maskedText, into) {
@@ -455,11 +462,17 @@ export function collectReferenceDefLabels(text, ext) {
  *   두 괄호짜리 참조(`][라벨]`·`[라벨][]`)를 정의 확인 없이 전부 가린다 — 단축형(`[라벨]`)은
  *   혼자서도 흔한 대괄호 표기라 여기서까지 넓히지 않는다. 자동 교정이 죽은 링크를 만드는
  *   쪽이 지적 하나를 놓치는 쪽보다 나쁘다.
+ * @param {(number[])[]} [precomputedCodeRanges] maskProtected가 이미 구한 codeRanges 결과.
  */
-function findReferenceLabelRanges(text, ext, extraDefs) {
+function findReferenceLabelRanges(text, ext, extraDefs, precomputedCodeRanges) {
   const conservative = extraDefs === null;
+  // extraDefs가 비어 있고(파일 밖 정의도 없고) 글 안에도 정의 줄이 있을 수 없으면
+  // (`]:`가 아예 없으면) defs는 항상 빈 채로 끝나 아래 두 루프 모두 아무것도 못 찾는다 —
+  // 결과가 같으니 정규식을 돌릴 필요가 없다. 보수적인 null은 정의와 무관하게 항상 가리므로
+  // 이 지름길에서 뺀다.
+  if (!conservative && (!extraDefs || extraDefs.size === 0) && !text.includes("]:")) return [];
   const defs = new Set(conservative ? [] : extraDefs || []);
-  scanDefLabels(maskCodeForDefScan(text, ext), defs);
+  scanDefLabels(maskCodeForDefScan(text, ext, precomputedCodeRanges), defs);
 
   const ranges = [];
 
@@ -533,43 +546,20 @@ export function maskProtected(text, ext, extraDefs) {
 }
 
 function maskProtectedUncached(text, ext, extraDefs) {
-  const ranges = [];
-  for (const pattern of ALWAYS_PATTERNS) {
-    pattern.lastIndex = 0;
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      if (match[0].length === 0) {
-        pattern.lastIndex += 1;
-        continue;
-      }
-      ranges.push([match.index, match.index + match[0].length]);
-    }
-  }
+  const ranges = collectRanges(text, ALWAYS_PATTERNS);
   ranges.push(...findPathRanges(text));
   ranges.push(...findHangulAsciiJoinRanges(text));
   ranges.push(...findLogLineRanges(text));
   ranges.push(...findPromptLineRanges(text));
 
-  if (PRE_CODE_EXTS.has(ext)) {
-    for (const pattern of PRE_CODE_PATTERNS) {
-      pattern.lastIndex = 0;
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        if (match[0].length === 0) {
-          pattern.lastIndex += 1;
-          continue;
-        }
-        ranges.push([match.index, match.index + match[0].length]);
-      }
-    }
-  }
-
-  if (INDENTED_CODE_EXTS.has(ext)) {
+  if (MARKDOWN_EXTS.has(ext)) {
+    // codeRanges는 pre/code 태그와 들여쓰기 블록까지 한 번에 구한다 — findReferenceLabelRanges
+    // 안에서 다시 구하지 않도록 그대로 넘긴다(원래 여기서도, 정의 스캔에서도 두 번씩 돌던 계산).
+    const code = codeRanges(text, ext);
+    ranges.push(...code);
     ranges.push(...findFrontmatterRanges(text));
-    ranges.push(...findReferenceLabelRanges(text, ext, extraDefs));
+    ranges.push(...findReferenceLabelRanges(text, ext, extraDefs, code));
   }
-  const indentedBlocks = INDENTED_CODE_EXTS.has(ext) ? findIndentedBlockRanges(text) : [];
-  ranges.push(...indentedBlocks);
   if (RST_EXTS.has(ext)) ranges.push(...findRstLiteralRanges(text, findIndentedBlockRanges(text)));
   if (ASCIIDOC_EXTS.has(ext)) ranges.push(...findAsciidocRanges(text));
 

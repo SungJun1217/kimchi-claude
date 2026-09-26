@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { maskProtected, isIgnoredFile, collectReferenceDefLabels, MASK } from "../hooks/lib/segment.mjs";
 import { fastestMs } from "./helpers.mjs";
 
@@ -498,6 +499,34 @@ test("항목5: 영문 키가 하나라도 있으면 그대로 프런트매터로
   const text = ["---", "id: 123", "참고: 컨텐츠 문서를 옮겼습니다", "---", "본문"].join("\n");
   const masked = maskProtected(text, "md");
   assert.ok(!masked.includes("컨텐츠 문서를 옮겼습니다"));
+});
+
+// H2: collectRanges/codeRanges 공용화 리팩터가 실제 문서의 마스킹 결과를 바꾸지 않았는지
+// 지킨다. 리팩터 전 구현으로 같은 파일들을 돌려 해시가 같음을 먼저 확인했다(git show
+// HEAD~1:hooks/lib/segment.mjs로 옛 모듈을 불러 비교) — 매 시험 실행마다 옛 구현을
+// 다시 불러오는 대신, 그 결과 해시 하나만 여기 못 박아 둔다. 실패하면 리팩터가 아니라
+// 실제 규칙 변경일 수 있으니 원인부터 확인한다.
+test("여러 가림 규칙이 섞인 문서의 가림 결과가 바뀌지 않는다", () => {
+  // 코드 구간 계산을 한 번으로 합칠 때(0.20.4) 옛 구현과 모든 확장자에서 결과가 같음을
+  // 확인하고 해시를 고정했다. 가림 규칙을 일부러 바꿨다면 이 해시도 새로 적는다.
+  const sample = [
+    "---", "title: 타겟 안내", "tags: [타겟]", "---", "",
+    "# 제목", "    제목 뒤 들여쓴 디렉토리", "",
+    "본문의 `인라인 타겟` 과 [링크 글](디렉토리/문서.md) 그리고 ![그림](타겟.png).", "",
+    "```js", "const 타겟 = 1;", "```", "", "~~~", "타겟 물결 펜스", "~~~", "",
+    "[설정 안내][타겟] 과 [타겟][] 그리고 [타겟].", "", "[타겟]: ./setup.md", "",
+    "$ mkdir 디렉토리", "Error: 타겟 not found", "Error: 컨텐츠를 불러오지 못했습니다", "",
+    "리팩토링 $(grep -l 리팩토링 docs) 타겟Id 타겟_id user_디렉토리 컨텐츠UI", "",
+    "<pre>json를 출력</pre> <code>API를</code>", "",
+    "- 목록", "", "    이어지는 디렉토리 문단", "",
+    "https://example.com/타겟/디렉토리 경로 /usr/local/타겟 파일 설정.json 봅니다.",
+  ].join("\n");
+  const hash = createHash("sha256");
+  for (const ext of ["md", "txt", "rst", "adoc", undefined]) {
+    hash.update(String(ext));
+    hash.update(maskProtected(sample, ext));
+  }
+  assert.equal(hash.digest("hex"), "db3b1d61c919e5b4b40a85951086ebd92c20bb1671e2c56c46e085ae1cea217d");
 });
 
 test("한 줄 예외 표시는 그 줄만 덮는다", () => {
