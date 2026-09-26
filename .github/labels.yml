@@ -33,6 +33,9 @@
 - name: ci
   color: "1d76db"
   description: GitHub Actions 워크플로에 관련된 일이다
+- name: claude-review
+  color: "1d76db"
+  description: 이 라벨을 붙이면 Claude 코드 리뷰 워크플로가 이 PR에서 돈다
 - name: dependencies
   color: "1d76db"
   description: 의존성 버전에 관련된 일이다

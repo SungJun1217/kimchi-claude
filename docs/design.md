@@ -946,7 +946,7 @@ sha1(file + "|" + ruleKey + "|" + bad + "|" + lineText.trim())
 `findResidentNumbers`로 검사하면 더는 13자리로 안 보여 통과해 버리므로, "가리기 전에 있었는가"
 를 직접 표시해 둬야 한다.
 
-파일 경로 자체에 번호가 섞인 경우(`900101-1234567.md`)도 같은 함수(`safeDisplayPath`)로
+파일 경로 자체에 번호가 섞인 경우(`900101-1234567.md`)도 같은 함수(`safeDisplayPath`)로 <!-- kimchi-allow-rrn -->
 가린 값만 JSON 출력의 `file` 필드에 싣는다 — annotations의 `file=` 속성, 리뷰 본문의 목록
 어디에도 원문 경로가 나타나지 않는다. `safeDisplayPath`는 훅의 `pii.mjs`가 경로에 쓰는
 `pathOnly`(대시 구분자만 인정하는 좁은 규칙)를 일부러 쓰지 않는다 — 감지에 쓴 규칙과
@@ -1086,6 +1086,45 @@ UI로 채우므로 필드 값에 무엇이 들어올지 스크립트가 통제�
 민다 — 두 동작이 원자적이지 않으므로, 병합 커밋이 `main`에 먼저 올라가고 태그는 뒤이어
 푸시되는 아주 짧은 틈이 있다. 그 틈 사이에 이 워크플로가 돌면(예: 그 시점에 이슈가 열리면)
 링크는 태그가 생기기 전까지 404다 — GitHub Action의 알려진 한계 목록과 같은 종류의 대가다.
+
+## Claude 봇 워크플로 (v0.20.0)
+
+`claude.yml`(`@claude` 멘션)과 `claude-code-review.yml`(자동 코드 리뷰)은 둘 다 소유자 개인
+구독의 OAuth 토큰(`CLAUDE_CODE_OAUTH_TOKEN`)으로 돈다. 이 저장소는 공개 저장소이므로 신뢰
+게이트 없이는 누구나 이슈·PR 코멘트나 PR 하나로 소유자의 쿼터를 소모하는 세션을 띄울 수
+있다 — 그래서 두 워크플로 모두 `author_association`이 `OWNER`/`MEMBER`/`COLLABORATOR`인
+경우에만 돈다. `pull_request_review_comment`·`pull_request_review`는 코멘트/리뷰 자체의
+`author_association`을 본다 — PR을 누가 열었는지가 아니라 지금 `@claude`를 부른 사람이
+신뢰할 수 있는지가 기준이다.
+
+리뷰 워크플로는 신뢰 게이트를 하나 더 둔다. `pull_request.author_association`으로 PR을 연
+사람 자체를 거른다 — PR 코멘트로 부르는 것과 달리 리뷰는 PR이 열리거나 라벨이 붙는 것만으로
+자동으로 돈다, 즉 사람이 그 순간 신뢰할 수 있는지 판단할 여지가 없다. fork PR은
+`head.repo.full_name != github.repository`로 거른다 — 애초에 시크릿을 못 받으므로 돈다 해도
+인증에서 실패하지만, 실패한 세션도 워크플로 로그를 남기고 큐를 차지하므로 미리 거른다.
+dependabot·github-actions 같은 bot이 연 PR도 거른다 — 리뷰를 받을 대상이 아니고, 이런 PR의
+author_association은 대개 `NONE`이라 위 조건에 이미 걸리지만 의도를 코드에 그대로 남겨 둔다.
+
+리뷰 트리거는 PR을 열거나 밀 때마다(`synchronize`)가 아니라 `ready_for_review`(draft 해제)
+아니면 `claude-review` 라벨을 붙였을 때만 돈다. 작업 중인 draft PR에 커밋할 때마다 리뷰
+세션이 돌면 아직 리뷰받을 준비가 안 된 코드에 쿼터를 쓰는 셈이다 — 리뷰가 필요한 시점(끝났을
+때, 또는 사람이 명시적으로 다시 봐 달라고 라벨을 붙였을 때)에만 돈다. `claude-review` 라벨은
+`.github/labels.yml`에 정의해 두고 `gh label create --force`로 만든다(불변식과 같은 이유로
+동기화 워크플로는 두지 않는다).
+
+리뷰 워크플로는 `--plugin-dir ${{ github.workspace }}`를 `claude_args`에 얹어 이 저장소
+자신(kimchi-claude 플러그인)을 함께 불러온다 — 리뷰 코멘트가 한국어로 나올 때도 항상 켜진
+출력 스타일을 그대로 적용받게 하려는 것이다(불변식 3). 공식 `code-review` 플러그인
+설정(`plugin_marketplaces`/`plugins`)은 그대로 두고 `claude_args`에만 이어 붙인다 — 두
+메커니즘이 다르다: 플러그인 두 개는 `plugins` 입력에 쉼표로 나열하는 것이 아니라, 하나는
+마켓플레이스 플러그인으로 다른 하나는 로컬 디렉터리 플러그인으로 각각 다른 입력을 쓴다.
+
+두 워크플로 모두 같은 스레드/PR에서 세션이 겹치지 않게 `concurrency` 그룹을 이슈·PR
+번호로 건다 — 겹치면 쿼터를 이중으로 쓰고 봇 코멘트도 뒤섞인다. `@claude` 쪽은
+`cancel-in-progress: false`(같은 스레드에 두 번 불러도 앞 세션 답을 잃지 않고 순서대로
+처리한다)이고, 리뷰 쪽은 `cancel-in-progress: true`(라벨을 여러 번 떼었다 붙이면 최신
+diff만 리뷰하면 되고, 옛 세션을 계속 돌릴 이유가 없다). `timeout-minutes: 30`은 어느
+쪽이든 한 세션이 통제 불능으로 길어지는 것을 막는 상한이다.
 
 ## 알려진 한계
 

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -305,8 +305,8 @@ test("주민등록번호가 섞인 문장을 가려서 재현한다(원문 숫�
       "--out", outPath,
       "--comment-out", commentPath,
     ]);
-    const json = execFileSync("cat", [outPath], { encoding: "utf8" });
-    const comment = execFileSync("cat", [commentPath], { encoding: "utf8" });
+    const json = readFileSync(outPath, "utf8");
+    const comment = readFileSync(commentPath, "utf8");
     assert.equal(/2345678/.test(json), false, "원문 주민등록번호가 JSON에 남으면 안 된다");
     assert.equal(/2345678/.test(comment), false, "원문 주민등록번호가 코멘트에 남으면 안 된다");
     assert.match(comment, /880505-\*+/);
@@ -343,8 +343,8 @@ test("이슈 본문에 kimchi-allow-rrn을 붙여도 검사를 피하지 못하�
       "--out", outPath,
       "--comment-out", commentPath,
     ]);
-    const json = execFileSync("cat", [outPath], { encoding: "utf8" });
-    const comment = execFileSync("cat", [commentPath], { encoding: "utf8" });
+    const json = readFileSync(outPath, "utf8");
+    const comment = readFileSync(commentPath, "utf8");
     assert.equal(/2345678/.test(json), false, "kimchi-allow-rrn 표시로 원문 번호가 새어 나오면 안 된다");
     assert.equal(/2345678/.test(comment), false, "kimchi-allow-rrn 표시로 원문 번호가 새어 나오면 안 된다");
     assert.match(comment, /880505-\*+/, "표시가 있어도 가려야 한다");

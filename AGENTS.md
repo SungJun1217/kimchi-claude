@@ -59,3 +59,4 @@ echo '<hook json>' | node hooks/guard.mjs  # drive a hook directly with a synthe
 - `rules/*.md`: markdown tables `| 원어 | 쓰지 말 것 | 쓸 것 | 이유 | 검사 | 순위 |`. `검사` ∈ `치환`/`정규식`/`프롬프트`; `순위` ∈ `핵심`/`보통`/`참고` decides what fits in the style body.
 - `tests/`: `node:test`, no dependencies. `improvement.test.mjs` pins the with/without-plugin difference on preserved real answers in `tests/fixtures/`.
 - `evals/`: `claude plugin eval` cases (tone vs. quality-preserved vs. english-passthrough). Needs credentials in the child process.
+- `.github/workflows/claude.yml` and `claude-code-review.yml`: `@claude` mentions and PR review, gated to `OWNER`/`MEMBER`/`COLLABORATOR` (public repo, runs on the owner's subscription). `claude-code-review.yml` also loads this repo's own plugin via `--plugin-dir` so review comments follow the same Korean register.

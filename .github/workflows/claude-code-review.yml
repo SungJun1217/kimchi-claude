@@ -1,0 +1,61 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [ready_for_review, labeled]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    # draft PR은 리뷰할 준비가 안 됐고, labeled 이벤트는 claude-review 라벨을 붙였을 때만 돈다
+    # (다른 라벨을 붙일 때마다 매번 도는 것을 막는다). bot이 연 PR과 fork PR은 시크릿이 없거나
+    # (fork PR) 리뷰가 무의미해(dependabot 같은 자동 PR) 제외한다. author_association 은
+    # PR을 연 사람 기준으로, 신뢰할 수 없는 외부 기고자가 소유자의 구독 쿼터를 쓰지 못하게 막는다.
+    if: |
+      github.event.pull_request.draft == false &&
+      (github.event.action == 'ready_for_review' ||
+        (github.event.action == 'labeled' && github.event.label.name == 'claude-review')) &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'github-actions[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    concurrency:
+      # 같은 PR에서 라벨을 여러 번 떼었다 붙이거나 ready_for_review 뒤에 라벨까지 달아도
+      # 리뷰 세션이 겹치지 않게 한다.
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # --plugin-dir 로 이 저장소 자신(kimchi-claude 플러그인)을 함께 얹어, 리뷰 코멘트가
+          # 한국어일 때 항상 켜진 출력 스타일(자연스러운 한국어 어투)을 그대로 쓰게 한다.
+          # claude_args 는 CLI 인자를 이어 붙인 문자열 하나다(공백으로 구분) —
+          # https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment" --plugin-dir ${{ github.workspace }}'
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
