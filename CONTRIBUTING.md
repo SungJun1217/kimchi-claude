@@ -3,6 +3,12 @@
 kimchi-claude의 규칙표와 코드를 고치는 방법입니다. 저장소의 불변식과 브랜치 규칙은
 [AGENTS.md](AGENTS.md)에, 설계 판단과 근거는 [설계 문서](docs/design.md)에 있습니다.
 
+## 오탐·놓친 표현 제보
+
+규칙이나 훅이 문제없는 문장을 잘못 지적했다면 [오탐 이슈](.github/ISSUE_TEMPLATE/false-positive.yml)를,
+규칙표에 없어서 걸러지지 않은 어색한 표현을 찾았다면 [놓친 표현 이슈](.github/ISSUE_TEMPLATE/missed-expression.yml)를
+열어 주십시오. 이슈 양식에서 걸린 문장과 근거를 함께 적어 주시면 규칙표에 반영하기 쉽습니다.
+
 ## 규칙 추가
 
 `rules/` 안의 마크다운 표에 한 줄을 넣고 다시 생성하면 됩니다. 한 줄은 이렇게 생겼습니다.

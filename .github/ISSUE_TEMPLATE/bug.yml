@@ -1,0 +1,48 @@
+name: "버그"
+description: "훅이나 스킬이 의도와 다르게 동작하는 경우 제보합니다."
+labels: ["bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차
+      description: 문제를 재현할 수 있는 순서를 적어 주십시오.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+    validations:
+      required: true
+  - type: textarea
+    id: hook-output
+    attributes:
+      label: 훅 출력
+      description: 훅이 표준출력이나 표준에러로 남긴 내용을 그대로 붙여 주십시오.
+      render: text
+  - type: textarea
+    id: environment
+    attributes:
+      label: 환경
+      description: Claude Code 버전, Node 버전, 운영체제를 적어 주십시오.
+      placeholder: |
+        Claude Code: 1.2.3
+        Node: 24.0.0
+        OS: macOS 15
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: plugin version
+      description: package.json 또는 plugin.json 에 적힌 버전입니다.
+      placeholder: "0.16.6"
+    validations:
+      required: true

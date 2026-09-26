@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 질문·아이디어
+    url: https://github.com/SungJun1217/kimchi-claude/discussions
+    about: 버그나 규칙 제보가 아니라면 여기서 논의해 주십시오.

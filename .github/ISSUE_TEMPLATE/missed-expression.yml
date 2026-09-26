@@ -1,0 +1,37 @@
+name: "놓친 표현"
+description: "규칙표에 없어서 걸러지지 않은 어색한 표현을 제보합니다."
+labels: ["missed-expression", "rules"]
+body:
+  - type: textarea
+    id: sentence
+    attributes:
+      label: 어색한 문장
+      description: 규칙이 놓친 문장을 그대로 적어 주십시오.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: fix
+    attributes:
+      label: 고친다면
+      description: 어떻게 바꾸는 것이 자연스럽다고 생각하는지 적어 주십시오.
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: 근거
+      description: 국립국어원 자료나 실무 관행 등 판단의 근거가 되는 자료나 링크를 적어 주십시오.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: 어디서
+      options:
+        - 커밋 메시지
+        - 문서 파일
+        - 대화 답변(스타일)
+        - 기타
+    validations:
+      required: true

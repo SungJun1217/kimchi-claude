@@ -1,0 +1,59 @@
+# gh 로 라벨을 다시 만들 때 참고하는 정의다. 동기화 워크플로는 두지 않는다 — 라벨은
+# 자주 바뀌지 않고, 잘못 지우면 이슈에서 라벨이 통째로 빠지는 편이 자동화보다 위험하다.
+#
+# 사용법: 항목마다 gh label create <name> --color <color> --description <description> --force
+# (--force 는 이미 있는 라벨의 색과 설명을 이 정의대로 덮어쓴다)
+- name: false-positive
+  color: "d73a4a"
+  description: 규칙이나 훅이 문제없는 문장을 잘못 지적했다
+- name: missed-expression
+  color: "d73a4a"
+  description: 규칙표에 없어서 걸러지지 않은 어색한 표현이다
+- name: rules
+  color: "0e8a16"
+  description: rules/ 아래 규칙표에 관련된 일이다
+- name: hooks
+  color: "0e8a16"
+  description: hooks/ 아래 훅 코드에 관련된 일이다
+- name: skills
+  color: "0e8a16"
+  description: skills/ 아래 스킬에 관련된 일이다
+- name: style
+  color: "0e8a16"
+  description: output-styles/ 에 관련된 일이다
+- name: ci
+  color: "1d76db"
+  description: GitHub Actions 워크플로에 관련된 일이다
+- name: dependencies
+  color: "1d76db"
+  description: 의존성 버전에 관련된 일이다
+- name: github_actions
+  color: "1d76db"
+  description: GitHub Actions 버전에 관련된 일이다
+- name: bug
+  color: "d73a4a"
+  description: 의도와 다르게 동작한다
+- name: documentation
+  color: "0075ca"
+  description: 문서에 관련된 일이다
+- name: enhancement
+  color: "a2eeef"
+  description: 새 기능이나 개선 요청이다
+- name: question
+  color: "d876e3"
+  description: 질문이다
+- name: duplicate
+  color: "cfd3d7"
+  description: 이미 있는 이슈나 PR 과 같다
+- name: invalid
+  color: "e4e669"
+  description: 이 저장소와 관련이 없다
+- name: wontfix
+  color: "ffffff"
+  description: 고치지 않기로 했다
+- name: good first issue
+  color: "7057ff"
+  description: 처음 기여하기 좋다
+- name: help wanted
+  color: "008672"
+  description: 도움이 더 필요하다
