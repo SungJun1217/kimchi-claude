@@ -29,7 +29,7 @@ echo '<hook json>' | node hooks/guard.mjs  # drive a hook directly with a synthe
 - After editing `rules/*.md` or `scripts/build-style.mjs`, run `npm run build`; `npm test` fails if the generated files are stale.
 - `assets/*.svg` are generated too, and the hero figure's lint score covers every rule. After any change to `rules/`, hook messages, the lint/particle engine, `tests/fixtures/thin-contract-*`, or `scripts/build-readme-art.mjs`, run `npm run art` (a rule edit usually needs both `build` and `art`); `tests/readme-art.test.mjs` fails if the figures are stale.
 - Commit only with `npm test` green, and never push without asking.
-- CI (`.github/workflows/test.yml`) runs `npm test` on every push to `main`, `develop`, `feature/**` and on every pull request. Pushing a `v*` tag runs `.github/workflows/release.yml`, which checks that the tag and both version files agree, runs `npm test` again, and creates the GitHub Release.
+- CI (`.github/workflows/test.yml`) runs `npm test` on every push to `main`, `develop`, `feature/**` and on every pull request. Pushing a `v*` tag runs `.github/workflows/release.yml`, which checks that the tag and both version files agree, runs `npm test` again, and creates the GitHub Release. Dependabot (`.github/dependabot.yml`) opens weekly PRs against `develop` for GitHub Actions versions only (there are no npm dependencies); merge them like any unit, with a version bump.
 
 ## Branches and versions
 
