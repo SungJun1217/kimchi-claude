@@ -113,7 +113,7 @@ function locateAndClassify(fileText, ext, needle, replaceAll) {
     idx = fileText.indexOf(needle, idx + needle.length);
   }
 
-  const masked = maskProtected(fileText, ext);
+  const masked = maskProtected(fileText, { ext });
   const flags = occurrences.map((at) => masked.slice(at, at + needle.length) === MASK.repeat(needle.length));
   if (flags.every(Boolean)) return "exempt";
   if (flags.some(Boolean)) return "unknown"; // 일부만 예외 구간 — 하나로 못 정한 것과 같다
@@ -279,7 +279,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   if (blockEnabled()) {
     // F8: 막을 때만 전체 위반 목록이 필요하다. 자동 교정 경로에서는 applyFixes 가
     // 안에서 다시 검사하므로 미리 훑으면 같은 일을 두 번 한다.
-    const allFindings = targets.flatMap((target) => lint(target.text, rules, target.ext, target.refDefs));
+    const allFindings = targets.flatMap((target) => lint(target.text, rules, target));
     if (allFindings.length === 0) return null;
     return {
       hookSpecificOutput: {
@@ -303,12 +303,12 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   let changed = false;
 
   /** 조사를 먼저 고치고, 그다음 용어를 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있어 한 번 더 돈다. */
-  function fixOne(text, ext, refDefs) {
-    const withParticles = fixParticles(text, ext, refDefs);
-    const result = applyFixes(withParticles.text, rules, ext, refDefs);
+  function fixOne(text, mask) {
+    const withParticles = fixParticles(text, mask);
+    const result = applyFixes(withParticles.text, rules, mask);
     // 용어를 하나도 안 고쳤으면 조사도 다시 틀어질 일이 없다 — 마지막 fixParticles를
     // 건너뛴다(같은 글을 또 가리는 비용도 함께 던다, maskProtected 캐시가 있어도 호출은 던다).
-    const fixedText = result.applied.length === 0 ? result.text : fixParticles(result.text, ext, refDefs).text;
+    const fixedText = result.applied.length === 0 ? result.text : fixParticles(result.text, mask).text;
     return {
       text: fixedText,
       applied: [
@@ -323,7 +323,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
     const edits = [];
     for (const target of targets) {
       if (target.replaceable === false || !target.span) continue;
-      const fixed = fixOne(target.text, target.ext, target.refDefs);
+      const fixed = fixOne(target.text, target);
       if (fixed.text === target.text) continue;
       // escapeOnWrite: 원문에 실제 이스케이프(\", \\ 등)가 있던 값만 다시 이스케이프한다.
       // 이스케이프가 없던 값(예: $BRANCH, `date` 를 그대로 쓴 메시지)은 손대지 않아야
@@ -342,7 +342,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   } else {
     for (const target of targets) {
       if (target.autofixSafe === false) continue;
-      const fixed = fixOne(target.text, target.ext, target.refDefs);
+      const fixed = fixOne(target.text, target);
       if (fixed.text === target.text) continue;
 
       if (target.editIndex !== undefined) {
@@ -384,9 +384,9 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
 
 export function warnAboutTone(targets, rules) {
   const findings = targets.flatMap((target) =>
-    lint(target.text, rules, target.ext, target.refDefs).map((finding) => ({ ...finding, label: target.label }))
+    lint(target.text, rules, target).map((finding) => ({ ...finding, label: target.label }))
   );
-  const particles = targets.flatMap((target) => findParticleErrors(target.text, target.ext, target.refDefs));
+  const particles = targets.flatMap((target) => findParticleErrors(target.text, target));
   if (findings.length === 0 && particles.length === 0) return null;
 
   const label = targets[0]?.label || "";

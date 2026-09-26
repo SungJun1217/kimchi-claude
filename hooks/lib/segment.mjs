@@ -440,7 +440,7 @@ function scanDefLabels(maskedText, into) {
 
 /**
  * 문서 안의 참조식 링크 정의 라벨을 모은다. Edit/MultiEdit처럼 조각만 보이는 호출에서,
- * 실제 정의 줄은 조각 밖 파일 어딘가에 있을 수 있다 — 그 정의를 maskProtected의 extraDefs
+ * 실제 정의 줄은 조각 밖 파일 어딘가에 있을 수 있다 — 그 정의를 maskProtected의 refDefs
  * 로 얹어 주는 통로다. 코드 울타리·인라인 코드 안의 가짜 정의는 세지 않는다.
  *
  * @param {string} text 파일 전체 글
@@ -518,11 +518,11 @@ export function isIgnoredFile(text) {
  * 제외 구간을 센티넬로 덮은 문자열을 돌려준다. 길이는 원문과 같다.
  *
  * @param {string} text
- * @param {string} [ext] 문서 확장자(점 없이, 소문자로). 들여쓰기 코드·rST·AsciiDoc·HTML
- *   리터럴 블록처럼 "이 파일 형식이라야 코드로 읽힌다"는 가리개의 범위를 정한다.
- *   생략하면(예: 커밋 메시지) 이 블록형 가리개는 하나도 적용되지 않는다.
- * @param {Set<string>|null} [extraDefs] 참조식 링크 라벨 판정에 쓸, 이 글 밖에서 모은 정의
- *   라벨. collectReferenceDefLabels 참고.
+ * @param {{ext?: string, refDefs?: Set<string>|null}} [mask]
+ *   ext: 문서 확장자(점 없이, 소문자로). 들여쓰기 코드·rST·AsciiDoc·HTML 리터럴 블록처럼
+ *   "이 파일 형식이라야 코드로 읽힌다"는 가리개의 범위를 정한다. 생략하면(예: 커밋 메시지)
+ *   이 블록형 가리개는 하나도 적용되지 않는다.
+ *   refDefs: 참조식 링크 라벨 판정에 쓸, 이 글 밖에서 모은 정의 라벨. collectReferenceDefLabels 참고.
  * @returns {string}
  */
 // 한 훅 호출 안에서 같은 글을 여러 번 가린다 — locateAndClassify가 old_string/new_string
@@ -532,20 +532,21 @@ export function isIgnoredFile(text) {
 let lastMaskKey = null;
 let lastMaskResult = null;
 
-export function maskProtected(text, ext, extraDefs) {
+export function maskProtected(text, mask = {}) {
   if (typeof text !== "string" || text.length === 0) return "";
+  const { ext, refDefs } = mask;
 
-  if (lastMaskKey && lastMaskKey.text === text && lastMaskKey.ext === ext && lastMaskKey.extraDefs === extraDefs) {
+  if (lastMaskKey && lastMaskKey.text === text && lastMaskKey.ext === ext && lastMaskKey.refDefs === refDefs) {
     return lastMaskResult;
   }
 
-  const result = maskProtectedUncached(text, ext, extraDefs);
-  lastMaskKey = { text, ext, extraDefs };
+  const result = maskProtectedUncached(text, ext, refDefs);
+  lastMaskKey = { text, ext, refDefs };
   lastMaskResult = result;
   return result;
 }
 
-function maskProtectedUncached(text, ext, extraDefs) {
+function maskProtectedUncached(text, ext, refDefs) {
   const ranges = collectRanges(text, ALWAYS_PATTERNS);
   ranges.push(...findPathRanges(text));
   ranges.push(...findHangulAsciiJoinRanges(text));
@@ -558,7 +559,7 @@ function maskProtectedUncached(text, ext, extraDefs) {
     const code = codeRanges(text, ext);
     ranges.push(...code);
     ranges.push(...findFrontmatterRanges(text));
-    ranges.push(...findReferenceLabelRanges(text, ext, extraDefs, code));
+    ranges.push(...findReferenceLabelRanges(text, ext, refDefs, code));
   }
   if (RST_EXTS.has(ext)) ranges.push(...findRstLiteralRanges(text, findIndentedBlockRanges(text)));
   if (ASCIIDOC_EXTS.has(ext)) ranges.push(...findAsciidocRanges(text));

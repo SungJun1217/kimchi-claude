@@ -143,11 +143,11 @@ test("명령 이름·식별자·경로 구분자 뒤는 잡지 않는다", () =>
     "A/B test할 때 봅니다.",
     "C:\\build한 파일입니다.",
   ];
-  for (const text of sentences) assert.equal(lint(text, [], "md").length, 0, text);
+  for (const text of sentences) assert.equal(lint(text, [], { ext: "md" }).length, 0, text);
 });
 
 test("윗줄 끝의 영어 낱말이 줄 첫머리 동사를 가리지 않는다", () => {
-  const findings = lint("Run the build\npush하면 됩니다.", [], "md");
+  const findings = lint("Run the build\npush하면 됩니다.", [], { ext: "md" });
   assert.equal(findings.length, 1);
   assert.equal(findings[0].matched, "push하면");
 });

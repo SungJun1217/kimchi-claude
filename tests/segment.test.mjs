@@ -105,7 +105,7 @@ test("구간 예외 표시 안쪽을 덮는다", () => {
 
 test("F7: 마크다운 들여쓰기 코드 블록을 덮는다 (.md)", () => {
   const text = ["설명입니다.", "", "    const 메세지 = \"컨텐츠\";", "", "끝입니다."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("컨텐츠"));
   assert.ok(masked.includes("설명입니다."));
   assert.ok(masked.includes("끝입니다."));
@@ -113,33 +113,33 @@ test("F7: 마크다운 들여쓰기 코드 블록을 덮는다 (.md)", () => {
 
 test("F7: 탭으로 들여쓴 코드 블록도 덮는다 (.md)", () => {
   const text = ["설명입니다.", "", "\tconst 메세지 = \"컨텐츠\";", "", "끝입니다."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("컨텐츠"));
 });
 
 test("F7: rST code-block 지시자 뒤의 들여쓰기 블록을 덮는다 (.rst)", () => {
   const text = [".. code-block:: python", "", "    print(\"컨텐츠\")", "", "본문입니다."].join("\n");
-  const masked = maskProtected(text, "rst");
+  const masked = maskProtected(text, { ext: "rst" });
   assert.ok(!masked.includes("컨텐츠"));
   assert.ok(masked.includes("본문입니다."));
 });
 
 test("F7: ::로 끝나는 rST 문단 뒤의 들여쓰기 블록을 덮는다 (.rst)", () => {
   const text = ["예시입니다::", "", "    컨텐츠 처리", "", "본문입니다."].join("\n");
-  const masked = maskProtected(text, "rst");
+  const masked = maskProtected(text, { ext: "rst" });
   assert.ok(!masked.includes("컨텐츠"));
 });
 
 test("F7: AsciiDoc ---- 리스팅 블록을 덮는다 (.adoc)", () => {
   const text = ["----", "컨텐츠 처리", "----", "본문입니다."].join("\n");
-  const masked = maskProtected(text, "adoc");
+  const masked = maskProtected(text, { ext: "adoc" });
   assert.ok(!masked.includes("컨텐츠"));
   assert.ok(masked.includes("본문입니다."));
 });
 
 test("F7: <pre>와 <code> 블록을 덮는다 (.md)", () => {
   const text = "설명 <pre>컨텐츠 메세지</pre> 그리고 <code>컨텐츠</code> 끝.";
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("컨텐츠"));
   assert.ok(masked.includes("설명"));
   assert.ok(masked.includes("끝."));
@@ -189,33 +189,33 @@ test("타이밍: 1MB 문서도 오늘의 자릿수 안에서 끝난다", () => {
 // 라운드1 항목1: 새로 추가한 가리개가 보통 한글 글을 지우면 안 된다.
 test("항목1a: 양쪽이 모두 한글뿐인 슬래시는 경로로 보지 않는다", () => {
   for (const text of ["컨텐츠/메세지를 정리합니다.", "읽기/쓰기 방향을 고릅니다.", "불변/가변이 다릅니다."]) {
-    const masked = maskProtected(text, "md");
+    const masked = maskProtected(text, { ext: "md" });
     assert.ok(masked.includes("컨텐츠") || masked.includes("메세지") || masked.includes("읽기") || masked.includes("쓰기") || masked.includes("불변") || masked.includes("가변"), text);
   }
 });
 
 test("항목1b: 목록 항목 뒤에 이어지는 4칸 들여쓰기는 코드로 보지 않는다", () => {
   const text = ["- 첫 항목입니다.", "", "    컨텐츠 이어지는 내용입니다.", "", "끝입니다."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("컨텐츠"));
 });
 
 test("항목1c: 마크다운 문서의 -------- 가로줄/셋텍스트 밑줄은 AsciiDoc 블록으로 보지 않는다", () => {
   const text = ["제목입니다", "----", "", "컨텐츠 문단입니다.", "", "----", "", "끝입니다."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("컨텐츠"));
 });
 
 test("항목1d: ::로 끝나는 줄이 있어도 마크다운(.md)에서는 뒤 문단을 덮지 않는다", () => {
   const text = ["예시입니다::", "", "컨텐츠 문단입니다."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("컨텐츠"));
 });
 
 test("타이밍: rST 지시자가 많은 560KB 문서도 이차 비용 없이 끝난다 (F8)", () => {
   const block = [".. code-block:: python", "", "    print(1)", "", "본문 문단입니다.", ""].join("\n");
   const doc = block.repeat(4000);
-  const ms = fastestMs(() => maskProtected(doc, "rst"));
+  const ms = fastestMs(() => maskProtected(doc, { ext: "rst" }));
   console.log(`    rST ${doc.length}자 마스킹: ${ms}ms`);
   assert.ok(ms < 1000, `rST 문서 마스킹이 ${ms}ms 걸렸다`);
 });
@@ -253,32 +253,32 @@ test("항목5: 닫는 괄호 없는 ]( 반복 입력도 선형 시간 근처에�
 // 바뀌면 정의 줄과 어긋나 죽은 링크가 된다. 라벨만 가리고 링크 텍스트는 계속 검사한다.
 test("항목3: [글 내용][라벨] 형태에서 라벨만 가리고 글 내용은 계속 검사한다", () => {
   const text = "[설정 안내][타겟]\n\n[타겟]: ./setup.md";
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("설정 안내"), "링크 텍스트까지 가려졌다");
   assert.ok(!masked.includes("][타겟]"), "라벨이 가려지지 않았다");
 });
 
 test("항목3: [라벨][] 축약형은 통째로 가린다", () => {
   const text = "[타겟][]\n\n[타겟]: ./setup.md";
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("[타겟][]"));
 });
 
 test("항목3: 정의가 있는 [라벨] 단축형 참조도 가린다", () => {
   const text = "자세한 것은 [타겟]을 본다.\n\n[타겟]: ./setup.md";
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("[타겟]을"));
   assert.ok(masked.includes("자세한 것은"));
 });
 
 test("항목3: 정의가 없는 대괄호는 참조 라벨로 보지 않는다", () => {
   const text = "이 값은 [예시] 안에 있습니다.";
-  assert.equal(maskProtected(text, "md"), text);
+  assert.equal(maskProtected(text, { ext: "md" }), text);
 });
 
 test("항목3: 인라인 링크 [글 내용](url)의 글 내용은 라벨 취급하지 않는다", () => {
   const text = "[타겟](./a.md) 안내입니다.\n\n[타겟]: ./setup.md";
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   // 인라인 링크의 대괄호는 단축형 참조가 아니다 — 뒤에 "(" 가 바로 오면 제외한다.
   assert.ok(masked.includes("타겟"), "인라인 링크의 글 내용까지 가려졌다");
   assert.ok(masked.includes("안내입니다."));
@@ -288,13 +288,13 @@ test("항목3: 인라인 링크 [글 내용](url)의 글 내용은 라벨 취급
 // 외부에서 모은 라벨(extraDefs)을 얹어야 그 정의와 맞는 라벨도 가릴 수 있다.
 test("항목1: 조각 밖에서 모은 라벨(extraDefs)로도 ][라벨]을 가린다", () => {
   const fragment = "[설정 안내][타겟]을 보세요.";
-  assert.equal(maskProtected(fragment, "md"), fragment); // 조각 안에 정의가 없으면 그대로
-  const masked = maskProtected(fragment, "md", new Set(["타겟"]));
+  assert.equal(maskProtected(fragment, { ext: "md" }), fragment); // 조각 안에 정의가 없으면 그대로
+  const masked = maskProtected(fragment, { ext: "md", refDefs: new Set(["타겟"]) });
   assert.ok(!masked.includes("][타겟]"));
 });
 
 test("항목1: extraDefs가 null(파일을 못 읽음)이면 보수적으로 ][라벨] 형태를 전부 가린다", () => {
-  const masked = maskProtected("[설정 안내][아무 라벨]을 보세요.", "md", null);
+  const masked = maskProtected("[설정 안내][아무 라벨]을 보세요.", { ext: "md", refDefs: null });
   assert.ok(!masked.includes("][아무 라벨]"), "정의를 모르는데도 가리지 않았다");
   assert.ok(masked.includes("설정 안내"), "링크 텍스트까지 가려졌다");
 });
@@ -303,14 +303,14 @@ test("항목1: extraDefs가 null이어도 단축형 [라벨]은 넓히지 않는
   // 두 괄호짜리 형태만 보수적으로 가린다 — 홑 대괄호는 혼자서도 흔한 표기라 여기서까지
   // 넓히면 오탐이 너무 커진다.
   const text = "이 값은 [예시] 안에 있습니다.";
-  assert.equal(maskProtected(text, "md", null), text);
+  assert.equal(maskProtected(text, { ext: "md", refDefs: null }), text);
 });
 
 // 라운드3 항목2: 정의가 하나라도 있으면 두 정규식이 문서 전체에서 돈다 — 닫히지 않은
 // "["가 잔뜩 있으면 이차 비용이 났다(실측 36초).
 test("항목2: 닫히지 않은 [ 가 잔뜩 있어도 정의가 있으면 선형 시간 근처에서 끝난다", () => {
   const doc = "[".repeat(100000) + "\n[a]: b";
-  const ms = fastestMs(() => maskProtected(doc, "md"));
+  const ms = fastestMs(() => maskProtected(doc, { ext: "md" }));
   console.log(`    닫히지 않은 [ 반복 ${doc.length}자 마스킹: ${ms}ms`);
   assert.ok(ms < 1000, `닫히지 않은 [ 반복 마스킹이 ${ms}ms 걸렸다`);
 });
@@ -319,7 +319,7 @@ test("항목2: 닫히지 않은 [ 가 잔뜩 있어도 정의가 있으면 선�
 // 가짜 정의를 진짜로 세면 그 라벨을 쓰는 산문까지 부당하게 빠진다.
 test("항목3: 울타리 안의 가짜 정의 줄은 세지 않는다", () => {
   const text = ["`[타겟]` 과 [타겟]", "", "```", "[타겟]: x", "```"].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("[타겟]"), "울타리 밖 [타겟]까지 가려졌다");
 });
 
@@ -430,7 +430,7 @@ test("한 줄짜리 $(...) 명령 치환을 덮는다", () => {
 
 test("울타리 닫힘(```) 바로 뒤의 들여쓰기는 목록 연속이 아니라 코드다 (.md)", () => {
   const text = ["설명입니다.", "", "```", "코드", "```", "", "    타겟 코드입니다.", "", "끝."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("타겟 코드입니다."));
   assert.ok(masked.includes("설명입니다."));
   assert.ok(masked.includes("끝."));
@@ -438,13 +438,13 @@ test("울타리 닫힘(```) 바로 뒤의 들여쓰기는 목록 연속이 아�
 
 test("ATX 제목(##) 바로 뒤의 들여쓰기도 코드다 (.md)", () => {
   const text = ["## 제목", "", "    타겟 코드입니다.", "", "끝."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("타겟 코드입니다."));
 });
 
 test("목록 항목 뒤의 들여쓰기는 울타리·제목 예외와 무관하게 여전히 목록 연속이다 (.md)", () => {
   const text = ["- 첫 항목입니다.", "", "    타겟 이어지는 내용입니다.", "", "끝."].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("타겟 이어지는 내용입니다."));
 });
 
@@ -452,7 +452,7 @@ test("YAML 프런트매터: 산문 키(title/description)의 값은 계속 검�
   const text = ["---", "title: 타겟 제목", "description: |", "  타겟 설명", "환경: prod", "---", "본문 타겟."].join(
     "\n"
   );
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("타겟 제목"), "title 값이 덮였다");
   assert.ok(masked.includes("타겟 설명"), "description 값이 덮였다");
   assert.ok(!masked.includes("환경: prod"), "산문 키가 아닌 줄이 덮이지 않았다");
@@ -461,7 +461,7 @@ test("YAML 프런트매터: 산문 키(title/description)의 값은 계속 검�
 
 test("--- 로 시작하지만 안쪽이 YAML처럼 안 생기면 프런트매터로 보지 않는다 (.md)", () => {
   const text = ["---", "타겟 그냥 문단입니다.", "", "---", ""].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("타겟 그냥 문단입니다."));
 });
 
@@ -476,14 +476,14 @@ test("항목2: 여는 --- 다음이 제목·목록이면 프런트매터로 보�
   const text = ["---", "", "## 변경 사항", "", "- 컨텐츠를 정리했습니다", "- 타겟을 바꿨습니다", "", "---", "", "다음 절"].join(
     "\n"
   );
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("컨텐츠를 정리했습니다"));
   assert.ok(masked.includes("타겟을 바꿨습니다"));
 });
 
 test("항목2: 여는 --- 다음이 **굵게**: 형태면 YAML 키로 보지 않는다", () => {
   const text = ["---", "", "**참고**: 컨텐츠를 옮겼습니다.", "", "---", "", "본문"].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("컨텐츠를 옮겼습니다"));
 });
 
@@ -491,13 +491,13 @@ test("항목2: 여는 --- 다음이 **굵게**: 형태면 YAML 키로 보지 않
 // 보이는 한국어 문장"일 수 있다.
 test("항목5: 영문 키가 하나도 없으면 프런트매터로 보지 않는다", () => {
   const text = ["---", "참고: 컨텐츠 문서를 옮겼습니다", "---", "본문"].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(masked.includes("컨텐츠 문서를 옮겼습니다"));
 });
 
 test("항목5: 영문 키가 하나라도 있으면 그대로 프런트매터로 인정한다", () => {
   const text = ["---", "id: 123", "참고: 컨텐츠 문서를 옮겼습니다", "---", "본문"].join("\n");
-  const masked = maskProtected(text, "md");
+  const masked = maskProtected(text, { ext: "md" });
   assert.ok(!masked.includes("컨텐츠 문서를 옮겼습니다"));
 });
 
@@ -524,7 +524,7 @@ test("여러 가림 규칙이 섞인 문서의 가림 결과가 바뀌지 않는
   const hash = createHash("sha256");
   for (const ext of ["md", "txt", "rst", "adoc", undefined]) {
     hash.update(String(ext));
-    hash.update(maskProtected(sample, ext));
+    hash.update(maskProtected(sample, { ext }));
   }
   assert.equal(hash.digest("hex"), "db3b1d61c919e5b4b40a85951086ebd92c20bb1671e2c56c46e085ae1cea217d");
 });
