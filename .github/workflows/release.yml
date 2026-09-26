@@ -45,7 +45,11 @@ jobs:
           # 릴리스 태그는 main 의 병합 커밋("merge: …")을 가리키고, 그 커밋 본문은
           # 비어 있다. 실제로 무엇이 바뀌었는지는 이전 태그부터 이번 태그까지의
           # 버전 커밋 제목들에 있다 — 그래서 태그 자체가 아니라 이 구간에서 노트를 뽑는다.
-          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+          # 이전 릴리스 태그는 이번 태그 바로 앞 커밋에서 닿는 v숫자.숫자.숫자 태그 중 가장 높은
+          # 버전이다. git describe 는 러너에서 --abbrev=0 을 줘도 "v0.18.0-2-g<sha>" 꼴을
+          # 돌려준 적이 있어(v0.20.1 노트에서 0.19.0 이 빠졌다), 태그 목록에서 직접 고른다.
+          # 움직이는 v0 태그는 이 패턴에 걸리지 않는다.
+          PREV_TAG=$(git tag --merged "${TAG}^" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname 2>/dev/null | head -n 1)
 
           if [ -n "$PREV_TAG" ]; then
             echo "이전 태그: $PREV_TAG"
