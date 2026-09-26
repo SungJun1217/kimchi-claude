@@ -946,7 +946,7 @@ sha1(file + "|" + ruleKey + "|" + bad + "|" + lineText.trim())
 `findResidentNumbers`로 검사하면 더는 13자리로 안 보여 통과해 버리므로, "가리기 전에 있었는가"
 를 직접 표시해 둬야 한다.
 
-파일 경로 자체에 번호가 섞인 경우(`900101-1234567.md`)도 같은 함수(`safeDisplayPath`)로
+파일 경로 자체에 번호가 섞인 경우(`900101-1234567.md`)도 같은 함수(`safeDisplayPath`)로 <!-- kimchi-allow-rrn -->
 가린 값만 JSON 출력의 `file` 필드에 싣는다 — annotations의 `file=` 속성, 리뷰 본문의 목록
 어디에도 원문 경로가 나타나지 않는다. `safeDisplayPath`는 훅의 `pii.mjs`가 경로에 쓰는
 `pathOnly`(대시 구분자만 인정하는 좁은 규칙)를 일부러 쓰지 않는다 — 감지에 쓴 규칙과
