@@ -76,6 +76,14 @@ function readDocForContext(filePath) {
   }
 }
 
+/**
+ * dst에 src 원소를 하나씩 민다. spread(...src)는 함수 호출 인자 개수 상한(수만 건)에
+ * 걸려 대량 반복 문서에서 "Maximum call stack size exceeded"로 죽는다(실측).
+ */
+function pushAll(dst, src) {
+  for (const item of src) dst.push(item);
+}
+
 /** 파일 확장자를 점 없이 소문자로. maskProtected/lint 의 블록형 가리개 범위를 정하는 데 쓴다. */
 function docExt(filePath) {
   const ext = extname(filePath || "").toLowerCase();
@@ -159,21 +167,12 @@ function extractTargets(toolName, toolInput) {
   if (filePath && !DOC_EXTENSIONS.has(extname(filePath).toLowerCase())) return [];
   if (filePath && isToneExemptBasename(filePath)) return [];
   const ext = docExt(filePath);
-  // 파일이 스스로를 예외로 선언했으면 조각만 넘어와도 존중한다.
-  //
-  // lint() 는 넘겨받은 글에서 표시를 찾으므로, Edit 처럼 조각만 오면 파일 수준 선언이
-  // 보이지 않는다. 그래서 여기서 파일을 읽어 확인한다. 이 덕분에 사용자가 자기 문서에
-  // 표시를 붙여 Edit 로 고칠 때도 동작한다.
-  if (filePath && declaresIgnore(filePath)) return [];
-
-  if (toolName === "Write" && typeof toolInput.content === "string") {
-    return [{ label: filePath || "문서", text: toolInput.content, field: "content", ext }];
-  }
 
   if (toolName === "Edit" && typeof toolInput.new_string === "string") {
-    // 파일은 한 번만 읽는다 — 울타리 판정(classifyEditContext)과 참조식 링크 정의 수집
-    // (refDefs)이 같은 사본을 함께 쓴다.
+    // 파일은 한 번만 읽는다 — 예외 선언 확인(isIgnoredFile), 울타리 판정
+    // (classifyEditContext), 참조식 링크 정의 수집(refDefs)이 같은 사본을 함께 쓴다.
     const fileText = filePath ? readDocForContext(filePath) : null;
+    if (declaresIgnoreFrom(filePath, fileText)) return [];
     const ctx = classifyEditContext(fileText, ext, toolInput.old_string, toolInput.new_string, toolInput.replace_all);
     if (ctx === "exempt") return [];
     return [
@@ -194,6 +193,7 @@ function extractTargets(toolName, toolInput) {
 
   if (toolName === "MultiEdit" && Array.isArray(toolInput.edits)) {
     const fileText = filePath ? readDocForContext(filePath) : null;
+    if (declaresIgnoreFrom(filePath, fileText)) return [];
     const refDefs = fileText === null ? null : collectReferenceDefLabels(fileText, ext);
     return toolInput.edits
       .map((edit, editIndex) => {
@@ -213,7 +213,28 @@ function extractTargets(toolName, toolInput) {
       .filter(Boolean);
   }
 
+  // 파일이 스스로를 예외로 선언했으면 조각만 넘어와도 존중한다.
+  //
+  // lint() 는 넘겨받은 글에서 표시를 찾으므로, Edit/MultiEdit 처럼 조각만 오면 파일
+  // 수준 선언이 보이지 않는다 — 위 두 분기는 이미 읽어 둔 fileText로 확인을 마쳤다.
+  // Write는 새 내용을 파일 전체로 받으므로 여기서 디스크의 기존 내용을 따로 읽어 본다.
+  if (filePath && declaresIgnore(filePath)) return [];
+
+  if (toolName === "Write" && typeof toolInput.content === "string") {
+    return [{ label: filePath || "문서", text: toolInput.content, field: "content", ext }];
+  }
+
   return [];
+}
+
+/**
+ * 이미 읽어 둔 fileText로 예외 선언을 확인한다. 크기 상한(readDocForContext)에 걸려
+ * fileText가 null이면 declaresIgnore로 한 번 더 읽어 큰 파일에서도 선언을 놓치지 않는다
+ * — 그 경우에만 두 번 읽고, 보통 크기 파일은 이 함수 덕분에 한 번만 읽는다.
+ */
+function declaresIgnoreFrom(filePath, fileText) {
+  if (fileText !== null) return isIgnoredFile(fileText);
+  return filePath ? declaresIgnore(filePath) : false;
 }
 
 // 같은 교정이 문서에 수천 번 반복될 수 있다(1.24M자 문서에서 실측: 3.6MB짜리 훅 JSON).
@@ -291,7 +312,9 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   function fixOne(text, ext, refDefs) {
     const withParticles = fixParticles(text, ext, refDefs);
     const result = applyFixes(withParticles.text, rules, ext, refDefs);
-    const fixedText = fixParticles(result.text, ext, refDefs).text;
+    // 용어를 하나도 안 고쳤으면 조사도 다시 틀어질 일이 없다 — 마지막 fixParticles를
+    // 건너뛴다(같은 글을 또 가리는 비용도 함께 던다, maskProtected 캐시가 있어도 호출은 던다).
+    const fixedText = result.applied.length === 0 ? result.text : fixParticles(result.text, ext, refDefs).text;
     return {
       text: fixedText,
       applied: [
@@ -320,11 +343,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
       for (const edit of edits) command = command.slice(0, edit.start) + edit.writeText + command.slice(edit.end);
       updatedInput.command = command;
       changed = true;
-      // spread(...edit.applied)는 함수 호출 인자 개수 상한(수만 건)에 걸려 대량
-      // 반복 문서에서 "Maximum call stack size exceeded"로 죽는다(실측). 원소를 하나씩 민다.
-      for (const edit of edits) {
-        for (const item of edit.applied) applied.push(item);
-      }
+      for (const edit of edits) pushAll(applied, edit.applied);
     }
   } else {
     for (const target of targets) {
@@ -341,9 +360,7 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
         updatedInput[target.field] = fixed.text;
         changed = true;
       }
-      // spread(...fixed.applied)는 함수 호출 인자 개수 상한에 걸려 대량 반복 문서에서
-      // 죽는다(실측, 위 Bash 분기와 같은 문제). 원소를 하나씩 민다.
-      for (const item of fixed.applied) applied.push(item);
+      pushAll(applied, fixed.applied);
     }
   }
 

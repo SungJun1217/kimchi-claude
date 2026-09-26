@@ -66,6 +66,15 @@ function escapeDoubleQuoted(text) {
   return text.replace(/[$`"\\]/g, "\\$&");
 }
 
+// 이중 따옴표 밖(또는 heredoc 본문)에서 셸이 그대로 확장하는 세 형태. 백틱도 이중
+// 따옴표 안에서는 여전히 명령 치환이다 — `$(...)`/`${...}`와 같은 취급이 일관된 정책이다.
+const SHELL_EXPANSION = /\$\(|\$\{|`/;
+
+/** raw 안에 셸이 확장할 자리($(...)·${...}·백틱)가 있는지 본다. */
+function hasShellExpansion(raw) {
+  return SHELL_EXPANSION.test(raw);
+}
+
 /** 이중 따옴표 내용을 훑는다. i는 여는 따옴표 다음 위치. 닫는 따옴표의 인덱스를 돌려준다(없으면 길이). */
 function skipDoubleQuoted(command, i) {
   const n = command.length;
@@ -569,7 +578,7 @@ export function extractCommitTargets(command, depth = 0) {
             // 확장하지 않는 글자 그대로다 — 자동 교정이 그 글자를 고쳐도 실행에 영향이
             // 없다. 감싸지 않았다면(unquoted) -m 경로(아래)와 같은 정책으로, 그런 문자가
             // 없을 때만 안전하다.
-            replaceable: hd.quoted || !/\$\(|\$\{|`/.test(hdBody),
+            replaceable: hd.quoted || !hasShellExpansion(hdBody),
             escapeOnWrite: false,
           });
           continue;
@@ -592,22 +601,23 @@ export function extractCommitTargets(command, depth = 0) {
               end: value.innerStart + bEnd,
               text: catBody,
               quote: null,
-              replaceable: catQuoted || !/\$\(|\$\{|`/.test(catBody),
+              replaceable: catQuoted || !hasShellExpansion(catBody),
               escapeOnWrite: false,
             });
             continue;
           }
           // 백슬래시가 하나도 없으면 이스케이프를 걱정할 게 없다 — 원문 그대로 잘라 붙인다.
           // $BRANCH나 `date` 처럼 이스케이프 없이 쓴 특수 문자를 건드리지 않는 길이 이 길뿐이다.
-          // 다만 $(…)와 ${…} 안은 명령과 매개변수 확장이라 글이 아니다. 가림 처리가 그 안을
-          // 덮지 못하므로 고치지 않고 알리기만 한다. "$(grep 리팩토링 a.txt)"의 검색어가 바뀌었다.
+          // 다만 $(…)·${…}·백틱 안은 명령과 매개변수 확장이라 글이 아니다(이중 따옴표 안에서도
+          // 백틱은 명령 치환이다). 가림 처리가 그 안을 덮지 못하므로 고치지 않고 알리기만
+          // 한다. "$(grep 리팩토링 a.txt)"의 검색어가 바뀌었다.
           if (!raw.includes("\\")) {
             targets.push({
               start: value.innerStart,
               end: value.innerEnd,
               text: raw,
               quote: '"',
-              replaceable: !raw.includes("$(") && !raw.includes("${"),
+              replaceable: !hasShellExpansion(raw),
               escapeOnWrite: false,
             });
             continue;

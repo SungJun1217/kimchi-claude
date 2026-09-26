@@ -16,6 +16,7 @@
 // 발견을 집어 고치지 않게 한다(applyFixes는 CHECK_SUBSTITUTE만 거른다).
 
 import { CHECK_REGEX } from "./rules.mjs";
+import { MASK } from "./segment.mjs";
 
 // 동사만 담는다(명사 자리에서 쓰는 state·props·target 같은 낱말은 뺀다 — 0.15.0 표기
 // 원칙 3번이 이미 로마자로 남겨 두라고 정한 자리다). 자주 관찰된 사고(push합니다,
@@ -58,8 +59,9 @@ const VERBS = {
   create: "생성", send: "전송",
 };
 
-// "하다"/"되다" 활용형의 시작 조각. 긴 것을 먼저 둬야 정규식 교대(|)가 "하"만 먼저
-// 먹고 "다"를 뒤에 남기는 일이 없다("하다"가 "하"보다 먼저 와야 "하다"까지 통째로 잡는다).
+// "하다"/"되다" 활용형의 시작 조각. 여기 나열한 순서는 상관없다 — 아래 SUFFIX_PATTERN이
+// 길이 내림차순으로 다시 정렬한다("하다"가 "하"보다 먼저 와야 정규식 교대(|)가 "하다"까지
+// 통째로 잡는다. 정렬 없이 "하"가 먼저 오면 "다"를 뒤에 남긴다).
 const SUFFIXES = [
   "합니다", "하세요", "됩니다", "하도록", "하려면",
   "하다", "하는", "하고", "하면", "해서", "하기", "하여", "되는", "되면", "되고", "되어",
@@ -94,7 +96,7 @@ const SUFFIX_PATTERN = [...SUFFIXES].sort((a, b) => b.length - a.length).join("|
 // 가린 자리(MASK, "\u0000")도 로마자 낱말처럼 본다. "`git` push하면"은 백틱이 가려진 뒤
 // 명령 이름 자리가 MASK로 남는다. 역슬래시는 Windows 경로("C:\\build한")라서 뺀다. 앞 낱말과의
 // 사이는 줄바꿈이 아닌 공백만 본다. 줄 첫머리의 동사를 윗줄 끝 영어 낱말이 가리면 안 된다.
-const LEFT_BOUNDARY = String.raw`(?<![A-Za-z0-9_.:/@$\\\u0000-]|[A-Za-z0-9\u0000]+[ \t])`;
+const LEFT_BOUNDARY = String.raw`(?<![A-Za-z0-9_.:/@$\\${MASK}-]|[A-Za-z0-9${MASK}]+[ \t])`;
 const LATIN_VERB_HADA_PATTERN = new RegExp(
   `${LEFT_BOUNDARY}(${VERB_PATTERN})(${SUFFIX_PATTERN})`,
   "gi"
@@ -104,8 +106,8 @@ const LATIN_VERB_HADA_PATTERN = new RegExp(
 // 이만큼 반복되는 일은 없다 — lint.mjs의 다른 상한들과 같은 목적이다.
 const MAX_HITS = 1000;
 
-export const LATIN_HADA_SOURCE = "latin-hada";
-export const LATIN_HADA_WHY = "로마자 동사에 하다를 붙이지 않는다. 정착한 음차 동사는 한글로 쓴다.";
+const LATIN_HADA_SOURCE = "latin-hada";
+const LATIN_HADA_WHY = "로마자 동사에 하다를 붙이지 않는다. 정착한 음차 동사는 한글로 쓴다.";
 
 /**
  * masked 문자열(maskProtected가 이미 코드·경로·URL을 가린 것)에서 "로마자 동사+하다"
@@ -125,9 +127,7 @@ export function findLatinVerbHada(masked, normalized) {
   while (hits < MAX_HITS && (match = LATIN_VERB_HADA_PATTERN.exec(masked)) !== null) {
     hits += 1;
     const verb = match[1].toLowerCase();
-    const hangul = VERBS[verb];
-    if (!hangul) continue; // 이론상 오지 않는다. VERB_PATTERN이 VERBS의 키로만 만들어진다.
-
+    const hangul = VERBS[verb]; // VERB_PATTERN이 VERBS의 키로만 만들어지므로 항상 찾는다.
     const suffix = match[2];
     const good = `${hangul}${suffix}`;
     const matched = normalized.slice(match.index, match.index + match[0].length);

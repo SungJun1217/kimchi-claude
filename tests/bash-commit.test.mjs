@@ -265,6 +265,14 @@ test("메시지 안의 $(…)와 ${…}는 명령이라 자동 교정하지 않�
   assert.equal(plain.replaceable, true);
 });
 
+test("메시지 안의 백틱도 이중 따옴표 안에서는 명령 치환이라 자동 교정하지 않는다", () => {
+  // 이중 따옴표 안의 백틱은 $(...)·${...}와 같은 명령 치환이다. `date`의 자리를 그대로
+  // 두고 문장만 고쳐야 하는데, 백슬래시가 없는 경로(hasShellExpansion 미검사)에서
+  // replaceable이 true로 잘못 나온 적이 있다.
+  const [target] = extractCommitTargets('git commit -m "정리 시각: `date`"');
+  assert.equal(target.replaceable, false);
+});
+
 // 라운드3 항목1: -c 탐지를 sh/bash/zsh/dash 의 다양한 옵션 형태로 넓힌다.
 test("항목1: sh -c \"'…'\" 이중 밖·작은따옴표 안 스크립트도 잡는다", () => {
   const command = `sh -c "git commit -m '컨텐츠 메세지 정리'"`;

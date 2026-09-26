@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - develop
-      - "feature/**"
   pull_request:
 
 permissions:
@@ -17,11 +16,22 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         node-version: ["22", "24"]
+        include:
+          # 개발자 대부분이 macOS 를 쓴다. 시험은 5~15초라 러너 비용이 적고, macOS 고유의
+          # 경로·파일시스템 가정(예: FIFO 처리)이 깨지는 것을 여기서만 잡을 수 있다.
+          #
+          # 검사 이름(name:)을 "test-macos"로 고정한다 — 이 이름이 main 브랜치
+          # 규칙(ruleset)에 필수 검사로 등록돼 있다. 이름이 달라지면 규칙도 함께 고쳐야 한다.
+          - os: macos-latest
+            node-version: "24"
+            name: test-macos
+    name: ${{ matrix.name || format('test ({0})', matrix.node-version) }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,19 +44,4 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       # 의존성이 없다 — npm install/ci 는 필요 없다.
-      - run: npm test
-
-  # 개발자 대부분이 macOS 를 쓴다. 시험은 5~15초라 러너 비용이 적고, macOS 고유의
-  # 경로·파일시스템 가정(예: FIFO 처리)이 깨지는 것을 여기서만 잡을 수 있다.
-  test-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-
       - run: npm test
