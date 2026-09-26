@@ -33,7 +33,7 @@
 | This means the request is sent twice. | 이것은 요청이 두 번 전송된다는 것을 의미합니다. | 그래서 요청이 두 번 전송됩니다. | This means 직역. 접속사 하나로 끝납니다. | 정규식 | 핵심 |
 | If the test fails, then check the log. | 만약 테스트가 실패한다면, 그러면 로그를 확인하세요. | 테스트가 실패하면 로그를 보세요. | if~then의 then은 한국어 어미에 이미 들어 있습니다. | 정규식 | 핵심 |
 | I fixed the function that was causing slow responses because it rebuilt the cache on every call. | 호출마다 캐시를 새로 만들어서 응답을 느리게 만들고 있던 이 함수를 수정했습니다. | 이 함수가 호출마다 캐시를 새로 만들고 있었습니다. 그래서 응답이 느렸고, 지금은 고쳤습니다. | 영어 관계절을 명사 앞에 쌓지 말고 문장을 끊습니다. | 프롬프트 | 핵심 |
-| This change removes the cache rebuild, which reduces latency, while all tests still pass and backward compatibility is preserved. | 이 변경은 캐시 재생성을 없애 지연 시간을 줄이면서, 동시에 모든 테스트를 통과하고 하위 호환도 유지합니다. | 캐시 재생성을 없애 지연 시간을 줄였습니다. 테스트는 전부 통과하고 하위 호환도 그대로입니다. | 영어 한 문장을 한국어 한 문장으로 옮기면 늘어집니다. 끊어 씁니다. | 프롬프트 | 핵심 |
+| This change removes the cache rebuild, which reduces latency, while all tests still pass and backward compatibility is preserved. | 이 변경은 캐시 재생성을 없애 latency를 줄이면서, 동시에 모든 테스트를 통과하고 하위 호환도 유지합니다. | 캐시 재생성을 없애 latency를 줄였습니다. 테스트는 전부 통과하고 하위 호환도 그대로입니다. | 영어 한 문장을 한국어 한 문장으로 옮기면 늘어집니다. 끊어 씁니다. latency는 실무에서 원어를 그대로 씁니다. | 프롬프트 | 핵심 |
 | This class has three dependencies. | 이 클래스는 세 개의 의존성을 가지고 있습니다. | 이 클래스는 의존성이 세 개입니다. | have 직역. 한국어는 '있다'로 씁니다. | 정규식 | 핵심 |
 | This flag allows you to skip the cache. | 이 플래그는 당신이 캐시를 건너뛸 수 있도록 허용합니다. | 이 플래그를 주면 캐시를 건너뜁니다. | allow you to 직역은 주어와 목적어를 둘 다 늘립니다. | 정규식 | 핵심 |
 | — | 한 문장에 절을 셋 이상 이어 붙이기 | 절 두 개까지. 50자를 넘으면 문장을 나눕니다 | 영어 한 문장을 한국어 한 문장으로 고집하면 늘어집니다 | 프롬프트 | 핵심 |
