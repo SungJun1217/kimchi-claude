@@ -6,7 +6,6 @@
 import { maskProtected, isIgnoredFile } from "./segment.mjs";
 import { particleHeads, RIEUL, OTHER_FINAL, NO_FINAL } from "./particle.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
-import { findLatinVerbHada } from "./latin-hada.mjs";
 import { groupCounted, formatGroupedList } from "./format.mjs";
 
 // 규칙의 "쓰지 말 것" 칸에서 ~ 는 "앞뒤에 무엇이 붙든"을 뜻한다.
@@ -349,18 +348,25 @@ export function isParticleSafe(bad, good, nextChar, prevChar = "") {
 }
 
 /**
- * 규칙의 금칙어 안쪽에 물결표가 있는지 본다.
+ * 발견이 규칙끼리 겹침을 다투는 resolveOverlaps에서 아예 빠지는지 본다.
  *
- * "만약 ~라면, 그러면" 같은 문장 패턴 규칙은 앞뒤로 최대 20자까지 아무 내용이나 물고
- * 매치한다. 그 폭 안에 우연히 다른 규칙(예: "임시 저장소")이 들어 있어도 두 규칙은
- * 서로 다른 것을 지적하는 것이지 한쪽이 다른 쪽을 가리키는 게 아니다. 길이만 보고
- * 겹침을 해소하면 패턴 규칙이 항상 이겨서 그 안의 진짜 지적을 삼켜 버린다.
+ * 두 갈래가 이 조건에 해당한다.
  *
- * @param {string} bad
+ * 1. 금칙어 안쪽에 물결표가 있는 규칙("만약 ~라면, 그러면" 같은 문장 패턴)은 앞뒤로
+ *    최대 20자까지 아무 내용이나 물고 매치한다. 그 폭 안에 우연히 다른 규칙(예: "임시
+ *    저장소")이 들어 있어도 두 규칙은 서로 다른 것을 지적하는 것이지 한쪽이 다른 쪽을
+ *    가리키는 게 아니다. 길이만 보고 겹침을 해소하면 패턴 규칙이 항상 이겨서 그 안의
+ *    진짜 지적을 삼켜 버린다.
+ * 2. finding.overlapFree === true를 규칙이 직접 선언한 경우다. latin-hada.mjs의
+ *    LATIN_HADA_RULE이 그렇다 — bad가 매치마다 달라 정적 문자열로 셀 수 없는 규칙이라,
+ *    길이 비교로 겹침을 다투는 게 애초에 말이 안 된다. 절대 자동 교정하지 않는(check가
+ *    늘 정규식) 규칙이 다른 규칙의 자동 교정 대상까지 밀어내면 안 된다(실측, 0.16.0).
+ *
+ * @param {object} finding
  * @returns {boolean}
  */
-function hasInteriorWildcard(bad) {
-  return typeof bad === "string" && stripWildcardEdges(bad).includes(WILDCARD);
+function isOverlapFree(finding) {
+  return finding.overlapFree === true || (typeof finding.bad === "string" && stripWildcardEdges(finding.bad).includes(WILDCARD));
 }
 
 /**
@@ -634,8 +640,8 @@ function lowerBound(sorted, target) {
  * 독자가 "루즈"는 왜 안 걸리는지 헷갈린다. 긴 쪽이 뜻을 더 구체적으로 담고 있으므로
  * 긴 쪽을 남기고 그 구간에 포함된 짧은 것은 버린다.
  *
- * 물결표가 있는 문장 패턴 규칙은 이 해소에서 아예 빠진다. 항상 남고, 다른 발견을
- * 밀어내지도 않는다 — hasInteriorWildcard 의 설명을 보라.
+ * isOverlapFree가 참인 발견은 이 해소에서 아예 빠진다. 항상 남고, 다른 발견을
+ * 밀어내지도 않는다 — isOverlapFree 의 설명을 보라.
  *
  * 길이 내림차순으로 훑으며 이미 받아들인 구간과 겹치면 버리는 탐욕법을 쓴다. 길이가 같으면
  * 앞쪽(index 오름차순)을 먼저 받아들인다. accepted를 index 오름차순으로 유지하면, 이미
@@ -646,10 +652,10 @@ function lowerBound(sorted, target) {
  * @returns {object[]} index 오름차순
  */
 function resolveOverlaps(findings) {
-  const wildcard = [];
+  const free = [];
   const plain = [];
   for (const finding of findings) {
-    (hasInteriorWildcard(finding.bad) ? wildcard : plain).push(finding);
+    (isOverlapFree(finding) ? free : plain).push(finding);
   }
 
   // 흔한 경우(실제로 겹치는 발견이 하나도 없음)는 훑기 한 번으로 끝낸다. 아래의
@@ -667,7 +673,7 @@ function resolveOverlaps(findings) {
     }
   }
   if (!hasOverlap) {
-    return [...byIndex, ...wildcard].sort((a, b) => a.index - b.index);
+    return [...byIndex, ...free].sort((a, b) => a.index - b.index);
   }
 
   const ordered = plain.sort((a, b) => b.length - a.length || a.index - b.index);
@@ -683,7 +689,7 @@ function resolveOverlaps(findings) {
     if (!overlapsBefore && !overlapsAfter) accepted.splice(pos, 0, finding);
   }
 
-  return [...accepted, ...wildcard].sort((a, b) => a.index - b.index);
+  return [...accepted, ...free].sort((a, b) => a.index - b.index);
 }
 
 /**
@@ -713,21 +719,26 @@ function capPerRule(findings) {
  *   정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
  *   refDefs: Edit/MultiEdit 조각 밖의 참조식 링크 정의 라벨. artifact.mjs의 target을
  *   그대로 넘겨도 된다 — target에 이미 {ext, refDefs}가 실려 있다.
- * @param {{exhaustive?: boolean, latinHada?: boolean}} [options]
+ * rules의 각 항목은 보통 규칙표 한 줄(bad/good/why 문자열)이지만, bad가 매치마다
+ * 달라 정적 정규식으로 셀 수 없는 검사는 대신 find(masked, normalized) 매처를 들고
+ * 있을 수 있다 — latin-hada.mjs의 LATIN_HADA_RULE이 그렇다. find가 있으면
+ * toPattern(rule.bad) 대신 그 함수를 부른다. 이런 규칙은 rules.mjs의 loadRules()가
+ * builtins로 따로 내보내므로, 그 결과를 이어 붙인 rules를 넘긴 호출부(예:
+ * artifact.loadToneRules())에서만 검사되고, 규칙표만 다루는 호출부(build-style.mjs 등)는
+ * rules만 넘기면 그만이다.
+ *
+ * @param {{exhaustive?: boolean}} [options]
  *   exhaustive를 true로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)도, 원시 매치·반복
  *   상한(MAX_RAW_HITS_PER_RULE/MAX_PATTERN_ITERATIONS)도 적용하지 않는다 — applyFixes가
  *   문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다. 대신 masked 문자열 길이로 상한을
  *   둔다 — 매치 하나가 최소 MIN_LITERAL_LENGTH(2)자를 먹고, 길이 0짜리 매치도 매번
  *   lastIndex를 최소 1씩 미니 반복 횟수든 매치 수든 masked.length를 넘을 수 없다. 병적인
- *   입력에서도 무한히 돌지 않는다는 것이 이 값 자체로 증명된다. latinHada를 false로
- *   주면 findLatinVerbHada를 건너뛴다 — import-corpus.mjs·corpus.test.mjs처럼 규칙
- *   하나만 담은 임시 배열로 "규칙 자신을 다시 잡는지"만 볼 때, latin-hada가 그 결과에
- *   섞여 들어오면 안 되기 때문이다(전체 규칙 집합을 검사하는 게 아니다).
+ *   입력에서도 무한히 돌지 않는다는 것이 이 값 자체로 증명된다.
  * @returns {object[]}
  */
 export function lint(text, rules, mask = {}, options = {}) {
   const { ext, refDefs } = mask;
-  const { exhaustive = false, latinHada = true } = options;
+  const { exhaustive = false } = options;
 
   if (typeof text !== "string" || text.length === 0) return [];
   if (!Array.isArray(rules)) return [];
@@ -749,6 +760,15 @@ export function lint(text, rules, mask = {}, options = {}) {
 
   for (const rule of rules) {
     if (!SCANNABLE_CHECKS.includes(rule.check)) continue;
+
+    // bad가 매치마다 달라 정적 정규식으로 셀 수 없는 규칙(latin-hada.mjs 상단 설명 참고)은
+    // find가 이미 다 채운 발견 목록을 돌려준다 — toPattern 경로를 아예 타지 않는다.
+    if (typeof rule.find === "function") {
+      for (const found of rule.find(masked, normalized)) {
+        findings.push({ ...found, overlapFree: rule.overlapFree === true });
+      }
+      continue;
+    }
 
     const pattern = toPattern(rule.bad);
     if (pattern === null) continue;
@@ -783,19 +803,10 @@ export function lint(text, rules, mask = {}, options = {}) {
     }
   }
 
-  // resolveOverlaps는 규칙끼리만 겹침을 다툰다. latin-hada는 규칙표로 표현할 수 없는
-  // 별개의 검사라(latin-hada.mjs 상단 설명 참고) 규칙과 span이 겹쳐도 어느 한쪽이 다른
-  // 쪽을 밀어내면 안 된다 — "build할때"에서 latin-hada가 "build할"을 잡았다고 "할때"→
-  // "할 때" 치환 규칙까지 지워지면, 그 규칙이 원래 했던 자동 교정(applyFixes는 lint()의
-  // findings를 그대로 후보로 쓴다)까지 함께 사라진다(실측, 0.16.0). latin-hada는 절대
-  // 자동 교정하지 않으므로(check가 늘 정규식이다) 겹침은 표시상의 문제일 뿐이고, 둘 다
-  // 보여 줘도 읽는 사람이 헷갈리지 않는다 — 그래서 규칙 겹침을 먼저 해소한 뒤에 latin-hada
-  // 발견을 그대로 이어 붙인다.
+  // find 기반 발견(overlapFree: true)은 resolveOverlaps 안에서 isOverlapFree가 걸러내
+  // 겹침 다툼에서 아예 빠진다 — 여기서 따로 나눠 담을 필요가 없다.
   const resolved = resolveOverlaps(findings);
-  const latinFindings = latinHada ? findLatinVerbHada(masked, normalized) : [];
-  const combined =
-    latinFindings.length === 0 ? resolved : [...resolved, ...latinFindings].sort((a, b) => a.index - b.index);
-  return exhaustive ? combined : capPerRule(combined);
+  return exhaustive ? resolved : capPerRule(resolved);
 }
 
 /**
@@ -820,9 +831,9 @@ export function applyFixes(text, rules, mask = {}) {
   // lint()의 기본 상한(규칙당 3건 보고)을 그대로 쓰지 않는다 — 자동 교정은 문서에 실제로
   // 있는 만큼 다 고쳐야 한다. 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고 말하는"
   // 불일치가 생긴다(실측, 0.14.13). exhaustive: true로 보고 상한도 원시 매치·반복 상한도 끈다.
-  // latin-hada는 항상 check가 정규식이라(latin-hada.mjs 상단 설명) 아래 필터에서 어차피
-  // 버려진다 — latinHada: false로 그 스캔 자체를 건너뛴다.
-  const candidates = lint(text, rules, mask, { exhaustive: true, latinHada: false }).filter(
+  // find 기반 builtin(예: latin-hada.mjs의 LATIN_HADA_RULE)은 항상 check가 정규식이라
+  // 아래 필터에서 저절로 버려진다 — 자동 교정 대상에서 빼려고 따로 끌 필요가 없다.
+  const candidates = lint(text, rules, mask, { exhaustive: true }).filter(
     (finding) => finding.check === CHECK_SUBSTITUTE
   );
 

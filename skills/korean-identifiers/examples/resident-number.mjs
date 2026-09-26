@@ -125,14 +125,6 @@ export function foldForScan(text) {
   return { clean, spanToOriginal };
 }
 
-// 구분자 없이 붙은 13자리("9001011234567", "주민번호9001011234567"). RESIDENT_NUMBER_PATTERN
-// 은 구분자가 있는 형태만 잡는다 — 자유 텍스트에서는 구분자 없이 그대로 붙여 넣는
-// 경우도 흔해서 따로 둔다. foldForScan() 이 돌려준 clean 문자열에만 쓴다(원문에
-// 전각 숫자가 섞이면 이 패턴의 [0-9] 로는 못 잡는다). 식별자 속(`order_9001011234567`)
-// 이나 소수점 뒤(`0.9001011234567`)에서는 잡지 않는다 — hooks/lib/pii.mjs 의
-// CANDIDATE_GLUED 와 같은 이유다.
-export const RESIDENT_NUMBER_GLUED_PATTERN = /(?<![0-9A-Za-z_.])[0-9]{6}[1-8][0-9]{6}(?![0-9A-Za-z_])/g;
-
 // 점·밑줄·슬래시는 실측 후 뺐다 — 부동소수점, 날짜/번호 나열, `ORD_`·`IMG_` 류
 // 식별자와 겹친다. hooks/lib/pii.mjs 의 SEP 설명을 참고할 것.
 const SEP = "(?: ?- ?| {1,2})";
@@ -140,6 +132,14 @@ const SEP = "(?: ?- ?| {1,2})";
 // ("No.900101-1234567") 앞자리 숫자를 막지 않는다. hooks/lib/pii.mjs 와 같다.
 const CANDIDATE_SEPARATED = new RegExp(`(?<![0-9])(?<![0-9]\\.)([0-9]{6})${SEP}([1-8][0-9]{6})(?![0-9A-Za-z_])`, "g");
 const CANDIDATE_GLUED = /(?<![0-9A-Za-z_.])([0-9]{6})([1-8][0-9]{6})(?![0-9A-Za-z_])/g;
+
+// 구분자 없이 붙은 13자리("9001011234567", "주민번호9001011234567"). RESIDENT_NUMBER_PATTERN
+// 은 구분자가 있는 형태만 잡는다 — 자유 텍스트에서는 구분자 없이 그대로 붙여 넣는
+// 경우도 흔해서 따로 둔다. foldForScan() 이 돌려준 clean 문자열에만 쓴다(원문에
+// 전각 숫자가 섞이면 이 패턴의 [0-9] 로는 못 잡는다). 식별자 속(`order_9001011234567`)
+// 이나 소수점 뒤(`0.9001011234567`)에서는 잡지 않는다 — CANDIDATE_GLUED 와 같은 이유다.
+// CANDIDATE_GLUED 의 캡처 그룹을 그대로 물려받지만(.source), 매치 결과에는 영향이 없다.
+export const RESIDENT_NUMBER_GLUED_PATTERN = new RegExp(CANDIDATE_GLUED.source, "g");
 
 // 구분자가 있는 형태를 탐지기(findResidentNumbers)와 똑같은 경계로 잡는다. 가리는 쪽이
 // 따로 패턴을 두면 "ID900101-1234567"처럼 탐지기는 잡는데 마스킹은 놓치는 틈이 생긴다.
@@ -251,8 +251,7 @@ export function birthYearOf(value) {
   if (!looksLikeResidentNumber(digits)) return null;
 
   const genderDigit = Number(digits[6]);
-  // 1·2·5·6 → 1900년대, 3·4·7·8 → 2000년대
-  const century = genderDigit === 1 || genderDigit === 2 || genderDigit === 5 || genderDigit === 6 ? 1900 : 2000;
+  const century = CENTURY_BASE[genderDigit];
   return { birthYear: century + Number(digits.slice(0, 2)), century };
 }
 

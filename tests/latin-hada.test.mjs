@@ -9,15 +9,21 @@ import assert from "node:assert/strict";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lint, applyFixes } from "../hooks/lib/lint.mjs";
-import { findLatinVerbHada } from "../hooks/lib/latin-hada.mjs";
+import { findLatinVerbHada, LATIN_HADA_RULE } from "../hooks/lib/latin-hada.mjs";
 import { loadRules, CHECK_REGEX } from "../hooks/lib/rules.mjs";
 import { fastestMs } from "./helpers.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { rules } = loadRules(join(ROOT, "rules"));
+const { rules: tableRules } = loadRules(join(ROOT, "rules"));
+// lint()는 더 이상 이 검사를 하드코딩하지 않는다 — rules 배열에 이 규칙 객체가 실려
+// 있어야 검사된다(rules.mjs의 loadRules()가 훅에는 builtins로 얹어 준다). 이 시험은
+// lint() 자체를 부르므로 직접 포함한다.
+const BUILTIN_RULES = [LATIN_HADA_RULE];
+// 규칙표와 함께 겹침을 시험할 때는 훅이 실제로 보는 전체 집합과 같은 모양으로 맞춘다.
+const rules = [...tableRules, LATIN_HADA_RULE];
 
 test("push합니다를 찾아 푸시합니다를 제안한다", () => {
-  const findings = lint("이제 push합니다.", []);
+  const findings = lint("이제 push합니다.", BUILTIN_RULES);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].matched, "push합니다");
   assert.equal(findings[0].good, "푸시합니다");
@@ -25,7 +31,7 @@ test("push합니다를 찾아 푸시합니다를 제안한다", () => {
 });
 
 test("deploy한을 찾아 배포한을 제안한다", () => {
-  const findings = lint("어제 deploy한 버전입니다.", []);
+  const findings = lint("어제 deploy한 버전입니다.", BUILTIN_RULES);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].matched, "deploy한");
   assert.equal(findings[0].good, "배포한");
@@ -45,29 +51,29 @@ test("언어 키워드·전역 API 이름과 헷갈리는 동사는 목록에서
     "이미지를 load하면 됩니다.",
     "컴포넌트를 render하면 됩니다.",
   ];
-  for (const text of sentences) assert.equal(lint(text, []).length, 0, text);
+  for (const text of sentences) assert.equal(lint(text, BUILTIN_RULES).length, 0, text);
 });
 
 test("체크박스와 헷갈리는 check, 정착 음차가 없는 pull도 목록에서 뺐다", () => {
   // check: "체크된 항목"의 체크는 표시라는 뜻이라 확인으로 바꾸면 뜻이 달라진다.
   // pull: "풀하다"라는 정착 음차 자체가 없다 — 개발자는 "pull 받아서"라고 쓴다.
-  assert.equal(lint("체크된 항목만 배포합니다.", []).length, 0);
-  assert.equal(lint("이슈를 close하려고 check했습니다.", []).length, 0);
-  assert.equal(lint("최신 브랜치를 pull한 뒤 시작합니다.", []).length, 0);
+  assert.equal(lint("체크된 항목만 배포합니다.", BUILTIN_RULES).length, 0);
+  assert.equal(lint("이슈를 close하려고 check했습니다.", BUILTIN_RULES).length, 0);
+  assert.equal(lint("최신 브랜치를 pull한 뒤 시작합니다.", BUILTIN_RULES).length, 0);
 });
 
 test("trigger는 트리거로, reset은 리셋으로 제안한다 (실행/초기화가 아니다)", () => {
-  const trigger = lint("이벤트가 trigger되면 실행됩니다.", []);
+  const trigger = lint("이벤트가 trigger되면 실행됩니다.", BUILTIN_RULES);
   assert.equal(trigger.length, 1);
   assert.equal(trigger[0].good, "트리거되면");
 
-  const reset = lint("상태를 reset한 뒤 다시 시작합니다.", []);
+  const reset = lint("상태를 reset한 뒤 다시 시작합니다.", BUILTIN_RULES);
   assert.equal(reset.length, 1);
   assert.equal(reset[0].good, "리셋한");
 });
 
 test("대문자로 시작해도 잡는다", () => {
-  const findings = lint("PR을 Call하고 기다립니다.", []);
+  const findings = lint("PR을 Call하고 기다립니다.", BUILTIN_RULES);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].matched, "Call하고");
   assert.equal(findings[0].good, "호출하고");
@@ -76,43 +82,43 @@ test("대문자로 시작해도 잡는다", () => {
 test("자동 교정 대상이 아니다 (정규식 검사만, 치환 금지)", () => {
   // applyFixes는 check === 치환인 발견만 거른다. CHECK_REGEX면 후보에도 못 들어가
   // 절대 자동으로 고쳐지지 않는다(불변식 5 — 어떤 하다 활용형이 자연스러운지는 문맥에 달렸다).
-  const { text, applied } = applyFixes("이제 push합니다.", []);
+  const { text, applied } = applyFixes("이제 push합니다.", BUILTIN_RULES);
   assert.equal(text, "이제 push합니다.");
   assert.equal(applied.length, 0);
 });
 
 test("인라인 코드 안의 push합니다는 잡지 않는다", () => {
-  assert.equal(lint("`push합니다`", []).length, 0);
+  assert.equal(lint("`push합니다`", BUILTIN_RULES).length, 0);
 });
 
 test("코드 블록 안의 deploy한은 잡지 않는다", () => {
   const text = ["```", "// deploy한 버전을 기록한다", "```"].join("\n");
-  assert.equal(lint(text, []).length, 0);
+  assert.equal(lint(text, BUILTIN_RULES).length, 0);
 });
 
 test("명사 자리에 조사가 붙은 경우는 잡지 않는다 (push를 실행합니다)", () => {
-  assert.equal(lint("git push를 실행합니다.", []).length, 0);
+  assert.equal(lint("git push를 실행합니다.", BUILTIN_RULES).length, 0);
 });
 
 test("이미 정착한 음차 동사(머지합니다)는 잡지 않는다", () => {
-  assert.equal(lint("PR을 머지합니다.", []).length, 0);
+  assert.equal(lint("PR을 머지합니다.", BUILTIN_RULES).length, 0);
 });
 
 test("영어 과거형(pushed)은 하다 활용형이 아니므로 잡지 않는다", () => {
-  assert.equal(lint("이미 pushed 상태입니다.", []).length, 0);
+  assert.equal(lint("이미 pushed 상태입니다.", BUILTIN_RULES).length, 0);
 });
 
 test("영어만 있는 문장은 잡지 않는다", () => {
-  assert.equal(lint("We should push the fix and deploy it.", []).length, 0);
+  assert.equal(lint("We should push the fix and deploy it.", BUILTIN_RULES).length, 0);
 });
 
 test("URL 안의 동사는 잡지 않는다", () => {
-  assert.equal(lint("https://example.com/api/push하면-이상함 을 참고하십시오.", []).length, 0);
+  assert.equal(lint("https://example.com/api/push하면-이상함 을 참고하십시오.", BUILTIN_RULES).length, 0);
 });
 
 test("다른 낱말 속을 잘못 잘라내지 않는다 (rebuild합니다)", () => {
   // build는 목록에 있지만 rebuild합니다에서 왼쪽 경계(ASCII 문자 뒤)에 걸려 잡히지 않는다.
-  assert.equal(lint("전체를 rebuild합니다.", []).length, 0);
+  assert.equal(lint("전체를 rebuild합니다.", BUILTIN_RULES).length, 0);
 });
 
 test("명령 이름·식별자·경로 구분자 뒤는 잡지 않는다", () => {
@@ -143,11 +149,11 @@ test("명령 이름·식별자·경로 구분자 뒤는 잡지 않는다", () =>
     "A/B test할 때 봅니다.",
     "C:\\build한 파일입니다.",
   ];
-  for (const text of sentences) assert.equal(lint(text, [], { ext: "md" }).length, 0, text);
+  for (const text of sentences) assert.equal(lint(text, BUILTIN_RULES, { ext: "md" }).length, 0, text);
 });
 
 test("윗줄 끝의 영어 낱말이 줄 첫머리 동사를 가리지 않는다", () => {
-  const findings = lint("Run the build\npush하면 됩니다.", [], { ext: "md" });
+  const findings = lint("Run the build\npush하면 됩니다.", BUILTIN_RULES, { ext: "md" });
   assert.equal(findings.length, 1);
   assert.equal(findings[0].matched, "push하면");
 });
@@ -156,7 +162,7 @@ test("한글이 로마자 동사에 곧바로 붙으면 잡지 않는다 (재com
   // latin-hada 자신의 왼쪽 경계에는 안 걸리지만(한글은 그 두 갈래 어디에도 없다),
   // segment.mjs가 "한글 + 로마자 소문자" 모양을 타겟Id류 혼합 식별자로 보고 통째로
   // 가린다("재commit"도 그 모양이다) — 그 앞단 보호 덕에 여기서도 안 잡힌다.
-  assert.equal(lint("재commit해야 합니다.", []).length, 0);
+  assert.equal(lint("재commit해야 합니다.", BUILTIN_RULES).length, 0);
 });
 
 test("findLatinVerbHada는 masked 문자열 기준으로 위치를 돌려준다", () => {
@@ -168,11 +174,11 @@ test("findLatinVerbHada는 masked 문자열 기준으로 위치를 돌려준다"
 });
 
 test("추가한 하다/되다 활용형도 잡는다 (trigger되면, commit됐습니다)", () => {
-  const trigger = lint("이벤트가 trigger되면 실행됩니다.", []);
+  const trigger = lint("이벤트가 trigger되면 실행됩니다.", BUILTIN_RULES);
   assert.equal(trigger.length, 1);
   assert.equal(trigger[0].matched, "trigger되면");
 
-  const commit = lint("이미 commit됐습니다.", []);
+  const commit = lint("이미 commit됐습니다.", BUILTIN_RULES);
   assert.equal(commit.length, 1);
   assert.equal(commit[0].matched, "commit됐");
   assert.equal(commit[0].good, "커밋됐");
@@ -180,14 +186,14 @@ test("추가한 하다/되다 활용형도 잡는다 (trigger되면, commit됐�
 
 test("규칙별 보고 상한을 그대로 따른다 (같은 동사 3건까지만 보고)", () => {
   const text = Array(5).fill("push합니다.").join(" ");
-  const findings = lint(text, []);
+  const findings = lint(text, BUILTIN_RULES);
   assert.equal(findings.length, 3);
 });
 
 test("지연 시간: 긴 문서에서도 빠르다", () => {
   // fastestMs: 다른 시험과 동시에 도는 동안은 한 번 잰 시간이 스케줄링에 흔들린다(실측).
   const text = "이 문장은 평범한 한국어 문장입니다. ".repeat(2000);
-  const ms = fastestMs(() => lint(text, []));
+  const ms = fastestMs(() => lint(text, BUILTIN_RULES));
   // 공유 CI 러너는 로컬보다 느릴 수 있다. 72KB 입력에서 이차 비용으로 퇴화하면
   // 그래도 이 상한을 넘는다.
   assert.ok(ms < 1000, `긴 문서에서 지나치게 오래 걸렸다 (${ms}ms)`);

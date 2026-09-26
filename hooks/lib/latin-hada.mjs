@@ -14,8 +14,15 @@
 // 문맥마다 자연스러운 한글 활용형이 다를 수 있어(불변식 5, "확신이 없으면 판단하지
 // 않는다") 자동 교정은 하지 않는다 — CHECK_REGEX로만 분류해 applyFixes가 절대 이
 // 발견을 집어 고치지 않게 한다(applyFixes는 CHECK_SUBSTITUTE만 거른다).
+//
+// lint()에는 이 파일 끝의 LATIN_HADA_RULE 하나로 얹힌다 — bad/good이 규칙표처럼 고정된
+// 문자열이 아니라 매치마다(동사마다) 달라지므로, toPattern(lint.mjs)이 쓰는 정적 정규식
+// 대신 find(masked, normalized) 매처를 규칙 객체에 얹는 일반 기제를 쓴다. rules.mjs의
+// loadRules()가 이 규칙을 builtins로 내보내고, 실제 검사에 쓰는 소비자(artifact.loadToneRules
+// 등)만 rules에 이어 붙인다 — 규칙표만 보는 소비자(build-style.mjs, corpus.test.mjs 등)는
+// 그대로 rules만 쓰므로 이 규칙이 섞여 들어오지 않는다.
 
-import { CHECK_REGEX } from "./rules.mjs";
+import { CHECK_REGEX } from "./checks.mjs";
 import { MASK } from "./segment.mjs";
 
 // 동사만 담는다(명사 자리에서 쓰는 state·props·target 같은 낱말은 뺀다 — 0.15.0 표기
@@ -146,3 +153,22 @@ export function findLatinVerbHada(masked, normalized) {
   }
   return findings;
 }
+
+/**
+ * lint()가 규칙표의 다른 규칙과 똑같이 다루는 규칙 객체 하나로 이 검사를 감싼다.
+ *
+ * bad/good이 매치마다 달라(동사별로 뜻이 다르다) 정적인 rule.bad 하나로 표현할 수
+ * 없으므로, find가 masked/normalized를 받아 findLatinVerbHada의 결과(이미 bad·good·why
+ * 까지 채운 발견 목록)를 그대로 돌려준다. overlapFree: true는 이 발견이 규칙끼리 겹침을
+ * 다투는 resolveOverlaps(lint.mjs)에 끼지 않는다는 뜻이다 — "build할때"에서 이 규칙이
+ * 잡은 "build할"이 치환 규칙 "할때"→"할 때"보다 길다는 이유로 그 규칙을 밀어내면, 절대
+ * 자동 교정하지 않는(check가 늘 정규식) 이 규칙이 실제로 되던 자동 교정까지 함께
+ * 지워버린다(실측, 0.16.0).
+ */
+export const LATIN_HADA_RULE = {
+  check: CHECK_REGEX,
+  priority: "핵심",
+  source: LATIN_HADA_SOURCE,
+  overlapFree: true,
+  find: findLatinVerbHada,
+};

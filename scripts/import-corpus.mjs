@@ -149,9 +149,10 @@ export function decideCheck(rule) {
   if (autoFixReplacement(rule) === null) return "정규식";
 
   const candidate = { ...rule, check: "치환" };
-  // 고친 결과가 같은 규칙에 또 걸리면 순환한다. 규칙 하나만 담은 배열이라 latin-hada까지
-  // 함께 검사하면 이 규칙과 무관한 매치가 섞여 들어올 수 있다(전체 규칙 집합이 아니다).
-  if (lint(rule.good, [candidate], {}, { latinHada: false }).length > 0) return "정규식";
+  // 고친 결과가 같은 규칙에 또 걸리면 순환한다. 규칙 하나만 담은 배열이라 lint()가 보는
+  // 것은 이 규칙뿐이다 — builtins(latin-hada 등)는 loadRules()가 따로 내보내고 여기서는
+  // 이어 붙이지 않으므로 애초에 섞여 들어오지 않는다.
+  if (lint(rule.good, [candidate]).length > 0) return "정규식";
 
   // 실제로 치환해 본다. 조사가 없는 자리에서도 적용되지 않으면 치환 규칙이 아니다.
   // 조사 앞에서 막히는 경우는 applyFixes 의 안전장치가 실행 시점에 알아서 건너뛴다.

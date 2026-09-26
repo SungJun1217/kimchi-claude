@@ -105,7 +105,8 @@ kimchi-claude/
 │   ├── guard.mjs                  산출물 검사의 단일 진입점. 차단이 경고보다 앞선다
 │   ├── session-language.mjs       저장소의 산출물 언어를 세션 시작에 알려 준다
 │   └── lib/
-│       ├── rules.mjs              마크다운 표 → 규칙 객체
+│       ├── rules.mjs              마크다운 표 → 규칙 객체. builtins(latin-hada 등)도 여기서 내보낸다
+│       ├── checks.mjs             `검사` 칸 상수(치환/정규식/프롬프트). rules.mjs·latin-hada.mjs가 함께 본다
 │       ├── segment.mjs            검사 제외 구간(코드·경로·예외 표시)
 │       ├── detect.mjs             한국어 문서인지 판정
 │       ├── lint.mjs               규칙 검사와 자동 교정. 조사 안전장치
@@ -218,14 +219,31 @@ Explanatory를 쓸 수 없다. "설치만 하면 켜진다"가 요구사항이�
 활용형은 문맥마다 다를 수 있어(예: "업데이트합니다" 대 "업데이트해서") 이 발견은 언제나
 `정규식`으로 분류되어 경고만 한다.
 
-`lint()`는 규칙끼리 겹치는 발견만 `resolveOverlaps`로 해소하고, latin-hada의 발견은 그
-해소가 끝난 뒤에 그대로 이어 붙인다 — 규칙과 span이 겹쳐도 서로 밀어내지 않고 **둘 다**
-보고한다. 처음에는 규칙과 한 findings 배열에 섞어 넣고 함께 겹침을 해소했는데, "build할때
-확인합니다"에서 latin-hada가 잡은 "build할"이 더 길다는 이유로 겹치는 치환 규칙("할때"→
-"할 때")까지 밀어냈다 — `applyFixes`가 `lint()`의 결과를 그대로 후보로 쓰므로, 지적만
-사라지는 게 아니라 원래 되던 자동 교정까지 함께 사라졌다(실측, 0.16.0). latin-hada는 절대
-자동 교정하지 않으므로(check가 늘 정규식이다) 규칙과의 겹침은 표시상의 문제일 뿐이라
-밀어낼 이유가 없다.
+`lint()`에는 이 검사가 규칙 객체 하나(`LATIN_HADA_RULE`)로 얹힌다. `bad`가 매치마다(동사마다)
+달라 규칙표처럼 정적 정규식 하나로 셀 수 없으므로, 이 규칙은 `toPattern(rule.bad)` 대신
+`find(masked, normalized)` 매처를 들고 있다 — `lint()`는 규칙에 `find`가 있으면 그 함수를
+불러 이미 다 채운 발견 목록을 그대로 받아들인다. 규칙 자체가 자기 검사 방법을 들고 있으므로
+lint()의 규칙 순회 루프는 "규칙표 정규식이냐, 그 밖의 매처냐"를 가르지 않는다.
+
+`LATIN_HADA_RULE`은 `overlapFree: true`도 함께 든다 — `lint()`가 규칙끼리 겹치는 발견을
+`resolveOverlaps`로 해소할 때, 이 표시가 있는 발견은 그 다툼에서 아예 빠져 규칙과 span이
+겹쳐도 서로 밀어내지 않고 **둘 다** 보고한다(같은 표시를 물결표 있는 문장 패턴 규칙도 쓴다 —
+`isOverlapFree`가 두 경우를 한 갈래로 본다). 처음에는 규칙과 한 findings 배열에 섞어 넣고
+함께 겹침을 해소했는데, "build할때 확인합니다"에서 latin-hada가 잡은 "build할"이 더 길다는
+이유로 겹치는 치환 규칙("할때"→"할 때")까지 밀어냈다 — `applyFixes`가 `lint()`의 결과를
+그대로 후보로 쓰므로, 지적만 사라지는 게 아니라 원래 되던 자동 교정까지 함께 사라졌다(실측,
+0.16.0). latin-hada는 절대 자동 교정하지 않으므로(check가 늘 정규식이다) 규칙과의 겹침은
+표시상의 문제일 뿐이라 밀어낼 이유가 없다.
+
+`rules.mjs`의 `loadRules()`는 규칙표(`rules`)와 별도로 `builtins`(`LATIN_HADA_RULE`을 담은
+배열)를 함께 내보낸다. 규칙표 자체만 다루는 소비자(`build-style.mjs`, README 규칙 수,
+`corpus.test.mjs`의 표 시험, `import-corpus.mjs`)는 `rules`만 그대로 쓰면 이 검사가 섞여
+들어오지 않는다 — 스타일 본문에 latin-hada 예시를 실을 수도, README 규칙 수에 셀 수도
+없으니 옳다. 실제로 검사하는 전체 집합이 필요한 훅 쪽은 `hooks/lib/artifact.mjs`의
+`loadToneRules()`가 `[...rules, ...builtins]`로 이어 붙인다. `rules.mjs`가 `latin-hada.mjs`를
+불러오는데 `latin-hada.mjs`도 `검사` 칸 상수(`CHECK_REGEX` 등)가 필요해 거꾸로 `rules.mjs`를
+불러오면 순환 참조가 되므로, 그 상수들은 의존성이 없는 `hooks/lib/checks.mjs`로 옮기고
+`rules.mjs`는 기존 이름을 그대로 다시 내보낸다(가져다 쓰던 곳을 고칠 필요가 없다).
 
 동사 목록은 일부러 짧다. `import`·`export`·`return`·`delete`는 언어 예약어이고
 `fetch`·`load`·`render`는 그 자체로 흔히 참조되는 전역 API·생명주기 메서드 이름이다.

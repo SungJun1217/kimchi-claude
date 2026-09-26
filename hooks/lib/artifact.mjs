@@ -413,9 +413,17 @@ export function warnAboutTone(targets, rules) {
 export const autofixEnabled = () => process.env.KIMCHI_AUTOFIX === "1";
 export const blockEnabled = () => process.env.KIMCHI_BLOCK === "1";
 
-/** 규칙을 읽는다. 값싼 걸러내기를 통과한 뒤에만 부른다. */
+/**
+ * 규칙을 읽는다. 값싼 걸러내기를 통과한 뒤에만 부른다.
+ *
+ * rules/*.md 표(rules)에 builtins(latin-hada.mjs의 LATIN_HADA_RULE처럼 표로 옮길 수
+ * 없는 검사, rules.mjs의 loadRules() 참고)를 이어 붙여 돌려준다 — 훅은 "실제로 검사하는
+ * 전체 규칙"이 필요하다. 스타일 본문·README 규칙 수·코퍼스 표 시험은 이 함수를 쓰지
+ * 않고 loadRules().rules만 직접 쓴다.
+ */
 export function loadToneRules() {
-  return loadRules(join(PLUGIN_ROOT, "rules")).rules;
+  const { rules, builtins } = loadRules(join(PLUGIN_ROOT, "rules"));
+  return [...rules, ...builtins];
 }
 
 export { extractCommitMessages, extractTargets };

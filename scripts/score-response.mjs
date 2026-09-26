@@ -42,7 +42,10 @@ function main() {
   const path = args.find((arg) => !arg.startsWith("--"));
 
   const text = readInput(path);
-  const { rules } = loadRules(join(ROOT, "rules"));
+  const { rules, builtins } = loadRules(join(ROOT, "rules"));
+  // 훅이 실제로 검사하는 전체 집합으로 채점한다. rules.length 는 사람이 읽는 "규칙 몇 개"
+  // 숫자라 규칙표 개수(builtins 제외)를 그대로 쓴다 — README 의 규칙 수와 같은 기준이다.
+  const allRules = [...rules, ...builtins];
 
   if (rules.length === 0) {
     console.error("규칙을 찾지 못했습니다. rules/ 를 확인하십시오.");
@@ -51,7 +54,7 @@ function main() {
 
   if (fix) {
     // 조사를 먼저 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있어 순서가 중요하다.
-    const result = applyFixes(fixParticles(text).text, rules);
+    const result = applyFixes(fixParticles(text).text, allRules);
     process.stdout.write(fixParticles(result.text).text);
     if (result.skipped.length > 0) {
       console.error(`\n손대지 않은 것 ${result.skipped.length}건:`);
@@ -62,7 +65,7 @@ function main() {
     return;
   }
 
-  const findings = lint(text, rules);
+  const findings = lint(text, allRules);
   const particles = findParticleErrors(text);
 
   if (json) {

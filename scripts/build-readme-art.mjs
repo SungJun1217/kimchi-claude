@@ -432,11 +432,14 @@ ${body}
 
 /** 그릴 파일 이름 → 내용. */
 export function renderAll() {
-  const { rules } = loadRules(join(ROOT, "rules"));
+  // 훅이 실제로 보는 것과 같은 집합으로 채점한다 — builtins(latin-hada 등)를 빼면
+  // 이 그림의 점수가 훅의 실제 판정보다 낮게 나올 수 있다.
+  const { rules, builtins } = loadRules(join(ROOT, "rules"));
+  const allRules = [...rules, ...builtins];
   const data = {
-    without: score(readFixture(EXCERPTS.without.fixture), rules),
-    with: score(readFixture(EXCERPTS.with.fixture), rules),
-    hook: hookMessages(rules),
+    without: score(readFixture(EXCERPTS.without.fixture), allRules),
+    with: score(readFixture(EXCERPTS.with.fixture), allRules),
+    hook: hookMessages(allRules),
   };
   const files = {};
   for (const [name, draw] of Object.entries({ logo, hero, guard, layers })) {
