@@ -427,3 +427,71 @@ test("골든 문장: 자동 교정 파이프라인을 그대로 통과한다", (
   assert.equal(pipeline("제가 확인해 본 결과를 공유합니다."), "확인해 본 결과를 공유합니다.");
   assert.equal(pipeline("패러렐리즘을 높였다"), "병렬성을 높였다");
 });
+
+// ── 번역투 근거 보강 (2026-09-27) ─────────────────────────────
+// 딥리서치로 확인한 이중 피동(잊혀지다/되어지다) 활용형과, 문맥마다 대체 표현이
+// 갈려 정규식으로만 안내하는 새 행(로부터·에 의해 결정·바로가기)을 시험한다.
+
+test("잊혀지다·되어지다 계열은 활용형까지 모두 자동 교정된다", () => {
+  const cases = [
+    ["오래전에 잊혀지다.", "오래전에 잊히다."],
+    ["금방 잊혀졌다.", "금방 잊혔다."],
+    ["잊혀진 이야기", "잊힌 이야기"],
+    ["점점 잊혀지는 전통", "점점 잊히는 전통"],
+    ["언젠가 잊혀질 것이다.", "언젠가 잊힐 것이다."],
+    ["설정이 실행되어지다.", "설정이 실행되다."],
+    ["자동으로 실행되어졌다.", "자동으로 실행됐다."],
+    ["미리 설정되어진 값", "미리 설정된 값"],
+    ["자동으로 되어지는 과정", "자동으로 되는 과정"],
+    ["이 값은 설정되어질 예정입니다.", "이 값은 설정될 예정입니다."], // 기존 핵심 행(~되어질)
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(applyFixes(input, rules).text, expected, input);
+  }
+});
+
+test("사람으로부터 받았다/들었다는 정규식이며, 사물·기관에는 다른 대체 표현도 안내한다", () => {
+  const personCases = ["고객으로부터 받았다.", "동료로부터 들었다."];
+  for (const sentence of personCases) {
+    assert.ok(lint(sentence, rules).length > 0, `"${sentence}" 가 걸리지 않는다`);
+    assert.equal(applyFixes(sentence, rules).text, sentence, `"${sentence}" 가 자동 교정됐다 — 정규식이어야 한다`);
+  }
+
+  // 같은 문자열 규칙이 사물·기관에도 걸린다("업스트림으로부터 받았다") — 그때 맞는 대체
+  // 표현은 '에게서'가 아니라 '에서'라, 안내 문구가 그 사실도 함께 말해야 한다.
+  const inanimate = "업스트림으로부터 받았다.";
+  const findings = lint(inanimate, rules);
+  assert.ok(findings.length > 0, `"${inanimate}" 가 걸리지 않는다`);
+  assert.ok(findings.some((f) => /에서/.test(f.good)), "사물·기관 대체 표현(~에서)이 안내에 없다");
+  assert.equal(applyFixes(inanimate, rules).text, inanimate, "정규식인데 자동 교정됐다");
+});
+
+test("~에 의해(의하여) 결정은 정규식이며, 행위자에 따라 다른 대체 표현도 안내한다", () => {
+  // '국민투표'는 결정의 기준·도구에 가까워 '~로 결정'도 뜻이 통하지만, 정규식이라
+  // 자동 교정하지 않는다.
+  const toolCase = "국민투표에 의하여 결정한다.";
+  assert.ok(lint(toolCase, rules).length > 0, `"${toolCase}" 가 걸리지 않는다`);
+  assert.equal(applyFixes(toolCase, rules).text, toolCase);
+
+  // '위원회'는 결정을 내리는 주체(기관)라, 기계적으로 '~로 결정'으로 바꾸면 위원회가
+  // 선정된 대상으로 읽혀 뜻이 달라진다 — 안내 문구가 능동형('~가 결정')도 함께 말해야 한다.
+  const agentCase = "위원회에 의해 결정됩니다.";
+  const findings = lint(agentCase, rules);
+  assert.ok(findings.length > 0, `"${agentCase}" 가 걸리지 않는다`);
+  assert.ok(findings.some((f) => f.good.includes("가 결정")), "행위자 대체 표현(~가 결정)이 안내에 없다");
+  assert.equal(applyFixes(agentCase, rules).text, agentCase, "정규식인데 자동 교정됐다");
+});
+
+test("바로가기는 경고만 하고 자동 교정하지 않는다", () => {
+  const sentence = "바탕화면에 바로가기를 만들었다.";
+  assert.ok(lint(sentence, rules).length > 0, `"${sentence}" 가 걸리지 않는다`);
+  assert.equal(applyFixes(sentence, rules).text, sentence, "정규식인데 자동 교정됐다");
+});
+
+test("파일들을은 이제 정규식이라 수량 표현 없이는 자동 교정하지 않는다", () => {
+  const { text, applied } = applyFixes("파일들을 뒤졌다.", rules);
+  assert.equal(text, "파일들을 뒤졌다.");
+  assert.equal(applied.length, 0);
+  // 수량 표현이 있는 핵심 행(여러 파일들을 → 여러 파일을)은 여전히 치환이다.
+  assert.equal(applyFixes("여러 파일들을 수정했습니다.", rules).text, "여러 파일을 수정했습니다.");
+});
