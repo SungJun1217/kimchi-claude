@@ -1,0 +1,52 @@
+name: test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # tests/repo-language.test.mjs reads this repo's own commit history
+          # (git log 로 커밋 제목을 읽는다) — 얕은 클론이면 표본이 부족해 판정이 흔들린다.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # 의존성이 없다 — npm install/ci 는 필요 없다.
+      - run: npm test
+
+  # 개발자 대부분이 macOS 를 쓴다. 시험은 5~15초라 러너 비용이 적고, macOS 고유의
+  # 경로·파일시스템 가정(예: FIFO 처리)이 깨지는 것을 여기서만 잡을 수 있다.
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - run: npm test

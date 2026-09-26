@@ -100,7 +100,7 @@ test("느린 리더에게도 64KiB 를 넘는 출력이 완전하게 도착한�
   // 대신 KIMCHI_AUTOFIX 로 큰 문서를 통째로 되돌려 받는 경로를 써서, 잘리면 곧바로
   // JSON.parse 가 던지도록 만든다 — 이 시험이 없으면 (a)/(c) 모두 실제로는 OS 파이프
   // 버퍼(64KiB) 밑에서만 돌아 truncation 수정 없이도 green 이 나올 수 있었다.
-  const filler = "이 문단은 내용을 채우기 위한 자리표시자 문장입니다. ".repeat(3500);
+  const filler = "이 문단은 내용을 채우기 위한 자리표시자 문장입니다. ".repeat(1000);
   const content = `${filler}\n\n계약이 얇습니다.\n`;
 
   const out = await runHookSlow(
@@ -113,8 +113,16 @@ test("느린 리더에게도 64KiB 를 넘는 출력이 완전하게 도착한�
     { KIMCHI_AUTOFIX: "1" }
   );
 
-  assert.ok(out.length > 65536, `표본이 OS 파이프 버퍼보다 커야 한다 (실제 ${out.length}바이트)`);
-  const parsed = JSON.parse(out); // 잘렸으면 여기서 던진다
+  // 한글은 UTF-8 로 한 글자에 3바이트를 쓴다. out.length(UTF-16 코드 단위)로 재면
+  // OS 파이프 버퍼(바이트 단위) 문턱을 실제보다 훨씬 낮게 잰 것이 된다.
+  const outBytes = Buffer.byteLength(out, "utf8");
+  assert.ok(outBytes > 65536, `표본이 OS 파이프 버퍼보다 커야 한다 (실제 ${outBytes}바이트)`);
+  let parsed;
+  try {
+    parsed = JSON.parse(out);
+  } catch (err) {
+    assert.fail(`출력이 잘려 JSON 으로 파싱되지 않았다 (${outBytes}바이트): ${err.message}`);
+  }
   assert.equal(parsed.hookSpecificOutput.permissionDecision, undefined);
   assert.match(parsed.hookSpecificOutput.updatedInput.content, /결합도가 낮습니다\.\s*$/, "출력 꼬리가 잘렸다");
 });

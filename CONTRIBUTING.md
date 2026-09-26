@@ -117,3 +117,6 @@ npm run eval      # claude plugin eval. 자식 claude 를 띄워 토큰이 든�
 ```
 
 손으로 말투를 잴 때 사용자 설정이 섞이지 않게 하는 방법은 [evals/README.md](evals/README.md)에 적어 두었습니다.
+
+풀 리퀘스트를 올리면 GitHub Actions가 같은 `npm test`를 돌립니다. 로컬에서 통과했더라도
+확인해 주십시오.
