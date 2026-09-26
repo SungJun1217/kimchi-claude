@@ -510,9 +510,27 @@ export function isIgnoredFile(text) {
  *   라벨. collectReferenceDefLabels 참고.
  * @returns {string}
  */
+// 한 훅 호출 안에서 같은 글을 여러 번 가린다 — locateAndClassify가 old_string/new_string
+// 둘 다 찾아보고(artifact.mjs), fixOne이 조사 교정 전후로 다시 가리고, warnAboutTone이
+// lint와 findParticleErrors에 각각 넘긴다. 매번 text·ext가 똑같은 값(대개 같은 문자열
+// 인스턴스)이라 마지막 한 번만 기억해 두면 대부분 그대로 맞는다 — 단칸 캐시로 충분하다.
+let lastMaskKey = null;
+let lastMaskResult = null;
+
 export function maskProtected(text, ext, extraDefs) {
   if (typeof text !== "string" || text.length === 0) return "";
 
+  if (lastMaskKey && lastMaskKey.text === text && lastMaskKey.ext === ext && lastMaskKey.extraDefs === extraDefs) {
+    return lastMaskResult;
+  }
+
+  const result = maskProtectedUncached(text, ext, extraDefs);
+  lastMaskKey = { text, ext, extraDefs };
+  lastMaskResult = result;
+  return result;
+}
+
+function maskProtectedUncached(text, ext, extraDefs) {
   const ranges = [];
   for (const pattern of ALWAYS_PATTERNS) {
     pattern.lastIndex = 0;

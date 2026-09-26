@@ -37,7 +37,6 @@ import {
   parseTable,
   kindTag,
   PRIORITIES,
-  CHECK_PROMPT,
   CHECK_SUBSTITUTE,
   CHECK_REGEX,
 } from "../hooks/lib/rules.mjs";
@@ -180,15 +179,14 @@ export function recheckLine(line, name, changes) {
   if (rules.length !== 1) return line;
 
   const rule = rules[0];
-  if (rule.check === CHECK_PROMPT) return line;
-
-  const next = decideCheck({ ...rule, lintable: true });
-  if (next === rule.check) return line;
   // 재계산은 강등만 한다 — decideCheck 는 "기계적 치환이 되는가"만 보므로 손으로
   // 내려 둔 정규식 규칙(예: "로그" 같은 다른 뜻과 겹치는 말)을 다시 치환으로 되돌릴 수
   // 있다. 치환 → 정규식만 허용하고, 정규식 → 치환과 프롬프트로의 이동은 사람 판단이므로
-  // 건드리지 않는다.
-  if (!(rule.check === CHECK_SUBSTITUTE && next === CHECK_REGEX)) return line;
+  // 건드리지 않는다 — 애초에 치환이 아닌 규칙은 decideCheck를 부를 일도 없다.
+  if (rule.check !== CHECK_SUBSTITUTE) return line;
+
+  const next = decideCheck({ ...rule, lintable: true });
+  if (next !== CHECK_REGEX) return line;
 
   changes.push(`${name}: "${rule.bad}" ${rule.check} → ${next}`);
   // rule.why 는 parseTable 이 [표기]/[외래어] 표지를 이미 떼어낸 값이다. 표지를

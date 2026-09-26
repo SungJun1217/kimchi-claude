@@ -142,10 +142,10 @@ const ALLOW_LINE = /kimchi-allow-rrn/;
 export const GENERATED_FILES = /(^|[\\/])(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock|go\.sum)$/;
 
 // 뒷자리 맨 앞 숫자(성별·세기 표시)가 가리키는 출생 세기. 1/2 는 1900년대 내국인,
-// 3/4 는 2000년대 내국인, 5/6 은 1900년대 외국인, 7/8 은 2000년대 외국인,
-// 9/0 은 1800년대다(9/0 은 CANDIDATE_* 정규식이 [1-8]만 받으므로 현재 입력에는
-// 나오지 않지만, 함수 자체는 실제 부여 규칙을 그대로 옮겨 둔다).
-const CENTURY_BASE = { 1: 1900, 2: 1900, 3: 2000, 4: 2000, 5: 1900, 6: 1900, 7: 2000, 8: 2000, 9: 1800, 0: 1800 };
+// 3/4 는 2000년대 내국인, 5/6 은 1900년대 외국인, 7/8 은 2000년대 외국인이다.
+// 9/0(1800년대)은 CANDIDATE_* 정규식이 [1-8]만 받아 넣지 않는다(resident-number.mjs와
+// 같은 표).
+const CENTURY_BASE = { 1: 1900, 2: 1900, 3: 2000, 4: 2000, 5: 1900, 6: 1900, 7: 2000, 8: 2000 };
 
 function isLeapYear(year) {
   return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
@@ -174,9 +174,9 @@ function plausibleBirthDate(front, genderDigit) {
   const day = Number(front.slice(4, 6));
   if (month < 1 || month > 12 || day < 1 || day > 31) return false;
 
-  const base = CENTURY_BASE[genderDigit];
-  if (base === undefined) return false;
-  const year = base + Number(front.slice(0, 2));
+  // CANDIDATE_* 정규식이 genderDigit을 [1-8]만 받으므로 CENTURY_BASE[genderDigit]은
+  // 항상 값이 있다.
+  const year = CENTURY_BASE[genderDigit] + Number(front.slice(0, 2));
 
   return day <= daysInMonth(year, month);
 }

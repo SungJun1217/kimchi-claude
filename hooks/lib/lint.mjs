@@ -30,22 +30,14 @@ const MAX_HITS_PER_RULE = 3;
 //
 // 이 상한은 **보고**(lint()의 기본값) 전용이다. 자동 교정(applyFixes)은 문서에 실제로
 // 있는 만큼 다 고쳐야 한다 — 이 상한을 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고
-// 말하는" 불일치가 생긴다(실측, 0.14.13). applyFixes는 MAX_AUTOFIX_HITS_PER_RULE을
-// 대신 쓴다.
+// 말하는" 불일치가 생긴다(실측, 0.14.13). applyFixes는 lint()를 exhaustive: true로
+// 불러 이 상한을 끈다.
 const MAX_RAW_HITS_PER_RULE = 50;
 
 // 경계에 막혀 버려지는 매치까지 포함한, 정규식이 한 규칙당 돌 수 있는 총 횟수의 상한.
 // MAX_RAW_HITS_PER_RULE 보다 넉넉해야 "경계에 막힌 매치가 많은 문서"에서도 진짜 매치를
 // 찾을 때까지 계속 돈다.
 const MAX_PATTERN_ITERATIONS = 1000;
-
-// 자동 교정 전용 상한. artifact.mjs의 MAX_AUTOFIX_CHARS(2,000,000자)가 이미 문서 크기를
-// 막아 두므로, 그 문서 안에서 규칙 하나(최소 매치 길이 MIN_LITERAL_LENGTH=2)가 이론상
-// 가질 수 있는 매치 수의 상한(100만)을 그대로 쓴다 — 실측한 실제 문서(2838건)보다
-// 훨씬 여유 있게 잡아, 문서 크기 제한 안에서는 "일부만 고치고 다 고쳤다고 말하는" 일이
-// 없다. 그래도 무한은 아니어야 병적인 입력에서 정규식이 무한히 돌지 않는다.
-const MAX_AUTOFIX_HITS_PER_RULE = 1_000_000;
-const MAX_AUTOFIX_PATTERN_ITERATIONS = 2_000_000;
 
 const HANGUL_START = 0xac00;
 const HANGUL_END = 0xd7a3;
@@ -174,16 +166,8 @@ function matchedAlternative(bad, matchedText) {
  * @returns {boolean|null}
  */
 export function hasFinalConsonant(text) {
-  if (typeof text !== "string") return null;
-  for (let i = text.length - 1; i >= 0; i -= 1) {
-    const code = text.charCodeAt(i);
-    if (code >= HANGUL_START && code <= HANGUL_END) {
-      return (code - HANGUL_START) % JAMO_COUNT !== 0;
-    }
-    // 끝에 한글이 아닌 글자가 있으면 받침을 판정할 수 없다.
-    if (!/\s/.test(text[i])) return null;
-  }
-  return null;
+  const cls = finalConsonantClass(text);
+  return cls === null ? null : cls !== NO_FINAL;
 }
 
 // 한글 음절 코드에서 종성(받침) 색인. 8이 ㄹ이다 — (코드 - 0xAC00) % 28 의 나머지가
@@ -201,7 +185,7 @@ const RIEUL_FINAL_INDEX = 8;
  * @param {string} text
  * @returns {""|"ㄹ"|"other"|null}
  */
-export function finalConsonantClass(text) {
+function finalConsonantClass(text) {
   if (typeof text !== "string") return null;
   for (let i = text.length - 1; i >= 0; i -= 1) {
     const code = text.charCodeAt(i);
@@ -457,7 +441,7 @@ const RO_CONTINUATION_TOKENS = [
   "야", "밖에", "조차", "마저", "든", "인", "다가",
 ];
 const RO_CONTINUATION_PATTERN = new RegExp(
-  `^(?:${[...RO_CONTINUATION_TOKENS].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`
+  `^(?:${RO_CONTINUATION_TOKENS.sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`
 );
 
 function isAllowedFollower(rest, allowJeok) {
@@ -468,8 +452,9 @@ function isAllowedFollower(rest, allowJeok) {
   if (ro) {
     const after = rest.slice(ro[0].length);
     if (after.length === 0 || !isHangulChar(after[0]) || RO_CONTINUATION_PATTERN.test(after)) return true;
-    // "로"/"으로"는 여기서 조사로 인정할 수 없다. FOLLOWER_TOKENS 안에 "로"로 시작하는
-    // 다른 토큰은 없으므로(적 판정 제외) 일반 검사로 넘겨도 결과는 같다 — 명시적으로 끊는다.
+    // "로"/"으로"는 여기서 조사로 인정할 수 없다. FOLLOWER_TOKENS 에 "로"가 실려 있어
+    // FOLLOWER_PATTERN(접두만 봄)은 "로그"·"로직"도 그대로 받아들인다 — 아래 일반 검사로
+    // 넘기면 위에서 이미 가려낸 오판이 되살아나므로, 여기서 명시적으로 끊는다.
     return allowJeok && JEOK_PATTERN.test(rest);
   }
 
@@ -726,22 +711,20 @@ function capPerRule(findings) {
  *   범위를 정한다. 커밋 메시지처럼 확장자가 없는 대상은 일반 가리개만 적용된다.
  * @param {Set<string>|null} [extraDefs] maskProtected에 그대로 전달한다. Edit/MultiEdit
  *   조각 밖의 참조식 링크 정의 라벨.
- * @param {{capReporting?: boolean, maxHitsPerRule?: number, maxIterations?: number, latinHada?: boolean}} [options]
- *   capReporting을 false로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)을 적용하지 않는다.
- *   applyFixes가 문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다 — 원시 매치·반복 상한도
- *   함께 넉넉히 올려야 그만큼 찾힌다(maxHitsPerRule/maxIterations). latinHada를 false로
+ * @param {{exhaustive?: boolean, latinHada?: boolean}} [options]
+ *   exhaustive를 true로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)도, 원시 매치·반복
+ *   상한(MAX_RAW_HITS_PER_RULE/MAX_PATTERN_ITERATIONS)도 적용하지 않는다 — applyFixes가
+ *   문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다. 대신 masked 문자열 길이로 상한을
+ *   둔다 — 매치 하나가 최소 MIN_LITERAL_LENGTH(2)자를 먹고, 길이 0짜리 매치도 매번
+ *   lastIndex를 최소 1씩 미니 반복 횟수든 매치 수든 masked.length를 넘을 수 없다. 병적인
+ *   입력에서도 무한히 돌지 않는다는 것이 이 값 자체로 증명된다. latinHada를 false로
  *   주면 findLatinVerbHada를 건너뛴다 — import-corpus.mjs·corpus.test.mjs처럼 규칙
  *   하나만 담은 임시 배열로 "규칙 자신을 다시 잡는지"만 볼 때, latin-hada가 그 결과에
  *   섞여 들어오면 안 되기 때문이다(전체 규칙 집합을 검사하는 게 아니다).
  * @returns {object[]}
  */
 export function lint(text, rules, ext, extraDefs, options = {}) {
-  const {
-    capReporting = true,
-    maxHitsPerRule = MAX_RAW_HITS_PER_RULE,
-    maxIterations = MAX_PATTERN_ITERATIONS,
-    latinHada = true,
-  } = options;
+  const { exhaustive = false, latinHada = true } = options;
 
   if (typeof text !== "string" || text.length === 0) return [];
   if (!Array.isArray(rules)) return [];
@@ -754,6 +737,12 @@ export function lint(text, rules, ext, extraDefs, options = {}) {
   const normalized = text.normalize("NFC");
   const masked = maskProtected(normalized, ext, extraDefs);
   const findings = [];
+
+  // exhaustive면 masked.length + 1로 넉넉히 잡는다 — 매치 하나가 최소 두 자를 먹거나
+  // (MIN_LITERAL_LENGTH) 길이 0짜리 매치라도 매번 lastIndex가 최소 1씩 밀리므로, 반복
+  // 횟수도 매치 수도 이 값을 넘을 수 없다(위 lint() 문서 참고).
+  const maxHitsPerRule = exhaustive ? masked.length + 1 : MAX_RAW_HITS_PER_RULE;
+  const maxIterations = exhaustive ? masked.length + 1 : MAX_PATTERN_ITERATIONS;
 
   for (const rule of rules) {
     if (!SCANNABLE_CHECKS.includes(rule.check)) continue;
@@ -800,10 +789,10 @@ export function lint(text, rules, ext, extraDefs, options = {}) {
   // 보여 줘도 읽는 사람이 헷갈리지 않는다 — 그래서 규칙 겹침을 먼저 해소한 뒤에 latin-hada
   // 발견을 그대로 이어 붙인다.
   const resolved = resolveOverlaps(findings);
-  const combined = latinHada
-    ? [...resolved, ...findLatinVerbHada(masked, normalized)].sort((a, b) => a.index - b.index)
-    : resolved;
-  return capReporting ? capPerRule(combined) : combined;
+  const latinFindings = latinHada ? findLatinVerbHada(masked, normalized) : [];
+  const combined =
+    latinFindings.length === 0 ? resolved : [...resolved, ...latinFindings].sort((a, b) => a.index - b.index);
+  return exhaustive ? combined : capPerRule(combined);
 }
 
 /**
@@ -828,13 +817,12 @@ export function applyFixes(text, rules, ext, extraDefs) {
   //
   // lint()의 기본 상한(규칙당 3건 보고)을 그대로 쓰지 않는다 — 자동 교정은 문서에 실제로
   // 있는 만큼 다 고쳐야 한다. 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고 말하는"
-  // 불일치가 생긴다(실측, 0.14.13). capReporting: false로 규칙당 보고 상한을 끄고,
-  // 원시 매치·반복 상한도 자동 교정 전용 값으로 넉넉히 올린다.
-  const candidates = lint(text, rules, ext, extraDefs, {
-    capReporting: false,
-    maxHitsPerRule: MAX_AUTOFIX_HITS_PER_RULE,
-    maxIterations: MAX_AUTOFIX_PATTERN_ITERATIONS,
-  }).filter((finding) => finding.check === CHECK_SUBSTITUTE);
+  // 불일치가 생긴다(실측, 0.14.13). exhaustive: true로 보고 상한도 원시 매치·반복 상한도 끈다.
+  // latin-hada는 항상 check가 정규식이라(latin-hada.mjs 상단 설명) 아래 필터에서 어차피
+  // 버려진다 — latinHada: false로 그 스캔 자체를 건너뛴다.
+  const candidates = lint(text, rules, ext, extraDefs, { exhaustive: true, latinHada: false }).filter(
+    (finding) => finding.check === CHECK_SUBSTITUTE
+  );
 
   // lint() 는 매치를 NFC로 정규화한 사본에서 찾으므로, 찾은 index는 그 사본 기준이다.
   // text가 이미 NFC면 사본과 원본이 같아 인덱스가 그대로 맞는다. NFD로 들어온 텍스트를
@@ -880,7 +868,7 @@ export function applyFixes(text, rules, ext, extraDefs) {
     // 원문에서 그대로 읽어도 안전하다.
     const next = candidates[i + 1];
     const nextOutcome = i + 1 < outcomes.length ? outcomes[i + 1] : undefined;
-    const nextChar = next && next.index === end && nextOutcome ? nextOutcome.replacement[0] ?? "" : text[end] ?? "";
+    const nextChar = next && next.index === end && nextOutcome ? nextOutcome[0] ?? "" : text[end] ?? "";
     // prevChar는 항상 아직 판정하지 않은 왼쪽 매치 앞이라 원문 그대로다(오른쪽부터
     // 판정하므로 왼쪽은 아직 안 바뀐 것으로 본다 — 예전 구현도 같은 순서였다).
     const prevChar = text[finding.index - 1] ?? "";
@@ -890,7 +878,7 @@ export function applyFixes(text, rules, ext, extraDefs) {
       continue;
     }
 
-    outcomes[i] = { replacement };
+    outcomes[i] = replacement;
   }
 
   const pieces = [];
@@ -899,9 +887,9 @@ export function applyFixes(text, rules, ext, extraDefs) {
     const outcome = outcomes[i];
     if (!outcome) continue;
     const finding = candidates[i];
-    pieces.push(text.slice(cursor, finding.index), outcome.replacement);
+    pieces.push(text.slice(cursor, finding.index), outcome);
     cursor = finding.index + finding.length;
-    applied.push({ ...finding, replacement: outcome.replacement });
+    applied.push({ ...finding, replacement: outcome });
   }
   pieces.push(text.slice(cursor));
 
