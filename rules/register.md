@@ -87,9 +87,9 @@ shell→쉘(오표기)/셸(규범)은 표에 올리지 않는다. `쉘`이 한 �
 | You could modify it like this | 이렇게 수정할 수 있습니다 | 이렇게 수정하면 됩니다 | 가능형을 남용하면 판단을 미루는 말투가 된다. 권고라면 권고로 쓴다. | 프롬프트 | 보통 |
 | Exactly right! | 정확히 맞습니다! | 맞습니다 | 강조 부사와 느낌표가 정보를 늘리지 않는다. | 치환 | 보통 |
 | dramatically faster | 엄청나게 빨라집니다 | (실측 배수)배 빨라집니다 / 빨라집니다 | 과장 부사 대신 실측 수치를 쓴다. 수치가 없으면 부사만 뺀다. 없는 배수를 지어내면 없는 사실을 만드는 것이라 자동으로는 채우지 않는다. | 정규식 | 보통 |
-| with the URL | URL으로 | URL로 | 발음을 따르는 관행이다(온라인가나다 316967). ㄹ 받침 뒤에는 으로가 아니라 로다. SQL, XML, HTML도 같다. | 치환 | 보통 |
-| React | React을 | React를 | 발음을 따르는 관행이다(온라인가나다 316967). 철자는 t로 끝나지만 발음 [리액트]는 모음으로 끝난다. | 치환 | 보통 |
-| GitHub | GitHub을 | GitHub를 | 발음을 따르는 관행이다(온라인가나다 316967). 발음 [깃허브]가 모음으로 끝나므로 를이다. | 치환 | 보통 |
+| with the URL | URL으로 | URL로 | 읽는 소리의 받침을 따른다(온라인가나다 317037·330830). ㄹ 받침 뒤에는 으로가 아니라 로다. SQL, XML, HTML도 같다. | 치환 | 보통 |
+| React | React을 | React를 | 읽는 소리의 받침을 따른다(온라인가나다 330830). 철자는 t로 끝나지만 발음 [리액트]는 모음으로 끝난다. | 치환 | 보통 |
+| GitHub | GitHub을 | GitHub를 | 읽는 소리의 받침을 따른다(온라인가나다 330830). 발음 [깃허브]가 모음으로 끝나므로 를이다. | 치환 | 보통 |
 | — | cache 를 | cache를 | 조사는 원어에 붙여 쓴다. 영문과 한글 사이를 띄우는 규칙의 예외다. | 치환 | 보통 |
 | parameter | 파라메터 | 파라미터 | [외래어] 외래어 표기법. 문맥에 따라 매개변수도 좋은 선택이다. | 치환 | 보통 |
 | scheduler | 스케쥴러 | 스케줄러 | [외래어] 외래어에 쟈, 져, 쥬, 챠, 쵸를 쓰지 않는다. | 치환 | 보통 |
@@ -141,7 +141,7 @@ shell→쉘(오표기)/셸(규범)은 표에 올리지 않는다. `쉘`이 한 �
 | powerful feature | 강력한 기능입니다 | ~을 할 수 있습니다 | 마케팅 형용사다. 기능은 하는 일로 설명한다. | 정규식 | 참고 |
 | Surprisingly, | 놀랍게도 | (삭제) | 놀람은 정보가 아니다. 예상과 다른 이유를 쓴다. | 정규식 | 참고 |
 | Rust | Rust을 | Rust를 | 발음 [러스트]가 모음으로 끝난다. commit과 달리 끝에 으 소리가 붙는다. | 치환 | 참고 |
-| — | 1으로 | 1로 | 발음을 따르는 관행이다(온라인가나다 316967). [일]은 ㄹ 받침이므로 로다. 2는 [이]라서 2로, 6은 [육]이라서 6으로다. | 프롬프트 | 참고 |
+| — | 1으로 | 1로 | 읽는 소리의 받침을 따른다(온라인가나다 330830). [일]은 ㄹ 받침이므로 로다. 2는 [이]라서 2로, 6은 [육]이라서 6으로다. | 프롬프트 | 참고 |
 | data | 데이타 | 데이터 | [외래어] 외래어 표기법. | 치환 | 참고 |
 | license | 라이센스 | 라이선스 | [외래어] 외래어 표기법. | 치환 | 참고 |
 | access | 엑세스 | 액세스 | [외래어] 외래어 표기법. 문맥에 따라 접근이 더 짧다. | 치환 | 참고 |
@@ -226,6 +226,8 @@ shell→쉘(오표기)/셸(규범)은 표에 올리지 않는다. `쉘`이 한 �
 - 온라인가나다 307529: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=307529
 - 온라인가나다 314334: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=314334
 - 온라인가나다 326374: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=326374
+- 온라인가나다 317037: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=317037
 - 온라인가나다 330407: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=330407
+- 온라인가나다 330830: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=330830
 - 온라인가나다 333450: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=333450
 - 온라인가나다 334621: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=334621
