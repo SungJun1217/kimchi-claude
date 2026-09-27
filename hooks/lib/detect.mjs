@@ -42,8 +42,8 @@ export function countHangul(text) {
 export function looksKorean(text) {
   if (typeof text !== "string" || text.length === 0) return false;
 
-  // 한 번만 훑으면서 한글 수와 공백을 뺀 길이를 함께 센다.
-  // 예전에는 match() 로 배열을, replace() 로 문자열 사본을 각각 만들었다.
+  // 한 번만 훑으면서 한글 수와 공백을 뺀 길이를 함께 센다(match()·replace()로 각각
+  // 배열·문자열 사본을 만드는 것보다 할당이 적다).
   let hangul = 0;
   let dense = 0;
   for (let i = 0; i < text.length; i += 1) {

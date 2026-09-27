@@ -139,7 +139,7 @@ function isTimeLikeKey(before) {
 const ALLOW_LINE = /kimchi-allow-rrn/;
 
 // 통째로 생성되는 파일. 확장자가 .json 이라 확장자 목록으로는 걸러지지 않는다.
-export const GENERATED_FILES = /(^|[\\/])(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock|go\.sum)$/;
+const GENERATED_FILES = /(^|[\\/])(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|composer\.lock|go\.sum)$/;
 
 // 뒷자리 맨 앞 숫자(성별·세기 표시)가 가리키는 출생 세기. 1/2 는 1900년대 내국인,
 // 3/4 는 2000년대 내국인, 5/6 은 1900년대 외국인, 7/8 은 2000년대 외국인이다.

@@ -19,10 +19,8 @@
 //   KIMCHI_AUTOFIX=1   말투 치환을 자동 교정한다
 //   KIMCHI_BLOCK=1     말투 위반이 있으면 막는다
 
-import { readFileSync } from "node:fs";
-
-// 프로세스가 시작된 시점. 안전 타이머(아래 writeAndExit)를 여기서부터 재서, 도구
-// 로딩에 시간이 걸려도 전체 실행이 훅 제한 시간(5초) 안에 들도록 한다.
+// 프로세스가 시작된 시점. 안전 타이머(entrypoint.mjs의 writeAndExit)를 여기서부터 재서,
+// 도구 로딩에 시간이 걸려도 전체 실행이 훅 제한 시간(5초) 안에 들도록 한다.
 const PROCESS_START = Date.now();
 
 // lib/ 안의 파일은 정적 import 를 쓰지 않는다. 설치가 깨져 그중 하나라도
@@ -33,14 +31,6 @@ const PROCESS_START = Date.now();
 // pii.mjs 는 따로, 가장 먼저 불러온다. 말투 쪽(artifact.mjs → particle/lint/rules/segment)이
 // 깨져도 주민등록번호 차단(불변식 2)은 살아있어야 한다 — 개인정보 검사가 말투 검사의
 // 성공에 기대면 안 된다.
-
-function readStdin() {
-  try {
-    return readFileSync(0, "utf8");
-  } catch {
-    return "";
-  }
-}
 
 /**
  * 주민등록번호 검사. 막을 이유가 있으면 메시지를, 없으면 null 을 돌려준다.
@@ -69,10 +59,11 @@ function checkPii(pii, toolName, toolInput) {
   return { message: pii.formatLeak(found, label), block: mode !== "warn" };
 }
 
-// artifact.mjs 가 내보내는 것과 같은 값이지만, 여기서는 그 체인(rules/lint/particle/
-// segment/latin-hada) 을 불러오기 전에 값싸게 확인하려고 그대로 한 줄씩 복제해 둔다.
-// PreToolUse 기본 설정(둘 다 꺼짐)에서는 이 확인만으로 끝나 그 체인을 아예 불러오지
-// 않는다(실측: Node 시작 시간을 뺀 순수 훅 처리 시간이 18.3ms → 11.5ms, 약 7ms 절약).
+// artifact.mjs의 autofixOrBlock 이 안에서 보는 것과 같은 환경변수 조건이지만, 여기서는
+// 그 체인(rules/lint/particle/segment/latin-hada) 을 불러오기 전에 값싸게 확인하려고
+// 그대로 복제해 둔다. PreToolUse 기본 설정(둘 다 꺼짐)에서는 이 확인만으로 끝나 그
+// 체인을 아예 불러오지 않는다(실측: Node 시작 시간을 뺀 순수 훅 처리 시간이 18.3ms →
+// 11.5ms, 약 7ms 절약).
 function toneDynamicModeEnabled() {
   return process.env.KIMCHI_AUTOFIX === "1" || process.env.KIMCHI_BLOCK === "1";
 }
@@ -94,9 +85,10 @@ function checkTone(libs, event, toolName, toolInput) {
 }
 
 /**
+ * @param {() => string} readStdin entrypoint.mjs 가 내보낸 것을 run() 이 그대로 넘긴다.
  * @returns {string|undefined} 내보낼 JSON 문자열. 낼 것이 없으면 undefined.
  */
-async function main() {
+async function main(readStdin) {
   if (process.env.KIMCHI_DISABLE === "1") return undefined;
 
   const raw = readStdin();
@@ -174,63 +166,16 @@ async function main() {
   return JSON.stringify(tone);
 }
 
-/**
- * stdout 이 파이프일 때 macOS/Linux 는 쓰기가 비동기다. write() 를 fire-and-forget 으로
- * 부르고 바로 exit(0) 하면 OS 파이프 버퍼(64KiB)를 넘는 출력이 잘린다. 콜백을 받아
- * 실제로 다 나간 뒤에만 종료한다.
- *
- * 느린 리더나 막힌 파이프에서 무한히 기다리지 않도록 안전 타이머로 상한을 둔다. 프로세스
- * 시작 시각(PROCESS_START)부터 재서, 그 앞의 동적 import 나 검사에 걸린 시간까지 합쳐
- * 훅 제한 시간(5초)보다 한참 짧게 끝나도록 한다. 타이머가 먼저 울리면 그때까지 파이프에
- * 실제로 들어간 만큼만 나가고 나머지는 버려진다 — 이미 쓴 바이트는 물릴 수 없으니 받아들인다.
- * Claude Code 쪽이 멈춰야만 일어나는 일이고, 그때는 훅이 뭘 하든 5초 뒤 강제 종료된다.
- */
-function writeAndExit(json) {
-  let done = false;
-  const finish = () => {
-    if (done) return;
-    done = true;
-    process.exit(0);
-  };
-
-  const remaining = Math.max(0, 4000 - (Date.now() - PROCESS_START));
-  const timer = setTimeout(finish, remaining);
-  timer.unref?.();
-
-  try {
-    process.stdout.write(json, () => {
-      clearTimeout(timer);
-      finish();
-    });
-  } catch {
-    clearTimeout(timer);
-    finish();
-  }
-}
-
 async function run() {
-  // 직접 실행될 때만 돈다. entrypoint.mjs 도 동적으로 불러온다 — 설치가
-  // 깨져 이 파일조차 없으면 아무 일도 하지 않고 조용히 끝나야 한다.
+  // entrypoint.mjs 도 동적으로 불러온다 — 설치가 깨져 이 파일조차 없으면 아무 일도
+  // 하지 않고 조용히 끝나야 한다(불변식 1). isEntrypoint·stdin 읽기·안전한 종료라는
+  // 배관은 session-language.mjs 와 여기가 똑같이 필요해 entrypoint.mjs 하나로 모았다.
   try {
-    const { isEntrypoint } = await import("./lib/entrypoint.mjs");
-    if (!isEntrypoint(import.meta.url)) return;
-  } catch {
-    return;
-  }
-
-  let output;
-  try {
-    output = await main();
+    const { runHook, readStdin } = await import("./lib/entrypoint.mjs");
+    await runHook(import.meta.url, () => main(readStdin), PROCESS_START);
   } catch {
     // 조용히 넘어간다. 훅이 깨져서 작업이 막히면 그것이 더 큰 실패다.
-    output = undefined;
   }
-
-  if (!output) {
-    process.exit(0);
-    return;
-  }
-  writeAndExit(output);
 }
 
 run();

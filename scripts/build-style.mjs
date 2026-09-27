@@ -37,7 +37,7 @@ export const MAX_CHARS = 6000;
 
 // 행 예산 가운데 프롬프트 규칙에 배정하는 비율. 나머지는 치환·정규식 규칙이 쓴다.
 // 프롬프트 규칙은 예시 문장이라 한 줄이 길고, 용어 규칙은 짧아 같은 예산으로 여러 개가 들어간다.
-export const PROMPT_SHARE = 0.5;
+const PROMPT_SHARE = 0.5;
 
 // 규칙 파일별 소제목. 없는 파일은 파일명을 그대로 쓴다.
 const SECTION_TITLES = {
@@ -207,7 +207,7 @@ export function buildBody(rules, maxChars = MAX_CHARS) {
 /**
  * README 의 표시 구간에 규칙 수를 써 넣은 문서를 돌려준다.
  */
-export function renderReadme(readme, rules, included, skillDescriptions = []) {
+function renderReadme(readme, rules, included, skillDescriptions = []) {
   const count = (check) => rules.filter((rule) => rule.check === check).length;
   const block = [
     COUNTS_OPEN,

@@ -28,15 +28,13 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { extractTargets, loadToneRules } from "../hooks/lib/artifact.mjs";
 import { lint, applyFixes } from "../hooks/lib/lint.mjs";
 import { CHECK_SUBSTITUTE } from "../hooks/lib/rules.mjs";
 import { looksKorean } from "../hooks/lib/detect.mjs";
 import { findResidentNumbers, redact, redactText } from "../hooks/lib/pii.mjs";
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 // 액션 입력의 기본값과 그대로 맞춘다(action.yml 의 paths 입력).
 export const DEFAULT_PATTERNS = "**/*.md,**/*.mdx,**/*.txt,**/*.rst,**/*.adoc";
@@ -255,21 +253,12 @@ function piiHits(text, label, extra = {}, options = {}) {
 }
 
 /**
- * 경로 문자열에 주민등록번호로 보이는 값이 섞여 있으면 가린 사본을 돌려준다. 파일
- * 이름 자체가 유출 경로가 될 수 있어(예: `900101-1234567.md`), JSON·주석·리뷰 어디에
- * 실을 "file" 값은 이 함수를 반드시 거친다 — 실제 디스크 읽기·git show 에는 원래
- * 경로를 그대로 쓴다(가린 값으로는 파일을 찾을 수 없다).
- *
- * 훅의 pii.mjs 는 경로를 검사할 때 일부러 좁은 규칙(`pathOnly`, 대시 구분자만)만
- * 쓴다 — 파일명 관례(날짜+일련번호를 붙여 쓴 리포트 파일 등)에서 나는 오탐을 줄이기
- * 위해서다. 여기서는 그 좁은 규칙을 쓰지 않는다 — 이 값은 표시(annotations·sticky
- * 코멘트·JSON)로 나가는 문구라서, "걸렸는데 안 가려짐"이 "안 걸림"보다 훨씬 나쁘다.
- * 그래서 감지(findResidentNumbers, 아래 main())와 가리기를 똑같이 기본 규칙(대시·공백·
- * 구분자 없는 형태까지)으로 맞춘다 — 둘이 다른 규칙을 쓰면 감지는 했는데 가리지는
- * 못하는 이 함수 자체의 목적이 깨진다. 그 대가로 몇몇 파일명 관례(예:
- * `reports/2501011234567.csv`)가 지나치게 가려질 수 있지만, 표시용 값 하나가 과하게
- * 가려지는 것이 주민등록번호를 그대로 보여주는 것보다 훨씬 싸다.
- *
+ * 경로 문자열에 주민등록번호로 보이는 값이 섞여 있으면 가린 사본을 돌려준다. JSON·주석·
+ * 리뷰 어디에 실을 "file" 값은 반드시 이 함수를 거친다(디스크 읽기·git show 에는 원래
+ * 경로를 그대로 쓴다 — 가린 값으로는 파일을 찾을 수 없다). 훅의 pii.mjs 와 달리
+ * pathOnly 규칙(대시 구분자만)을 쓰지 않는다 — 여기 나가는 값은 표시용이라 "걸렸는데
+ * 안 가려짐"이 "안 걸림"보다 훨씬 나쁘고, build-review.mjs 의 pathHasPii 판정도 감지와
+ * 가리기가 같은 규칙이어야 성립한다.
  * @param {string} filePath
  * @returns {string}
  */
@@ -405,15 +394,7 @@ async function main() {
   }
 }
 
-function isEntrypoint() {
-  try {
-    return resolve(process.argv[1] || "") === resolve(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
-}
-
-if (isEntrypoint()) {
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     // 이 스크립트는 사람이 읽는 CI 로그를 향한 것이라, 훅과 달리 실패를 숨기지 않는다 —
     // 여기서 조용히 넘어가면 액션이 "검사를 안 했는데 통과했다"는 잘못된 신호를 준다.
@@ -421,5 +402,3 @@ if (isEntrypoint()) {
     process.exitCode = 1;
   });
 }
-
-export { ROOT };

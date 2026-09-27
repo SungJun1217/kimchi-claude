@@ -117,7 +117,7 @@ kimchi-claude/
 │       ├── artifact.mjs           말투 판정. 훅 입출력은 다루지 않는다
 │       ├── bash-commit.mjs        git commit 명령에서 메시지 구간만 정확한 위치로 추출
 │       ├── repo-language.mjs      커밋 이력과 문서로 산출물 언어를 추론
-│       └── entrypoint.mjs         공백·한글·심볼릭 링크 섞인 경로에서도 직접 실행을 판정
+│       └── entrypoint.mjs         직접 실행 판정(공백·한글·심볼릭 링크 경로 포함)과 훅의 stdin 읽기·안전한 종료(runHook)
 │
 ├── scripts/
 │   ├── build-style.mjs            rules/ → output-styles/ 생성. README 숫자도 써 넣는다
@@ -127,7 +127,9 @@ kimchi-claude/
 │   ├── publish-docs.mjs           README·설계 문서·기여 안내·보안 정책 → Pages·위키 스테이징. 상대 링크를 대상별 절대 URL로 고쳐 쓴다
 │   ├── action-lint.mjs            GitHub Action(action.yml)의 오프라인 검사. 변경 파일·커밋·PR 텍스트를 훅과 같은 규칙으로 검사해 JSON을 낸다
 │   ├── build-review.mjs           action-lint.mjs의 JSON을 PR 리뷰 페이로드(인라인 코멘트 + 본문)로 바꾼다. 이것도 오프라인이다
-│   └── triage-report.mjs          오탐·놓친 표현 이슈 본문을 현재 규칙으로 재현해 JSON과 이슈 코멘트를 낸다. 이것도 오프라인이다
+│   ├── triage-report.mjs          오탐·놓친 표현 이슈 본문을 현재 규칙으로 재현해 JSON과 이슈 코멘트를 낸다. 이것도 오프라인이다
+│   └── lib/
+│       └── markdown.mjs           마크다운 인라인 코드·펜스 블록. build-review.mjs·triage-report.mjs가 같이 쓴다
 │
 ├── assets/                        README 그림. 생성물이다. 라이트·다크 두 벌
 ├── corpus/                        처음 들여온 규칙 자료. 출처 추적용
