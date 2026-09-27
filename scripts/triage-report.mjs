@@ -19,7 +19,7 @@
 //     [--repo <owner/name>] [--ref <태그, 기본 v<version>>] [--version <x.y.z>]
 //     [--out <결과 JSON 경로>] [--comment-out <코멘트 마크다운 경로>]
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findingsForTarget, findingsForText } from "./action-lint.mjs";
@@ -31,6 +31,7 @@ import { looksKorean } from "../hooks/lib/detect.mjs";
 import { findResidentNumbers, redactText } from "../hooks/lib/pii.mjs";
 import { formatGroupedList } from "../hooks/lib/format.mjs";
 import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
+import { parseArgs, writeJson, writeText, runMain } from "./lib/cli.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -350,21 +351,6 @@ export function decideLabels(template, result, piiRedacted) {
   return { add, remove };
 }
 
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith("--")) continue;
-    const next = argv[i + 1];
-    if (next === undefined || next.startsWith("--")) args[token.slice(2)] = true;
-    else {
-      args[token.slice(2)] = next;
-      i += 1;
-    }
-  }
-  return args;
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const template = String(args.template || "");
@@ -426,17 +412,10 @@ async function main() {
     labels,
   };
 
-  const json = JSON.stringify(output, null, 2);
-  if (args.out) writeFileSync(resolve(String(args.out)), `${json}\n`);
-  else console.log(json);
+  writeJson(output, args.out);
 
-  if (args["comment-out"]) writeFileSync(resolve(String(args["comment-out"])), `${comment}\n`);
+  if (args["comment-out"]) writeText(comment, args["comment-out"]);
   else if (!args.out) console.log(comment);
 }
 
-if (isEntrypoint(import.meta.url)) {
-  main().catch((err) => {
-    console.error(err);
-    process.exitCode = 1;
-  });
-}
+if (isEntrypoint(import.meta.url)) runMain(main);

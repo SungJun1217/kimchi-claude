@@ -26,7 +26,7 @@
 // PR diff 자체(어느 줄이 추가/삭제됐는지)는 여기서 다루지 않는다 — 리뷰 코멘트를
 // diff 위치에 올릴 수 있는지는 scripts/build-review.mjs 가 patch hunk 로 따로 가른다.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { extractTargets, loadToneRules } from "../hooks/lib/artifact.mjs";
@@ -35,6 +35,7 @@ import { CHECK_SUBSTITUTE } from "../hooks/lib/rules.mjs";
 import { looksKorean } from "../hooks/lib/detect.mjs";
 import { findResidentNumbers, redact, redactText } from "../hooks/lib/pii.mjs";
 import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
+import { parseArgs, writeJson, runMain } from "./lib/cli.mjs";
 
 // 액션 입력의 기본값과 그대로 맞춘다(action.yml 의 paths 입력).
 export const DEFAULT_PATTERNS = "**/*.md,**/*.mdx,**/*.txt,**/*.rst,**/*.adoc";
@@ -126,23 +127,6 @@ function readFileAt(repoRoot, relPath, headSha) {
   } catch {
     return null; // 삭제된 파일, 혹은 그 커밋을 로컬에 못 찾은 경우
   }
-}
-
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token.startsWith("--")) continue;
-    const key = token.slice(2);
-    const next = argv[i + 1];
-    if (next === undefined || next.startsWith("--")) {
-      args[key] = true;
-    } else {
-      args[key] = next;
-      i += 1;
-    }
-  }
-  return args;
 }
 
 /** index 이하인 가장 마지막 줄 시작 위치를 찾는다(이분 탐색). lineStarts 는 오름차순이다. */
@@ -382,9 +366,7 @@ async function main() {
     }
   }
 
-  const json = JSON.stringify(output, null, 2);
-  if (args.out) writeFileSync(resolve(String(args.out)), `${json}\n`);
-  else console.log(json);
+  writeJson(output, args.out);
 
   const failOnFindings = args["fail-on-findings"] === "true" || args["fail-on-findings"] === "1";
   const totalFindings =
@@ -394,11 +376,4 @@ async function main() {
   }
 }
 
-if (isEntrypoint(import.meta.url)) {
-  main().catch((err) => {
-    // 이 스크립트는 사람이 읽는 CI 로그를 향한 것이라, 훅과 달리 실패를 숨기지 않는다 —
-    // 여기서 조용히 넘어가면 액션이 "검사를 안 했는데 통과했다"는 잘못된 신호를 준다.
-    console.error(err);
-    process.exitCode = 1;
-  });
-}
+if (isEntrypoint(import.meta.url)) runMain(main);

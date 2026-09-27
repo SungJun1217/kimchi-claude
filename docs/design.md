@@ -129,7 +129,8 @@ kimchi-claude/
 │   ├── build-review.mjs           action-lint.mjs의 JSON을 PR 리뷰 페이로드(인라인 코멘트 + 본문)로 바꾼다. 이것도 오프라인이다
 │   ├── triage-report.mjs          오탐·놓친 표현 이슈 본문을 현재 규칙으로 재현해 JSON과 이슈 코멘트를 낸다. 이것도 오프라인이다
 │   └── lib/
-│       └── markdown.mjs           마크다운 인라인 코드·펜스 블록. build-review.mjs·triage-report.mjs가 같이 쓴다
+│       ├── markdown.mjs           마크다운 인라인 코드·펜스 블록. build-review.mjs·triage-report.mjs가 같이 쓴다
+│       └── cli.mjs                인자 파싱·JSON/텍스트 출력·main() 실패 처리. action-lint.mjs·triage-report.mjs가 같이 쓴다
 │
 ├── assets/                        README 그림. 생성물이다. 라이트·다크 두 벌
 ├── corpus/                        처음 들여온 규칙 자료. 출처 추적용
