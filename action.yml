@@ -3,6 +3,11 @@ description: >-
   변경된 문서, 커밋 메시지, PR 제목·본문을 kimchi-claude 의 한국어 말투 규칙과 주민등록번호
   탐지로 검사해 PR 리뷰나 워크플로 주석으로 알린다.
 author: SungJun1217
+# 마켓플레이스 목록에 보이는 아이콘과 색이다. icon은 Feather 아이콘 이름, color는 GitHub이 정한
+# 아홉 색 중 하나만 받는다(white·black·yellow·blue·green·orange·red·purple·gray-dark).
+branding:
+  icon: check-circle
+  color: red
 
 inputs:
   github-token:
