@@ -1109,6 +1109,16 @@ base 저장소와 다르거나 `github.actor`가 `dependabot[bot]`이면 리뷰 
 경우 등) 게시 단계들은 403을 만나면 `set +e`로 감싸 job을 실패시키지 않고 넘어간다 — 리뷰를
 못 올리는 것이 job 실패보다는 나은 실패다.
 
+
+### 마켓플레이스 등록 (v0.24.3)
+
+`action.yml`에 `branding`(아이콘 `check-circle`, 색 `red`)을 넣어 GitHub Marketplace 목록에 올릴 수 있게
+했다. 등록 자체는 릴리스를 편집할 때 "Publish this Action to the GitHub Marketplace"를 고르는 UI
+단계라 워크플로로 자동화하지 않는다 — 처음 한 번은 약관 동의와 2FA가 필요하고, `gh release create`
+에는 마켓플레이스 게시 옵션이 없다. 마켓플레이스에 보이는 버전은 게시를 고른 릴리스뿐이지만,
+`uses: SungJun1217/kimchi-claude@v0`는 마켓플레이스와 상관없이 태그를 따라가므로 사용자에게는
+영향이 없다.
+
 ## 오탐·놓친 표현 이슈 자동 확인 (v0.19.0)
 
 `false-positive.yml`·`missed-expression.yml` 이슈 양식은 사람이 신고한 문장을 담는다.
