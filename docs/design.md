@@ -131,6 +131,7 @@ kimchi-claude/
 │   ├── rule-impact.mjs            PR의 rules/ 변경이 스타일 본문 예산과 린트 결과에 미치는 영향을 base→head로 계산한다. 이것도 오프라인이다
 │   ├── extract-links.mjs          skills·rules·docs·README 등에서 출처 http(s) 링크를 모은다. 오프라인이다
 │   ├── link-report.mjs            extract-links.mjs 결과와 워크플로의 curl 결과를 합쳐 이슈 본문을 낸다. 이것도 오프라인이다
+│   ├── pr-version.mjs             PR의 버전·커밋 제목 형식을 확인하고(check), Dependabot PR의 버전을 대신 올린다(bump/needs-bump/is-stale). 이것도 오프라인이다
 │   └── lib/
 │       ├── markdown.mjs           마크다운 인라인 코드·펜스 블록. build-review.mjs·triage-report.mjs가 같이 쓴다
 │       └── cli.mjs                인자 파싱·JSON/텍스트 출력·main() 실패 처리. action-lint.mjs·triage-report.mjs가 같이 쓴다
@@ -1405,6 +1406,244 @@ GitHub Actions 러너가 이번 실행에서 바깥 네트워크에 못 나갔�
 찾는 단계도 마찬가지다 — 라벨 단계가 실패했으면 과거에 라벨 없이 만들어진 이슈가 있을 수 있어,
 `--label links` 필터 없이 열린 이슈 전체에서 마커 문자열로 찾는다(라벨이 있을 때는 후보를 좁히는
 최적화로만 쓴다).
+
+## PR 버전 검사·자동 bump (v0.24.0)
+
+AGENTS.md의 규칙("단위 커밋마다 package.json과 .claude-plugin/plugin.json 버전을 함께
+올리고, 제목은 `0.x.y — <합니다체 한 문장>`")은 지금까지 사람이 손으로 지켰다.
+Dependabot PR은 애초에 이 규칙을 모른다 — GitHub Actions 버전만 올리고 이 저장소의
+버전 파일은 건드리지 않는다. `scripts/pr-version.mjs`와 `.github/workflows/pr-version.yml`이
+이 둘을 대신한다.
+
+### `version-check`는 PR 제목이 아니라 마지막 단위 커밋 제목을 본다
+
+처음 요구사항은 "PR 제목 또는 마지막 단위 커밋 제목"이었다. 둘 중 하나만 고르기로
+했다 — 이 저장소는 `--no-ff` 병합만 쓰고 절대 스쿼시하지 않으므로(AGENTS.md), 이력에
+실제로 남는 것은 커밋 제목이지 PR 제목이 아니다. PR 제목은 GitHub UI에서 언제든
+자유롭게 고칠 수 있는 텍스트라 커밋 이력과 어긋날 수 있고, 어긋나도 아무 경고가 없다.
+반대로 마지막 커밋 제목이 형식에 맞으면 그 PR이 병합된 뒤 이력에 실제로 남는 문장도
+형식에 맞는다는 뜻이다 — 확인하려는 것과 확인 대상이 같다.
+
+"마지막 커밋"을 `git log -1 HEAD`로 읽으면 안 된다는 것은 실제로 시험을 만들다 찾은
+버그였다. PR을 열어 두고 develop을 다시 받아 병합하면(`merge: develop into
+feature/x`) HEAD가 병합 커밋이 되고, `-1 HEAD`는 그 병합 커밋의 제목("merge: ...")을
+그대로 돌려준다 — 형식에 맞을 리 없는 문장이라 정상적인 PR이 매번 걸린다. 그래서
+`subjectFromRange`는 마지막 커밋 하나가 아니라 **base..head 범위 전체**를
+`git log --no-merges`로 훑어 그 안에서 가장 최근인 병합이 아닌 커밋을 찾는다 — 병합
+커밋이 몇 겹으로 쌓여 있어도 그 밑의 실제 단위 커밋에 닿는다.
+
+이 함수는 `{ subject, error }`를 돌려주고, 둘은 뜻이 다르다. 범위 안에 병합이 아닌
+커밋이 하나도 없으면(예: 이미 병합된 브랜치를 실수로 다시 병합해 아무것도 새로
+안 들여온 경우) `{ subject: null, error: null }`이다 — `checkPrVersion`은 이것을
+"확인할 제목이 없다"로 받아들여 제목 검사 자체를 건너뛰고 버전만 본다. 형식을
+확인하고 싶어도 확인할 대상이 없는 것이지, 무언가 잘못됐다는 신호가 아니기
+때문이다. 반면 `git log` 자체가 실패하면(sha를 못 찾음 — 얕은 클론, 잘못된 sha,
+`repoRoot`가 저장소가 아님) `{ subject: null, error: "<메시지>" }`다 — 처음 버전은
+이 둘을 구분하지 않고 둘 다 null 하나로 뭉뚱그렸는데, 그러면 "확인 인프라 자체가
+고장 났다"가 "형식은 확인했고 문제없다"로 둔갑한다(실측 — checkout을 `fetch-depth:
+1`로 잘못 설정해 sha를 못 찾아도 검사가 조용히 통과했다). `runCheck`는 `error`가
+있으면 `::warning::`을 내고 `ok`를 강제로 `false`로 뒤집는다 — 설정이 깨졌는데
+검사가 통과하는 것이 아무것도 안 잡는 것보다 나쁘다(불변식 5의 반대 방향 — 판정
+자체를 못 했으면 "문제없음"이 아니라 "확인 못 함"이라고 말해야 한다).
+
+develop → main 릴리스 PR(`baseRef === "main"`)도 제목 검사를 건너뛴다 — 여러 단위
+커밋과 병합 커밋이 뒤섞여 들어오는 흐름이라 "제목 하나"가 없다.
+
+Dependabot PR은 이 결정만으로는 특별 취급이 안 끝난다 — 아래 "push가 워크플로를 다시
+트리거하지 않는 문제"에서 별도로 건너뛴다.
+
+### `pull_request_target`의 보안 모델
+
+`dependabot-bump`는 `pull_request_target`로 돈다 — 쓰기 토큰(`contents: write`)이
+필요해서다(브랜치에 커밋을 push한다). 이 이벤트는 PR 헤드가 아니라 **base**(이 저장소의
+`develop`)를 기준으로 워크플로 파일 자체를 읽는다는 점이 `pull_request`와 다르다 —
+그래서 신뢰할 수 없는 PR 헤드가 워크플로 파일을 직접 고쳐 자기 코드를 쓰기 토큰으로
+실행시킬 수 없다. 다만 그 안전장치는 워크플로 파일 자체에만 적용되지, 워크플로가
+"PR 헤드에서 실행하는 스크립트"에는 적용되지 않는다 — 실수로 PR 헤드의 `scripts/`를
+체크아웃해 그대로 실행하면 공격자가 그 스크립트 내용을 마음대로 바꿔 쓰기 토큰으로
+임의 코드를 실행시킬 수 있다. 그래서 이 job은:
+
+- base(이 저장소, develop)를 `base/`에, PR 헤드를 `head/`에 각각 다른 경로로
+  체크아웃한다.
+- `head/`는 끝까지 **데이터**로만 다룬다 — `npm install`도, `node head/...`로 그
+  안의 스크립트를 실행하는 일도 없다. 실행하는 스크립트는 오직 `base/scripts/pr-version.mjs`
+  하나이고, 이 스크립트가 `head/`의 두 JSON 파일을 인자로 받아 값만 읽고 쓴다(`bumpVersionInText`는
+  정규식으로 `"version"` 필드 문자열만 바꾸지, `head/`의 어떤 코드도 실행하지 않는다).
+- 이 job이 도는 조건 자체도 좁힌다 — 작성자가 `dependabot[bot]`이고 PR 헤드가 이
+  저장소 안(`head.repo.full_name == github.repository`)일 때만 돈다. Dependabot이 만드는
+  브랜치는 항상 이 저장소 안에 있으므로(fork가 아니다) 이 조건은 "진짜 Dependabot PR인가"를
+  가르는 데 충분하다.
+
+이 저장소가 신뢰하는 것은 딱 하나 — **Dependabot이 낸 PR 제목**뿐이다. 그 제목도
+셸 문자열로 보간하지 않고 파일로 떠서(`triage.yml`과 같은 원칙) `pr-version.mjs`에
+넘기고, 파서가 못 알아본 모양이면(`parseDependabotTitle`의 `unknown`) 안전한 일반
+문장으로 물러난다 — 신뢰할 수 없는 제목 텍스트로 임의의 한국어 문장을 합성하게
+두지 않는다.
+
+### `${{ }}` 표현식을 `run:` 안에 직접 박아 넣지 않는다
+
+첫 버전은 이 원칙을 커밋 제목에는 지켰지만(위 문단), 버전 문자열이나 계산된 커밋
+제목처럼 "우리 스스로 계산한 값"에는 지키지 않았다 — `--commit-subject
+"${{ steps.read.outputs.subject }}"`처럼 GitHub Actions가 워크플로 YAML을 렌더링하는
+단계에서 그 값을 셸 명령 텍스트에 그대로 이어 붙였다. 이건 명령 주입이다: 그 값이
+실제로는 PR 헤드가 통제하는 파일(예: `package.json`의 `version` 필드, 혹은 PR
+헤드 커밋 이력)에서 나온 것이라, 값 안에 백틱이나 `$(...)`나 따옴표가 섞여 있으면
+셸이 그것을 명령으로 해석한다 — "우리가 계산했다"는 사실이 "신뢰할 수 있다"는 뜻은
+아니다. 계산에 쓴 원재료(버전 문자열, 커밋 제목)가 이미 PR 헤드 것이기 때문이다.
+
+고친 방법은 두 가지를 함께 쓴다.
+
+- **셸에 넘길 값은 반드시 `env:`로 선언하고 `"$VAR"`로만 참조한다.** `${{ }}` 표현식은
+  YAML을 실제 셸 스크립트로 렌더링하기 **전에** 텍스트를 그대로 바꿔치기하지만,
+  `env:`로 선언한 환경 변수는 셸이 실행 시점에 그 자체를 한 값으로 넘겨받을 뿐 다시
+  셸 문법으로 해석하지 않는다 — 값 안에 무엇이 들었든 안전하다.
+- **애초에 셸을 거치지 않는다.** 커밋 제목은 `--commit-subject`로 셸을 거쳐 넘기는
+  대신 `--base-sha`/`--head-sha`만 넘기고, `pr-version.mjs`가 `execFileSync`(인자를
+  배열로 넘겨 셸을 아예 안 띄운다)로 직접 `git log`를 불러 스스로 읽는다. `needs-bump`
+  판정도 처음에는 `node -e "...${BASE_PKG}..."`처럼 셸 변수를 JS 소스 문자열에 그대로
+  붙여 넣었다 — 이건 명령 주입일 뿐 아니라 문자열 안에 따옴표가 섞이면 JS 구문
+  자체가 깨진다(이중 위험). `needs-bump` 서브커맨드를 따로 만들어 `env`로만 값을
+  받게 고쳤다.
+
+### bump는 head가 아니라 base에서 다시 계산한다
+
+처음 버전은 `bumpVersionFiles`가 head 쪽 두 파일의 버전을 그대로 믿고 거기서 다음
+버전을 계산했다 — 두 파일이 이미 같아야 한다는 조건만 걸었다. 문제는 head 쪽 파일이
+"다시 손볼 이유가 있는" 바로 그 상태라는 점이다: 두 파일이 어긋나 있거나(누가 실수로
+하나만 손댔다), head가 base보다 뒤처져 있으면(리베이스가 우리 bump 커밋을 지웠다)
+head 자체가 신뢰할 수 없는 시작점이다. head를 그대로 믿으면 이미 틀어진 값 위에
+`+1`을 더해 계속 틀어진 채로 두거나, 어느 파일이 "진짜" 버전인지 추측해야 한다.
+
+그래서 `bumpVersionFiles`는(워크플로가 호출하는 경로에서는 언제나) `baseVersion`을
+받아 **head가 이미 base를 앞서 있고 두 파일이 같을 때만 아무것도 안 하고(`skipped:
+true`), 그 밖의 모든 경우(어긋나 있거나, 못 앞섰거나)는 head를 참고하지 않고
+base + 1을 정답으로 놓고 두 파일 모두 그 값으로 덮어쓴다.** 무엇이 틀렸는지 진단하지
+않는다 — base는 이미 검증된 값(직전 병합 시점의 develop)이니 거기서 다시 세는 편이
+head의 어느 조각을 신뢰할지 고민하는 것보다 항상 안전하다. `baseVersion`을 생략하면
+(워크플로 밖에서 손으로 부르는 경우) 예전처럼 head 두 파일이 같아야 한다고 엄격하게
+요구한다 — 그 경로는 애초에 base라는 비교 대상이 없기 때문이다.
+
+### Dependabot 제목은 conventional-commits 접두사가 붙은 모양으로 온다
+
+`parseDependabotTitle`의 첫 버전은 `Bump ...`(대문자 B로 시작)만 알았다 — Dependabot
+문서·예시가 그렇게 생겼기 때문이다. 그런데 이 저장소 자신의 이력(`git log
+--author=dependabot`)에는 `ci: bump the actions group with 3 updates`처럼 소문자
+`bump`에 `ci:` 접두사가 붙은 제목이 실제로 있다 — `dependabot.yml`의
+`commit-message.prefix: "ci"` 설정이 conventional-commits 스타일 접두사를 앞에
+붙이기 때문이다. 대문자만 받으면 이 저장소가 실제로 만드는 모양을 정작 못 알아보는
+꼴이라, `[\w-]+(?:\([^)]*\))?!?:\s*` 형태의 접두사(스코프·breaking 표시 포함)를
+선택적으로 허용하고 `Bump`/`bump` 둘 다 받는다.
+
+### 그룹 제목은 관형격을 두 번 겹치지 않는다
+
+그룹 업데이트("actions 그룹에 3개가 걸렸다")의 문장은 처음에 "GitHub Actions의
+actions 그룹을 묶어 3건 올렸습니다"였다가 "GitHub Actions의 actions 그룹의 액션
+3개를 올렸습니다"로 한 번 고쳤는데, 뒤엣것도 "의"가 "GitHub Actions의"와 "actions
+그룹의"로 두 번 겹친다 — 한국어에서 관형격 조사 "의"가 이어 붙으면 사이 관계가
+헷갈린다("GitHub Actions의 [actions 그룹의 액션]"인지 "[GitHub Actions의 actions]
+그룹의 액션"인지). 지금은 "actions 그룹의 GitHub Actions 3개 버전을 올렸습니다"로
+쓴다 — "GitHub Actions"를 그룹 이름 뒤로 옮겨 "무엇을 올렸는지"를 밝히는 말로
+바꾸면 "의"가 한 번만 남는다.
+
+### Dependabot이 리베이스를 멈추는 대가
+
+Dependabot은 자기 PR 브랜치에 다른 사람(또는 봇)이 커밋을 push하면, 그 이후로는
+그 PR을 더 이상 자동으로 리베이스하지 않는다(GitHub 문서에 명시된 동작). 이 워크플로가
+정확히 그 일을 한다 — `github-actions[bot]` 이름으로 버전 bump 커밋을 push한다.
+즉 이 PR은 그 순간부터 Dependabot의 자동 리베이스 대상에서 빠진다. base(`develop`)가
+그 뒤로도 계속 앞서가면 이 PR은 낡아 충돌할 수 있는데, 이때 `@dependabot rebase`는
+쓸 수 없다 — 방금 말한 바로 그 이유(다른 사람이 커밋을 얹었다)로 Dependabot이
+거절한다. `@dependabot recreate`를 대신 써야 한다(사람이 직접 달든, 아래
+`nudge-stale-dependabot-prs` job이 자동으로 달든 — 다음 절 참고). 자동 병합·자동
+갱신을 완전히 유지하는 방법(예: 봇 커밋 없이 라벨만 다는 등)도 있었지만, 그러면
+애초에 버전을 자동으로 못 올린다 — "버전이 항상 맞다"와 "리베이스가 항상 자동이다"는
+동시에 가질 수 없어 앞의 것을 골랐다.
+
+### push가 워크플로를 다시 트리거하지 않는 문제
+
+`GITHUB_TOKEN`으로 한 push는 새 workflow run을 만들지 않는다(GitHub이 재귀 실행을
+막으려고 의도한 동작). `dependabot-bump`가 push한 커밋에는 그래서 아무 체크런도
+안 붙는다 — 브랜치 보호가 요구하는 필수 검사(`test (22)`, `test (24)`, `test-macos`)가
+영영 안 뜬다. `gh workflow run test.yml --ref <branch>`로 직접 재실행을 요청해
+피해 간다 — `test.yml`에 `workflow_dispatch:`를 열어 뒀다. `--ref`로 준 브랜치의
+최신 커밋(방금 push한 그 커밋)을 그대로 체크아웃해서 도니 체크런이 그 커밋 SHA에
+붙는다 — 브랜치 보호는 SHA 기준으로 필수 검사를 찾지 브랜치 이름 기준이 아니므로
+이걸로 충분하다는 것이 이 설계의 전제다. 이 전제 자체(실제로 필수 검사가 만족되는지)는
+실제 Dependabot PR로 한 번 확인이 필요하다 — 이 저장소 안에서 오프라인으로 재현할
+수 있는 성격의 판정이 아니다.
+
+`pr-version.yml`의 `version-check` job도 같은 이유로 이 push에는 다시 안 돈다 — 다만
+이 job은 애초에 Dependabot PR에서는 처음부터 돌지 않는다(바로 다음 문단). 브랜치
+보호의 필수 검사 목록에는 없으니(`test`, `test-macos`만 있다) 병합 자체를 막지는
+않지만, 그렇다고 "이 PR의 버전은 확인된 적이 없다"는 상태로 영영 남는 것도 이상하다.
+
+### `version-check`가 Dependabot PR을 건너뛰는 이유
+
+처음에는 "Dependabot PR도 결국 `dependabot-bump`가 형식에 맞는 커밋을 만들어 push
+하니, 그다음 `synchronize`에서 `version-check`가 자연스럽게 다시 돌아 통과할 것"이라고
+가정했다. 틀렸다 — `dependabot-bump`의 push는 방금 설명한 대로 `GITHUB_TOKEN`으로
+하는 push라 **애초에 새 `synchronize` 이벤트 자체를 안 만든다.** 즉 `version-check`는
+Dependabot PR에서 한 번 빨간불이 켜지면 그 이후 누가 그 브랜치에 직접 push하지 않는
+한 영영 다시 안 돈다 — "버전이 맞다"는 사실을 검사가 확인해 준 적이 없는데도 PR
+목록에는 계속 실패로 남는다.
+
+그래서 `version-check`는 PR 작성자가 `dependabot[bot]`이면 실제 확인 스텝을 전부
+건너뛰고 `::notice::`만 남긴다. Dependabot PR의 버전이 실제로 맞는지는 전적으로
+`dependabot-bump`의 몫이다 — 그 job은 `bumpVersionFiles`가 예외를 던지면(두 파일
+버전이 심하게 어긋나 있는 등 스스로 감당 못 하는 상황) job 자체가 빨간 X로
+실패한다. 확인하는 job과 고치는 job을 하나로 합쳐 "확인했지만 못 고쳤다"는 상태를
+만들지 않고, 애초에 고치는 job 하나가 성공/실패를 전부 책임지게 했다.
+
+### develop이 앞서가면 열려 있는 Dependabot PR을 깨워야 한다
+
+`dependabot-bump`는 PR 하나가 열리거나 새 커밋을 받을 때(`opened`/`synchronize`/
+`reopened`)만 돈다. 그 사이에 **다른** PR이 먼저 병합돼 develop의 버전이 더
+올라가면, 이미 bump까지 마친 Dependabot PR이라도 그 시점부터는 develop보다
+뒤처진다 — 아무도 그 PR에 새 이벤트를 안 주므로 아무 job도 다시 돌지 않는다. 두
+Dependabot PR이 동시에 열려 있어도 같은 일이 난다: 먼저 병합된 쪽의 bump 커밋이
+develop의 새 버전이 되고, 나중 것은 그 직전 버전에 머문 채로 남는다.
+
+이때 그 자리에서 곧바로 다시 bump하면 안 된다 — 병합할 때 두 브랜치가 같은 버전
+줄을 서로 다른 값으로 고친 채라 반드시 충돌한다(둘 다 `package.json`의 같은 줄을
+바꿨으니). 진짜 필요한 것은 그 PR을 develop 위로 다시 얹는 것이다.
+
+`@dependabot rebase`는 못 쓴다. 이 PR에는 이미 `dependabot-bump`가 만든
+`github-actions[bot]` 커밋이 있다 — Dependabot은 "Dependabot이 아닌 다른 사람(또는
+봇)이 고친 PR"이라고 보고 rebase 요청을 거절한다(공식 문서: "we'll comment to
+explain why we can't rebase"). 대신 `@dependabot recreate`를 쓴다 — 이건 그
+브랜치를 처음부터 다시 만들어 같은 PR에 force-push한다(편집 여부와 무관하게
+항상 받아들여진다). 그 force-push가 `synchronize`를 일으켜 `dependabot-bump`가
+새 base에서 다시 정확한 버전을 계산한다.
+
+`nudge-stale-dependabot-prs` job이 이 자리를 채운다. `develop`에 push될 때마다
+(다른 단위가 병합될 때마다) 돌아서, dependabot이 develop을 base로 연 열린 PR을
+모두 훑는다. 각 PR 헤드의 `package.json` 버전을(GitHub Contents API로 — PR 헤드를
+체크아웃하거나 그 안의 무엇도 실행하지 않는다, `pull_request_target` 절과 같은
+원칙) develop의 새 버전과 비교해(`isStaleAgainstDevelop`, `needsBump`와 판정
+자체는 같지만 "누가 재생성을 요청할지"와 "이 저장소가 직접 bump할지"는 다른
+결정이라 이름을 나눴다) 뒤처진 PR에 `@dependabot recreate` 코멘트를 단다.
+
+이 명령을 Dependabot이 실제로 받아 처리하는지(공식 문서는 사람이 단 코멘트만
+예로 들고, `github-actions[bot]`처럼 다른 봇이 단 코멘트도 인식하는지는 명시하지
+않는다)는 이 저장소 안에서 확인할 방법이 없다 — 실제 Dependabot PR로 검증이
+필요한 부분으로 남겨 둔다. 그래서 코멘트 본문에 사람이 읽을 설명도 함께 적는다 —
+Dependabot이 명령을 무시하더라도 사람이 같은 명령을 직접 달 수 있게, 코멘트 자체가
+"무엇을 해야 하는지"는 항상 전달한다.
+
+같은 develop sha에 대해 같은 PR에 코멘트를 두 번 달지 않는다 — 코멘트 본문에
+`<!-- kimchi-claude-recreate-nudge:<develop sha> -->` 마커를 심어 두고, 새로 달기
+전에 그 sha가 이미 마커에 있는 코멘트가 있는지 먼저 본다(`gh api --paginate`가
+코멘트 30개마다 한 번씩 "length" 결과를 따로 내므로, 그 줄들을 `awk`로 더해 한
+숫자로 합친 뒤에 본다 — 안 더하면 코멘트가 31개를 넘는 순간부터 "0"과 절대 같아지지
+않아 판정 자체가 무의미해진다). develop이 그 뒤로 또 바뀌면 새 sha라 새 마커로
+다시 하나 단다 — 매번 push마다 같은 PR에 코멘트가 쌓이는 스팸을 막으면서도, "지금
+이 develop 상태 기준으로는 아직 안 밀렸다"는 사실은 매번 새로 알린다.
+
+이 job의 `run:` 블록은(다른 모든 `run:` 블록처럼) 기본 셸 옵션(`-e -o pipefail`)으로
+돈다 — PR 하나를 확인하다 API 호출이 일시적으로 실패하면(네트워크 등) 가드 없이는
+그 실패가 곧바로 전체 스크립트를 끝내 남은 PR을 아예 안 본다. `is-stale` 판정과
+기존 코멘트 조회 둘 다 `|| { ::warning:: 을 남기고 continue; }`로 감싸 그 PR
+하나만 건너뛰고 루프는 계속 돌게 한다.
 
 ## 알려진 한계
 

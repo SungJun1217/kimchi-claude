@@ -1,0 +1,338 @@
+name: pr-version
+
+# AGENTS.md 규칙("모든 단위 커밋은 package.json 과 .claude-plugin/plugin.json 버전을
+# 함께 올리고, 제목은 `0.x.y — <합니다체 한 문장>`)을 사람이 손으로 확인하던 것을
+# 대신한다(scripts/pr-version.mjs, 오프라인). Dependabot PR은 버전을 절대 스스로
+# 안 올리므로 두 번째 job이 대신 올려 push한다(docs/design.md "PR 버전 검사·자동
+# bump" 참고 — pull_request_target 의 보안 모델을 그 절에서 설명한다).
+#
+# version-check job은 `contents: read`만 가진 채로 scripts/pr-version.mjs를 실행한다
+# — PR 헤드에서 체크아웃한 그 파일 자체를(pull_request 이벤트는 워크플로 정의도 헤드
+# 기준이다) 실행하는 셈이라, 신뢰할 수 없는 PR이 이 스크립트를 고쳐서 실행시킬 수는
+# 있다. 다만 이 job에는 시크릿도 쓰기 권한도 없어(npm test를 돌리는 test.yml과 같은
+# 노출 범위다) 블라스트 반경이 읽기 전용 토큰 하나로 한정된다.
+#
+# develop에 push가 있을 때마다(다른 PR이 먼저 병합되는 등) 열려 있는 Dependabot PR의
+# 버전이 develop을 못 따라가는 채로 남을 수 있다 — nudge-stale-dependabot-prs job이
+# 그런 PR에 재생성(recreate)을 요청한다(docs/design.md "develop이 앞서가면 열린
+# Dependabot PR을 깨워야 한다" 참고).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [develop]
+
+concurrency:
+  # 같은 PR 액션(예: synchronize)이 pull_request 와 pull_request_target 두 이벤트를
+  # 동시에 낸다 — event_name까지 그룹 이름에 넣지 않으면 서로 다른 job을 도는 두 실행이
+  # 같은 그룹으로 묶여, 하나가 다른 하나를(버전 확인이 버전 bump를, 혹은 그 반대를)
+  # cancel-in-progress로 취소해 버릴 수 있다.
+  group: pr-version-${{ github.event_name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # 모든 PR(develop·main 어느 쪽으로 가든)에서 버전·형식을 확인한다. pull_request
+  # 이벤트만 쓴다 — PR 헤드가 이 저장소 안이든 fork 든 checkout@head.sha 로 안전하게
+  # 읽을 수 있고, 쓰기 토큰이 필요 없다.
+  #
+  # Dependabot PR은 여기서 아예 건너뛴다. Dependabot이 처음 여는 PR은 아직 버전을 안
+  # 올린 상태라 이 검사에 당연히 걸리는데, GITHUB_TOKEN으로 한 push(dependabot-bump가
+  # 하는 바로 그것)는 새 workflow run을 만들지 않으므로(GitHub의 의도된 동작) 이
+  # job이 "다시 돌아 통과"하는 일이 자동으로는 없다 — 그 push가 붙기 전까지 이 job만
+  # 영원히 빨갛게 남는다. 그래서 Dependabot PR의 버전 정합성은 전적으로
+  # dependabot-bump job의 책임으로 두고, 이 job은 알림만 남기고 넘어간다.
+  version-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        with:
+          node-version: "24"
+
+      - name: 버전을 읽는다
+        id: read
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          echo "head-pkg=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "head-plugin=$(node -p "require('./.claude-plugin/plugin.json').version")" >> "$GITHUB_OUTPUT"
+          echo "base-pkg=$(git show "$BASE_SHA:package.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")" >> "$GITHUB_OUTPUT"
+
+      # 제목 형식은 PR 제목이 아니라 "마지막 단위 커밋 제목" 하나만 본다. 이 저장소는
+      # --no-ff 병합만 쓰고 스쿼시하지 않으므로 실제로 이력에 남는 것은 커밋 제목이지
+      # PR 제목이 아니다. PR 제목은 작성자가 자유롭게 쓰는 텍스트라 신뢰하지 않는다
+      # (docs/design.md 참고). 커밋 제목은 셸 문자열로 조립하지 않는다 — --base-sha/
+      # --head-sha만 넘기면 스크립트 스스로 execFileSync(배열 인자)로 git log를 불러
+      # 범위 안의 마지막 단위 커밋을 찾는다. HEAD 자체가 병합 커밋이어도(develop을
+      # 이 브랜치로 병합해 들여온 경우) 그 앞의 실제 단위 커밋까지 건너뛰지 않고
+      # 찾아낸다. base가 main(develop → main 릴리스 PR)이거나 범위 안에 병합이 아닌
+      # 커밋이 하나도 없으면 스크립트가 스스로 판단해 제목 검사를 건너뛰고 버전만 본다.
+      - name: 버전·형식을 확인한다
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          HEAD_PKG: ${{ steps.read.outputs.head-pkg }}
+          HEAD_PLUGIN: ${{ steps.read.outputs.head-plugin }}
+          BASE_PKG: ${{ steps.read.outputs.base-pkg }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node scripts/pr-version.mjs check \
+            --head-pkg-version "$HEAD_PKG" \
+            --head-plugin-version "$HEAD_PLUGIN" \
+            --base-pkg-version "$BASE_PKG" \
+            --base-ref "$BASE_REF" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --repo-root "$GITHUB_WORKSPACE"
+
+      - name: Dependabot PR은 여기서 건너뛴다
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        run: echo "::notice::Dependabot PR의 버전은 dependabot-bump job이 대신 맞춥니다. 여기서는 건너뜁니다."
+
+  # Dependabot PR의 버전을 대신 올려 push한다. pull_request_target 이라 시크릿을 쓸 수
+  # 있는 쓰기 토큰이 있다 — 그래서 PR 헤드의 어떤 코드도 실행하지 않는다(체크아웃만
+  # 하고 npm install/스크립트 실행이 전혀 없다). base(이 저장소, develop)의
+  # scripts/pr-version.mjs 만 실행해서 head 체크아웃의 두 파일을 고친다.
+  #
+  # 이 job이 실패하면(예: 두 파일 다 이미 base보다 한참 앞서 있는데 형식이 이상한
+  # 경우 등 bumpVersionFiles가 예외를 던지는 모든 경우) job 자체가 빨간 X로 실패한다
+  # — 조용히 넘어가지 않는다. Dependabot PR의 버전이 맞는지는 오직 이 job만 책임진다
+  # (version-check는 Dependabot PR을 건너뛴다).
+  dependabot-bump:
+    if: >
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      # base 스크립트는 이 경로(base/)에, PR 헤드 파일은 head/ 에 각각 체크아웃한다.
+      # head/ 는 순전히 데이터다 — 여기서 무엇 하나 실행하지 않는다.
+      - name: base(develop) 스크립트를 체크아웃한다
+        uses: actions/checkout@v7
+        with:
+          path: base
+
+      - name: PR 헤드를 데이터로만 체크아웃한다
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          path: head
+          persist-credentials: true
+          token: ${{ github.token }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: base·head 버전을 읽는다
+        id: state
+        run: |
+          echo "base-pkg=$(node -p "require('./base/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "head-pkg=$(node -p "require('./head/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "head-plugin=$(node -p "require('./head/.claude-plugin/plugin.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Dependabot이 rebase해서 우리 bump 커밋을 지운 게 아니라면(head가 이미 base보다
+      # 앞서 있고 두 파일이 같으면) 다시 손볼 것이 없다 — 매 synchronize마다 빈 커밋을
+      # 새로 쌓지 않는다(멱등성). 신뢰할 수 없는 값(버전 문자열)을 `node -e` 소스
+      # 문자열에 그대로 붙여 넣지 않는다 — needs-bump 서브커맨드에 env로만 넘긴다.
+      - name: 다시 올릴 것이 있는지 본다
+        id: needs
+        env:
+          BASE_PKG: ${{ steps.state.outputs.base-pkg }}
+          HEAD_PKG: ${{ steps.state.outputs.head-pkg }}
+          HEAD_PLUGIN: ${{ steps.state.outputs.head-plugin }}
+        run: |
+          NEEDS=$(node ./base/scripts/pr-version.mjs needs-bump \
+            --base-pkg-version "$BASE_PKG" \
+            --head-pkg-version "$HEAD_PKG" \
+            --head-plugin-version "$HEAD_PLUGIN")
+          echo "needs-bump=$NEEDS" >> "$GITHUB_OUTPUT"
+
+      - name: PR 제목을 파일로 읽는다
+        if: steps.needs.outputs.needs-bump == 'true'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s' "$PR_TITLE" > "${RUNNER_TEMP}/pr-title.txt"
+
+      # --base-version을 준다 — head 파일을 그대로 믿지 않고 base + 1을 정답으로
+      # 놓는다(reviewer 지적 5). 두 파일이 어긋나 있거나 head가 base를 못 앞섰으면
+      # base에서 다시 올리고, 이미 앞서 있고 같으면(need-bump가 이미 걸렀어야 하지만)
+      # 스크립트 자신도 다시 한 번 확인해 아무것도 안 한다.
+      - name: 버전을 올린다
+        if: steps.needs.outputs.needs-bump == 'true'
+        id: bump
+        env:
+          BASE_PKG: ${{ steps.state.outputs.base-pkg }}
+        run: |
+          node ./base/scripts/pr-version.mjs bump \
+            --level patch \
+            --pkg ./head/package.json \
+            --plugin ./head/.claude-plugin/plugin.json \
+            --base-version "$BASE_PKG" \
+            --subject-from-dependabot "$(cat "${RUNNER_TEMP}/pr-title.txt")" \
+            --out "${RUNNER_TEMP}/bump-result.json"
+          {
+            echo "subject<<KIMCHI_PR_VERSION_EOF"
+            node -p "require('${RUNNER_TEMP}/bump-result.json').subject ?? ''"
+            echo "KIMCHI_PR_VERSION_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "skipped=$(node -p "require('${RUNNER_TEMP}/bump-result.json').skipped")" >> "$GITHUB_OUTPUT"
+
+      # subject는 신뢰할 수 없는 PR 제목에서 만들어진 문자열이다 — 절대 셸 문자열로
+      # 조립하지 않는다(`git commit -m "${{ ... }}"`처럼 워크플로 표현식을 run: 안에
+      # 그대로 박아 넣으면 그 값에 셸 메타 문자가 섞였을 때 명령 주입이 된다). env로만
+      # 넘기고 "$SUBJECT"로 참조한다 — 셸이 값을 통째로 한 인자로 넘길 뿐, 값 안의
+      # 내용을 다시 셸 문법으로 해석하지 않는다. head.ref도 같은 이유로 env를 거친다.
+      - name: 커밋하고 push한다
+        if: steps.needs.outputs.needs-bump == 'true' && steps.bump.outputs.skipped != 'true'
+        working-directory: head
+        env:
+          SUBJECT: ${{ steps.bump.outputs.subject }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json .claude-plugin/plugin.json
+          git commit -m "$SUBJECT" -m "Dependabot 이 올린 버전을 AGENTS.md 규칙대로 커밋 하나에 반영합니다."
+          git push origin "HEAD:$HEAD_REF"
+
+      # push는 GITHUB_TOKEN으로 하므로 그 자체로는 워크플로를 다시 트리거하지
+      # 않는다(GitHub의 의도된 동작 — 무한 루프 방지). 그래서 필요한 검사를 직접
+      # 실행 요청한다. workflow_dispatch로 돈 실행도 그 커밋 SHA에 체크런으로
+      # 붙으므로(같은 커밋을 ref로 지정했다) 브랜치 보호에 필요한 필수 검사로
+      # 잡힌다 — 다만 실제로 만족되는지는 이 저장소 밖에서(실제 Dependabot PR로)
+      # 검증이 필요하다는 점을 기록해 둔다(design.md). head.ref는 브랜치 이름이라
+      # env를 거치지 않아도 git ref 문법이 이미 공백 등을 제한하지만, 일관성을 위해
+      # 여기도 env로 넘긴다.
+      - name: 필수 검사를 다시 돌아가게 한다
+        if: steps.needs.outputs.needs-bump == 'true' && steps.bump.outputs.skipped != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          gh workflow run test.yml --repo "${{ github.repository }}" --ref "$HEAD_REF"
+
+  # develop에 push될 때마다(다른 단위가 먼저 병합되는 등) 그 시점에 열려 있는
+  # Dependabot PR들의 버전이 develop을 못 따라가는 채로 남을 수 있다. 그 자리에서
+  # 그냥 다시 bump하면 안 된다 — PR을 병합할 때 결국 두 브랜치가 같은 버전 줄을
+  # 서로 다르게 고친 채라 병합 충돌이 난다. 진짜 필요한 것은 그 PR을 develop 위로
+  # 다시 얹는 것이다 — 다만 "@dependabot rebase"는 못 쓴다. 이 PR에는 이미
+  # `dependabot-bump`가 만든 github-actions[bot] 커밋이 얹혀 있어, Dependabot은
+  # "Dependabot이 아닌 다른 사람이 고쳤다"고 보고 rebase 요청을 거절한다. 대신
+  # "@dependabot recreate"를 쓴다 — 그 커밋을 버리고 같은 브랜치에 처음부터 다시
+  # force-push한다. 그 force-push가 synchronize를 일으켜 dependabot-bump가 새
+  # base에서 다시 정확한 버전을 계산한다.
+  #
+  # PR 헤드를 체크아웃하거나 그 안의 어떤 것도 실행하지 않는다 — GitHub Contents
+  # API로 package.json 하나의 내용만 데이터로 받는다(dependabot-bump job의
+  # pull_request_target 절과 같은 원칙).
+  nudge-stale-dependabot-prs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: develop의 새 버전을 읽는다
+        id: develop
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: dependabot이 develop에 연 열린 PR 목록을 본다
+        id: prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/pulls?state=open&base=develop" --paginate \
+            --jq '[.[] | select(.user.login == "dependabot[bot]")] | map({number, head_sha: .head.sha})' \
+            > "${RUNNER_TEMP}/prs.json"
+
+      - name: 뒤처진 PR에 재생성을 요청한다
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DEVELOP_VERSION: ${{ steps.develop.outputs.version }}
+          DEVELOP_SHA: ${{ github.sha }}
+        run: |
+          MARKER="<!-- kimchi-claude-recreate-nudge:${DEVELOP_SHA} -->"
+
+          jq -c '.[]' "${RUNNER_TEMP}/prs.json" | while read -r PR; do
+            # PR 하나치 JSON을 jq로만 가른다 — node -p 소스 문자열에 API 응답을
+            # 그대로 붙여 넣지 않는다(needs-bump에서 이미 한 번 고친 것과 같은
+            # 이유 — 값이 어떻게 생겼든 다시 코드로 해석되지 않는다).
+            NUMBER=$(echo "$PR" | jq -r '.number')
+            HEAD_SHA=$(echo "$PR" | jq -r '.head_sha')
+
+            # 데이터만 가져온다 — PR 헤드를 체크아웃하거나 그 안의 어떤 스크립트도
+            # 실행하지 않는다. GitHub Contents API로 package.json 하나의 내용을
+            # base64로 받아 이 셸에서 디코드·파싱만 한다.
+            HEAD_PKG_VERSION=$(gh api "repos/${REPO}/contents/package.json?ref=${HEAD_SHA}" --jq '.content' \
+              | base64 -d | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || true)
+            if [ -z "$HEAD_PKG_VERSION" ]; then
+              echo "::warning::PR #$NUMBER 의 package.json 버전을 못 읽어 건너뜁니다."
+              continue
+            fi
+
+            # 이 run: 블록은 기본 셸 옵션(-e -o pipefail)으로 돈다 — 아래 두 API
+            # 호출 중 하나가 일시적으로 실패하면(네트워크 등) 가드 없이는 이 PR뿐
+            # 아니라 남은 PR 전부를 도는 루프 자체가 그 자리에서 죽는다. 이 PR 하나만
+            # 건너뛰고 나머지는 계속 돌게 `|| { ...; continue; }`로 감싼다.
+            STALE=$(node scripts/pr-version.mjs is-stale --develop-version "$DEVELOP_VERSION" --head-version "$HEAD_PKG_VERSION") \
+              || { echo "::warning::PR #$NUMBER 의 뒤처짐 판정에 실패해 건너뜁니다."; continue; }
+            if [ "$STALE" != "true" ]; then
+              continue
+            fi
+
+            # 같은 develop sha에 대해 이미 재생성을 요청했으면 또 달지 않는다
+            # (멱등성 — develop에 push가 여러 번 있어도 이 job이 그때마다 도는데,
+            # 같은 sha로는 코멘트를 하나만 남긴다). develop이 그 뒤로 또 바뀌면
+            # DEVELOP_SHA도 바뀌어 새 마커로 다시 하나 단다.
+            #
+            # --paginate는 코멘트가 30개(한 페이지)를 넘으면 --jq를 페이지마다 따로
+            # 돌려 "length" 결과를 여러 줄로 낸다("0\n0"처럼) — 그 문자열 전체를
+            # 그대로 "0"과 비교하면 페이지가 둘 이상일 때 절대 "0"과 같아지지 않아
+            # 이미 달았어도 매번 새로 달거나(반대 방향 실수는 없지만) 판정 자체가
+            # 늘 거짓이 된다. awk로 페이지별 개수를 더해 한 숫자로 합친다.
+            EXISTING=$(gh api "repos/${REPO}/issues/${NUMBER}/comments" --paginate \
+              --jq "[.[] | select(.body | contains(\"${DEVELOP_SHA}\"))] | length" \
+              | awk '{s+=$1} END{print s+0}') \
+              || { echo "::warning::PR #$NUMBER 의 기존 코멘트 목록을 못 읽어 건너뜁니다."; continue; }
+            if [ "$EXISTING" != "0" ]; then
+              continue
+            fi
+
+            COMMENT_FILE="${RUNNER_TEMP}/recreate-nudge-${NUMBER}.md"
+            {
+              printf '%s\n\n' "$MARKER"
+              printf 'develop이 %s로 올라가면서 이 PR의 버전이 뒤처졌습니다.\n\n' "$DEVELOP_VERSION"
+              printf '%s\n' "@dependabot recreate"
+              printf '\n%s\n' "(이 PR에는 이미 github-actions[bot]이 올린 버전 커밋이 있어 \`@dependabot rebase\`는 거절됩니다 — 그래서 recreate를 씁니다.)"
+              printf '\n%s\n' "Dependabot이 이 명령을 못 받으면(봇이 올린 코멘트를 Dependabot이 실제로 처리하는지는 확인하지 못했습니다), 사람이 같은 명령을 PR에 직접 달아 주십시오."
+            } > "$COMMENT_FILE"
+
+            gh api --method POST "repos/${REPO}/issues/${NUMBER}/comments" -F body=@"$COMMENT_FILE" \
+              || echo "::warning::PR #$NUMBER 에 재생성 요청 코멘트를 달지 못했습니다."
+          done

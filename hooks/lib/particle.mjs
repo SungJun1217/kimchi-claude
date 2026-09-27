@@ -146,6 +146,7 @@ const LEXICON = {
   // 형상 관리와 도구
   git: OTHER_FINAL, // 깃 — ㅅ
   commit: OTHER_FINAL, // 커밋 — ㅅ
+  checkout: OTHER_FINAL, // 체크아웃 — ㅅ (actions/checkout처럼 조사가 바로 붙는 자리가 흔하다)
   webpack: OTHER_FINAL, // 웹팩 — ㄱ
   pull: RIEUL, // 풀 — ㄹ
   merge: NO_FINAL, // 머지
@@ -372,13 +373,15 @@ export function correctParticle(word, particle) {
 /**
  * 받침 종류를 이미 알고 있을 때 조사가 맞는지 본다. correctParticle과 괄호 뒤 조사
  * 판정(findParenParticleErrors)이 함께 쓴다 — 받침을 얻는 방법만 다르다(영어는 발음
- * 사전, 괄호 앞 한글은 종성 코드).
+ * 사전, 괄호 앞 한글은 종성 코드). scripts/pr-version.mjs처럼 받침을 이미 알고 있는
+ * 호출부가 조사 하나만 골라야 할 때도 이 함수를 그대로 쓴다 — 으로/로 예외(ㄹ 받침)를
+ * 두 번째로 베끼면 반드시 어긋난다.
  *
  * @param {""|"ㄹ"|"other"} final
  * @param {string} particle
  * @returns {string|null}
  */
-function correctForFinal(final, particle) {
+export function correctForFinal(final, particle) {
   const pair = PAIRS.find(([withFinal, without]) => particle === withFinal || particle === without);
   if (pair === undefined) return null;
   const usesShortForm = final === NO_FINAL || (final === RIEUL && pair[1].endsWith("로"));

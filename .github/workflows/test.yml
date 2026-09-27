@@ -6,6 +6,11 @@ on:
       - main
       - develop
   pull_request:
+  # GITHUB_TOKEN으로 한 push는 새 workflow run을 만들지 않는다(GitHub의 의도된 동작 —
+  # 재귀 실행 방지). pr-version.yml의 dependabot-bump job이 그 push 뒤에 이 이벤트로
+  # 직접 재실행을 요청한다(gh workflow run test.yml --ref <branch>) — 그래야 필수 검사
+  # (test, test-macos)가 그 커밋 SHA에 체크런으로 다시 붙는다.
+  workflow_dispatch:
 
 permissions:
   contents: read
