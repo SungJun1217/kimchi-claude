@@ -130,3 +130,8 @@ npm run eval      # claude plugin eval. 자식 claude 를 띄워 토큰이 든�
 
 풀 리퀘스트를 올리면 GitHub Actions가 같은 `npm test`를 돌립니다. 로컬에서 통과했더라도
 확인해 주십시오.
+
+풀 리퀘스트마다 `pr-version` 워크플로가 버전·제목 형식도 함께 확인합니다.
+`package.json`과 `.claude-plugin/plugin.json`의 버전이 같은지, base 브랜치보다
+올라갔는지, 마지막 커밋 제목이 `0.x.y — <합니다체 한 문장>` 형식인지를 봅니다
+(AGENTS.md 참고).

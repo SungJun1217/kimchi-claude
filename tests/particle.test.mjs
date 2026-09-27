@@ -291,6 +291,13 @@ test("흔한 기술 낱말을 판정한다", () => {
   }
 });
 
+// scripts/pr-version.mjs가 "actions/checkout을" 같은 조사를 이 사전 하나로 판정한다
+// (0.24.0) — 여기 값이 바뀌면 그쪽 문장도 조용히 바뀐다. 값을 여기 고정해 둔다.
+test("checkout 은 체크아웃(ㅅ 받침)으로 읽는다", () => {
+  assert.equal(finalSoundOf("checkout"), "other");
+  assert.equal(correctParticle("checkout", "를"), "을");
+});
+
 test("문서가 스스로를 예외로 선언하면 아무것도 보고하지 않는다", () => {
   // lint() 와 같은 기제를 쓴다. 한쪽만 표시를 존중하면 문체 가이드 문서에서 갈린다.
   const guide = "<!-- kimchi-ignore-file 나쁜 예를 인용한다 -->\ncommit를 라고 쓰면 틀립니다.";
