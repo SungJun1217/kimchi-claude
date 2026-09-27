@@ -160,34 +160,26 @@ function extractTargets(toolName, toolInput) {
   if (filePath && isToneExemptBasename(filePath)) return [];
   const ext = docExt(filePath);
 
-  if (toolName === "Edit" && typeof toolInput.new_string === "string") {
+  const isSingleEdit = toolName === "Edit" && typeof toolInput.new_string === "string";
+  const isMultiEdit = toolName === "MultiEdit" && Array.isArray(toolInput.edits);
+
+  if (isSingleEdit || isMultiEdit) {
     // 파일은 한 번만 읽는다 — 예외 선언 확인(isIgnoredFile), 울타리 판정
     // (classifyEditContext), 참조식 링크 정의 수집(refDefs)이 같은 사본을 함께 쓴다.
+    // Edit은 편집이 하나뿐인 MultiEdit으로 본다 — toolInput 자체를 길이 1짜리
+    // edits 배열로 감싸면 아래 map이 두 도구 모두를 같은 경로로 판정한다. 다만
+    // editIndex는 MultiEdit에만 싣는다 — autofixOrBlock이 이 키의 유무로 "여러
+    // 편집 중 몇 번째냐"와 "필드 하나를 통째로 바꾸느냐"를 가른다(불변식 5와
+    // 무관한 구현 세부지만, 키가 있으면 없던 updatedInput.edits를 찾게 된다).
     const fileText = filePath ? readDocForContext(filePath) : null;
     if (declaresIgnoreFrom(filePath, fileText)) return [];
-    const ctx = classifyEditContext(fileText, ext, toolInput.old_string, toolInput.new_string, toolInput.replace_all);
-    if (ctx === "exempt") return [];
-    return [
-      {
-        label: filePath || "문서",
-        text: toolInput.new_string,
-        field: "new_string",
-        ext,
-        autofixSafe: ctx !== "unknown",
-        // 조각(new_string)만으로는 파일 다른 곳의 참조식 링크 정의(`[라벨]: url`)가 안 보인다.
-        // fileText가 null(못 읽음)이면 null을 그대로 넘겨 findReferenceLabelRanges가
-        // 보수적으로 두 괄호짜리 참조를 전부 가리게 한다 — 죽은 링크보다 지적을 놓치는
-        // 쪽이 낫다.
-        refDefs: fileText === null ? null : collectReferenceDefLabels(fileText, ext),
-      },
-    ];
-  }
-
-  if (toolName === "MultiEdit" && Array.isArray(toolInput.edits)) {
-    const fileText = filePath ? readDocForContext(filePath) : null;
-    if (declaresIgnoreFrom(filePath, fileText)) return [];
+    // 조각(new_string)만으로는 파일 다른 곳의 참조식 링크 정의(`[라벨]: url`)가 안 보인다.
+    // fileText가 null(못 읽음)이면 null을 그대로 넘겨 findReferenceLabelRanges가
+    // 보수적으로 두 괄호짜리 참조를 전부 가리게 한다 — 죽은 링크보다 지적을 놓치는
+    // 쪽이 낫다.
     const refDefs = fileText === null ? null : collectReferenceDefLabels(fileText, ext);
-    return toolInput.edits
+    const edits = isSingleEdit ? [toolInput] : toolInput.edits;
+    return edits
       .map((edit, editIndex) => {
         if (typeof edit?.new_string !== "string") return null;
         const ctx = classifyEditContext(fileText, ext, edit.old_string, edit.new_string, edit.replace_all);
@@ -197,7 +189,7 @@ function extractTargets(toolName, toolInput) {
           text: edit.new_string,
           field: "new_string",
           ext,
-          editIndex,
+          ...(isMultiEdit ? { editIndex } : {}),
           autofixSafe: ctx !== "unknown",
           refDefs,
         };
