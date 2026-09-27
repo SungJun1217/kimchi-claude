@@ -54,15 +54,6 @@ function declaresIgnore(filePath) {
   }
 }
 
-/**
- * git commit 명령에서 메시지로 보이는 부분을 뽑는다. (하위 호환용 — 문자열만 필요한 호출부를 위한 얇은 래퍼)
- *
- * 실제 위치 정보가 필요한 자동 교정은 extractCommitTargets 를 직접 쓴다.
- */
-function extractCommitMessages(command) {
-  return extractCommitTargets(command).map((t) => t.text);
-}
-
 // Edit/MultiEdit 문맥 확인에 읽을 파일의 크기 상한. 이보다 크면 비용을 걸지 않고 조각만 본다.
 const MAX_CONTEXT_FILE_BYTES = 1_000_000;
 
@@ -242,8 +233,6 @@ function declaresIgnoreFrom(filePath, fileText) {
 // 종류별로 묶어 세지 않으면 systemMessage/additionalContext 가 건수에 비례해 커진다 —
 // particle.mjs의 formatParticleErrors, lint.mjs의 formatFindings와 같은 문제, 같은 해법이다.
 // 묶고 나열하는 부분은 format.mjs 하나로 모았다.
-const MAX_LISTED_FIXES = MAX_LISTED;
-
 function groupApplied(applied) {
   return groupCounted(applied, (item) => `${item.matched}\u0000${item.replacement}`);
 }
@@ -253,7 +242,7 @@ function formatFixList(applied) {
   const lines = formatGroupedList(
     entries,
     ({ item, count }) => `- "${item.matched}" → "${item.replacement}"${count > 1 ? ` (총 ${count}곳)` : ""}`,
-    MAX_LISTED_FIXES
+    MAX_LISTED
   );
   return lines.join("\n");
 }
@@ -276,7 +265,7 @@ function describeFixes(applied) {
 const MAX_AUTOFIX_CHARS = 2_000_000;
 
 export function autofixOrBlock(toolName, toolInput, targets, rules) {
-  if (blockEnabled()) {
+  if (process.env.KIMCHI_BLOCK === "1") {
     // F8: 막을 때만 전체 위반 목록이 필요하다. 자동 교정 경로에서는 applyFixes 가
     // 안에서 다시 검사하므로 미리 훑으면 같은 일을 두 번 한다.
     const allFindings = targets.flatMap((target) => lint(target.text, rules, target));
@@ -300,7 +289,6 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
   // 자동 교정. 원본을 그대로 유지한 채 필드별로 바꿔 넣는다.
   const updatedInput = { ...toolInput };
   const applied = [];
-  let changed = false;
 
   /** 조사를 먼저 고치고, 그다음 용어를 고친다. 용어를 바꾸면 조사가 다시 틀어질 수 있어 한 번 더 돈다. */
   function fixOne(text, mask) {
@@ -336,7 +324,6 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
       let command = String(updatedInput.command);
       for (const edit of edits) command = command.slice(0, edit.start) + edit.writeText + command.slice(edit.end);
       updatedInput.command = command;
-      changed = true;
       for (const edit of edits) pushAll(applied, edit.applied);
     }
   } else {
@@ -349,16 +336,18 @@ export function autofixOrBlock(toolName, toolInput, targets, rules) {
         updatedInput.edits = (updatedInput.edits || []).map((edit, index) =>
           index === target.editIndex ? { ...edit, new_string: fixed.text } : edit
         );
-        changed = true;
       } else {
         updatedInput[target.field] = fixed.text;
-        changed = true;
       }
       pushAll(applied, fixed.applied);
     }
   }
 
-  if (!changed || applied.length === 0) return null;
+  // fixOne 은 fixParticles/applyFixes 어느 쪽이든 실제로 뭔가 고쳤을 때만 텍스트를
+  // 바꾼다(위 두 분기 모두 "fixed.text === target.text 면 건너뛴다"). 그래서 updatedInput 이
+  // 실제로 바뀌었는지는 applied 가 비어 있는지만 봐도 정확히 같은 답이 나온다 — 따로
+  // changed 플래그를 들 필요가 없다.
+  if (applied.length === 0) return null;
 
   // permissionDecision 에 "allow" 를 실으면 Claude Code 가 사용자의 권한 프롬프트를
   // 건너뛴다("Hook approved tool use ... bypassing permission prompt", 2.1.282 실측). 여기서
@@ -410,9 +399,6 @@ export function warnAboutTone(targets, rules) {
   };
 }
 
-export const autofixEnabled = () => process.env.KIMCHI_AUTOFIX === "1";
-export const blockEnabled = () => process.env.KIMCHI_BLOCK === "1";
-
 /**
  * 규칙을 읽는다. 값싼 걸러내기를 통과한 뒤에만 부른다.
  *
@@ -426,4 +412,4 @@ export function loadToneRules() {
   return [...rules, ...builtins];
 }
 
-export { extractCommitMessages, extractTargets };
+export { extractTargets };

@@ -17,6 +17,9 @@ import { LATIN_HADA_RULE } from "./latin-hada.mjs";
 // 되도록 다시 내보낸다.
 export { CHECK_SUBSTITUTE, CHECK_REGEX, CHECK_PROMPT, CHECKS, SCANNABLE_CHECKS } from "./checks.mjs";
 
+// 린터의 적용 범위: 커밋 메시지와 문서 파일. **대화는 보지 못한다.**
+// 그래서 `검사` 값은 "어떻게 강제하는가"이고 "얼마나 중요한가"가 아니다. 후자는 `순위` 칸의 일이다.
+// 스타일 본문에 무엇을 담을지는 build-style.mjs 가 갈래별 예산으로 정한다.
 export const PRIORITIES = ["핵심", "보통", "참고"];
 
 // rules/*.md 표로 옮길 수 없는 검사(latin-hada.mjs 상단 설명 참고)를 loadRules() 가
@@ -124,15 +127,8 @@ export function parseTable(markdown, source = "") {
 
     const [en, bad, good, whyRaw, check, priority] = cells;
 
-    if (!CHECKS.includes(check)) {
-      skipped += 1;
-      continue;
-    }
-    if (!PRIORITIES.includes(priority)) {
-      skipped += 1;
-      continue;
-    }
-    if (EMPTY_MARKS.has(bad) || EMPTY_MARKS.has(good)) {
+    // 넷 중 하나라도 어긋나면 형식이 깨진 행이다 — 이유는 다르지만 처리는 같다(건너뛰고 센다).
+    if (!CHECKS.includes(check) || !PRIORITIES.includes(priority) || EMPTY_MARKS.has(bad) || EMPTY_MARKS.has(good)) {
       skipped += 1;
       continue;
     }
@@ -190,22 +186,14 @@ export function loadRules(rulesDir) {
   return { rules, builtins: BUILTIN_RULES, skipped, files };
 }
 
-// 린터의 적용 범위: 커밋 메시지와 문서 파일. **대화는 보지 못한다.**
-// 그래서 `검사` 값은 "어떻게 강제하는가"이고 "얼마나 중요한가"가 아니다. 후자는 `순위` 칸의 일이다.
-// 스타일 본문에 무엇을 담을지는 build-style.mjs 가 갈래별 예산으로 정한다.
-
 /**
  * 순위 순으로 정렬한다. 같은 순위 안에서는 규칙 파일에 적은 순서를 지킨다.
+ *
+ * Array.prototype.sort는 ES2019부터 안정 정렬이 규격이다(같은 순위인 원소는 원래
+ * 순서를 유지한다) — 예전처럼 인덱스를 실어 직접 안정성을 흉내 낼 필요가 없다.
  * @param {object[]} rules
  * @returns {object[]}
  */
 export function byPriority(rules) {
-  return rules
-    .map((rule, index) => ({ rule, index }))
-    .sort((a, b) => {
-      const byRank =
-        PRIORITIES.indexOf(a.rule.priority) - PRIORITIES.indexOf(b.rule.priority);
-      return byRank !== 0 ? byRank : a.index - b.index;
-    })
-    .map(({ rule }) => rule);
+  return [...rules].sort((a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority));
 }

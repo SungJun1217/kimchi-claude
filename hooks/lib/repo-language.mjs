@@ -73,9 +73,7 @@ function run(args, cwd) {
  * 디렉터리(예: packages/x)의 영어 README 때문에 전체 저장소를 영어로 오판하지 않도록. */
 function repoTopLevel(cwd) {
   const out = run(["rev-parse", "--show-toplevel"], cwd);
-  if (out === null) return cwd;
-  const top = out.trim();
-  return top || cwd;
+  return out?.trim() || cwd;
 }
 
 // 봇·머지 커밋 제목. 팀의 언어 관행과 무관하게 도구나 웹 UI 가 기계적으로 만든 글이다.
@@ -108,7 +106,7 @@ function isUndecodable(text) {
  * 표본에 언어를 판정할 만한 내용이 있는지 본다.
  *
  * 이모지 하나(🎉), 버전 번호(0.1.3)처럼 한글도 로마자도 없는 표본은 어느 쪽 증거도
- * 아니다. 그런데 지금까지는 "한국어가 아니다"로 세어져 영어 쪽 증거로 잘못 쌓였다.
+ * 아니다 — "한국어가 아니다"로 세어 영어 쪽 증거로 잘못 쌓이면 안 된다.
  */
 function hasLanguageContent(text) {
   const hangul = countHangul(text);
@@ -134,11 +132,13 @@ function isKoreanSubject(text) {
 
 /** 판정에 쓸 표본만 남긴다. 언어 신호가 없거나 인코딩이 깨졌거나 봇이 쓴 것은 뺀다. */
 function filterMeaningfulSubjects(samples) {
-  return samples
-    .filter((sample) => sample.trim().length > 0)
-    .filter((sample) => !isUndecodable(sample))
-    .filter((sample) => !isBotOrMergeSubject(sample))
-    .filter((sample) => hasLanguageContent(sample));
+  return samples.filter(
+    (sample) =>
+      sample.trim().length > 0 &&
+      !isUndecodable(sample) &&
+      !isBotOrMergeSubject(sample) &&
+      hasLanguageContent(sample)
+  );
 }
 
 /**
@@ -167,8 +167,7 @@ export function koreanShare(samples) {
  * @returns {"한국어"|"영어"|"혼용"|"알 수 없음"}
  */
 export function classify(share, count = Infinity) {
-  if (share === null) return "알 수 없음";
-  if (count < MIN_SAMPLES) return "알 수 없음";
+  if (share === null || count < MIN_SAMPLES) return "알 수 없음";
   if (share >= KOREAN_RATIO) return "한국어";
   if (share <= ENGLISH_RATIO) return "영어";
   return "혼용";
@@ -182,9 +181,10 @@ export function classify(share, count = Infinity) {
 export function commitLanguage(cwd) {
   const log = run(["log", `-${COMMIT_SAMPLE}`, "--format=%s"], cwd);
   if (log === null) return "알 수 없음";
-  const subjects = log.split("\n").filter((line) => line.trim().length > 0);
-  const meaningful = filterMeaningfulSubjects(subjects);
-  return classify(koreanShare(subjects), meaningful.length);
+  // 빈 줄(마지막 개행 뒤)은 filterMeaningfulSubjects 의 trim 검사가 걸러 준다 — 여기서
+  // 따로 걸러낼 필요가 없다.
+  const subjects = log.split("\n");
+  return classify(koreanShare(subjects), filterMeaningfulSubjects(subjects).length);
 }
 
 // 저장소의 얼굴이 되는 문서들. 있는 것만 본다.
@@ -390,8 +390,8 @@ export function detectRepoLanguage(cwd) {
  * SessionStart 시점에는 사용자가 이번 세션에서 어느 언어로 말할지 알 수 없다.
  * 그래서 이 문장은 **조건문**으로 쓴다 — "사용자가 한국어로 쓰면" 이라고 전제를 걸고,
  * 그 안에서만 저장소 산출물의 언어를 알려 준다. 영어로 대화하는 세션에는 전제가
- * 성립하지 않으니 아무 지시도 아니다. (예전 버전은 "대화는 한국어로 하되"로 시작해서,
- * 영어로 쓰는 사용자에게도 무조건 한국어로 대화하라고 지시하는 것처럼 읽혔다.)
+ * 성립하지 않으니 아무 지시도 아니다("대화는 한국어로 하되"로 시작하면 영어로 쓰는
+ * 사용자에게도 무조건 한국어로 대화하라는 지시로 읽힌다).
  *
  * @param {{commit: string, doc: string}} detected
  * @returns {string}

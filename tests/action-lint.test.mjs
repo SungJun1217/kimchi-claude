@@ -13,9 +13,9 @@ import {
   safeDisplayPath,
   DEFAULT_PATTERNS,
 } from "../scripts/action-lint.mjs";
+import { mdCode } from "../scripts/lib/markdown.mjs";
 import {
   commentableLines,
-  mdCode,
   fingerprint,
   extractFingerprints,
   buildLineSuggestion,
@@ -415,7 +415,7 @@ test("--head-sha 를 안 주면 작업 트리를 읽는다(기존 동작)", () =
   });
 });
 
-// --- build-review.mjs: mdCode / fingerprint --------------------------------
+// --- markdown.mjs mdCode / build-review.mjs fingerprint --------------------------------
 
 test("mdCode가 백틱이 섞인 텍스트도 안전하게 감싼다", () => {
   assert.equal(mdCode("컨텐츠"), "`컨텐츠`");

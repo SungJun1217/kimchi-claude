@@ -27,17 +27,19 @@ export function groupCounted(items, keyFn) {
 }
 
 /**
- * 묶음 목록을 최대 max개까지 줄로 나열하고, 남은 것은 "외 N가지 더"로 요약한다.
+ * 묶음 목록을 최대 max개까지 줄로 나열하고, 남은 것은 tailText(rest)가 만든 한 줄로 요약한다.
  *
  * @param {{item: object, count: number}[]} groups
  * @param {(entry: {item: object, count: number}) => string} lineFn
  * @param {number} [max]
+ * @param {(rest: number) => string} [tailText] 남은 개수로 마지막 줄을 만든다. 소비자마다
+ *   세는 단위가 달라(triage-report.mjs는 "건", 여기 기본값은 "가지") 문구를 고정하지 않는다.
  * @returns {string[]}
  */
-export function formatGroupedList(groups, lineFn, max = MAX_LISTED) {
+export function formatGroupedList(groups, lineFn, max = MAX_LISTED, tailText = (rest) => `- 외 ${rest}가지 더`) {
   const listed = groups.slice(0, max);
   const rest = groups.length - listed.length;
   const lines = listed.map(lineFn);
-  if (rest > 0) lines.push(`- 외 ${rest}가지 더`);
+  if (rest > 0) lines.push(tailText(rest));
   return lines;
 }

@@ -5,8 +5,12 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractCommitMessages, extractTargets, autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
+import { extractTargets, autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
+import { extractCommitTargets } from "../hooks/lib/bash-commit.mjs";
 import { fastestMs } from "./helpers.mjs";
+
+// artifact.mjs가 쓰는 것과 같은 위치 정보 없이, 문자열만 필요한 이 파일의 시험을 위한 얇은 래퍼다.
+const extractCommitMessages = (command) => extractCommitTargets(command).map((t) => t.text);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "guard.mjs");

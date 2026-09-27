@@ -23,12 +23,14 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findingsForTarget, findingsForText } from "./action-lint.mjs";
-import { mdCode } from "./build-review.mjs";
+import { mdCode, mdBlock as fenceBlock } from "./lib/markdown.mjs";
 import { loadToneRules } from "../hooks/lib/artifact.mjs";
 import { CHECK_PROMPT } from "../hooks/lib/rules.mjs";
 import { toPattern } from "../hooks/lib/lint.mjs";
 import { looksKorean } from "../hooks/lib/detect.mjs";
 import { findResidentNumbers, redactText } from "../hooks/lib/pii.mjs";
+import { formatGroupedList } from "../hooks/lib/format.mjs";
+import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -176,19 +178,6 @@ export function blobUrl(repo, ref, loc) {
 }
 
 /**
- * findingsForTarget/findingsForText는 원본 규칙(rules.mjs가 파싱한 것) 자체가 아니라
- * 위반 하나하나(ruleKey·bad·good·check)만 낸다 — source(어느 rules/*.md 파일인지)가
- * 없다. 같은 (ruleKey, good, check) 조합으로 원본 규칙표에서 다시 찾는다 — 두 벌을
- * 따로 유지하지 않기 위해서다.
- * @param {{ruleKey: string, good: string, check: string}} finding
- * @param {object[]} rules
- * @returns {object|undefined}
- */
-function ownerRuleOf(finding, rules) {
-  return rules.find((r) => r.bad === finding.ruleKey && r.good === finding.good && r.check === finding.check);
-}
-
-/**
  * findingsForTarget/findingsForText가 낸 위반에 규칙 출처 링크를 붙인다.
  * @param {object[]} findings
  * @param {object[]} rules
@@ -199,7 +188,9 @@ function ownerRuleOf(finding, rules) {
 export function attachRuleLocations(findings, rules, repo, ref) {
   const rulesDir = join(ROOT, "rules");
   return findings.map((finding) => {
-    const owner = ownerRuleOf(finding, rules);
+    // finding에는 source(어느 rules/*.md 파일인지)가 없다 — (ruleKey, good, check)
+    // 조합으로 원본 규칙표에서 다시 찾는다(두 벌을 따로 유지하지 않기 위해서다).
+    const owner = rules.find((r) => r.bad === finding.ruleKey && r.good === finding.good && r.check === finding.check);
     const loc = owner ? ruleLocation(owner, rulesDir) : null;
     return {
       bad: finding.bad,
@@ -214,9 +205,10 @@ export function attachRuleLocations(findings, rules, repo, ref) {
 }
 
 // 코멘트가 유출 건수·인용 길이에 비례해 무한정 커지는 것을 막는다(공개 이슈 코멘트다 —
-// build-review.mjs의 MAX_LISTED_FIXES·pii.mjs의 MAX_LISTED와 같은 원칙).
+// hooks/lib/format.mjs의 MAX_LISTED·pii.mjs의 MAX_LISTED와 같은 원칙).
 const MAX_QUOTE_CHARS = 2000;
 const MAX_LISTED_FINDINGS = 20;
+const identityGroups = (items) => items.map((item) => ({ item, count: 1 }));
 
 /** 인용문이 너무 길면 잘라내고 표시한다. */
 function truncateForDisplay(text) {
@@ -252,27 +244,15 @@ function ruleRefLine(rule, repo, ref) {
 
 /** items를 formatter로 줄마다 바꾸되, MAX_LISTED_FINDINGS를 넘으면 나머지는 건수로만 말한다. */
 function cappedLines(items, formatter) {
-  const listed = items.slice(0, MAX_LISTED_FINDINGS);
-  const rest = items.length - listed.length;
-  const out = listed.map(formatter);
-  if (rest > 0) out.push(`- 외 ${rest}건 더`);
-  return out;
+  return formatGroupedList(identityGroups(items), ({ item }) => formatter(item), MAX_LISTED_FINDINGS, (rest) => `- 외 ${rest}건 더`);
 }
 
 /**
- * 여러 줄 사용자 텍스트를 안전하게 인용한다(백틱 개수를 내용보다 하나 더 길게 잡는다).
- * 펜스는 반드시 그 줄의 첫 글자여야 한다(커먼마크 규칙) — 호출부는 이 반환값을
- * 항상 별도 줄(앞에 레이블을 붙이려면 별개의 lines 항목으로)에 놓아야 한다. 같은 줄에
- * `레이블: ${mdBlock(text)}` 처럼 이어 붙이면 펜스가 줄 중간에서 시작해 마크다운
- * 펜스로 인식되지 않고, 사용자가 넣은 여러 줄 텍스트가 코드 블록 밖에서 그대로
- * 렌더링된다(@멘션·이미지·헤딩이 실제로 해석되는 보안 결함이었다 — 실측).
+ * 여러 줄 사용자 텍스트를 안전하게 인용한다. 펜스 자체는 lib/markdown.mjs 의 mdBlock 이
+ * 만든다 — 여기서는 길이만 미리 잘라 넘긴다(펜스 규칙은 호출부와 무관하게 늘 같다).
  */
 function mdBlock(text) {
-  const s = truncateForDisplay(text);
-  const runs = s.match(/`+/g) || [];
-  const maxRun = runs.reduce((max, run) => Math.max(max, run.length), 0);
-  const fence = "`".repeat(Math.max(maxRun + 1, 3));
-  return `${fence}\n${s}\n${fence}`;
+  return fenceBlock(truncateForDisplay(text));
 }
 
 /**
@@ -454,19 +434,9 @@ async function main() {
   else if (!args.out) console.log(comment);
 }
 
-function isEntrypoint() {
-  try {
-    return resolve(process.argv[1] || "") === resolve(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
-}
-
-if (isEntrypoint()) {
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exitCode = 1;
   });
 }
-
-export { ROOT };

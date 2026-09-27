@@ -25,13 +25,17 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { findResidentNumbers } from "../hooks/lib/pii.mjs";
+import { mdCode } from "./lib/markdown.mjs";
+import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
 
 // 지문 마커는 인라인 코멘트마다(지적 하나당 하나) 붙는다 — "이 지적이 이미 올라가
 // 있는가"를 판정하는 열쇠다. 리뷰 마커·sticky 마커는 지문이 없다 — "이 리뷰/코멘트가
 // kimchi 것인가"만 구분하면 된다.
 const FP_MARKER_RE = /<!-- kimchi-claude-lint:v1 fp=([0-9a-f]{40}) -->/g;
 export const REVIEW_MARKER = "<!-- kimchi-claude-lint:review -->";
-export const STICKY_MARKER = "<!-- kimchi-claude-lint:summary -->";
+// action.yml 이 이 리터럴 문자열을 그대로 매칭한다(기존 sticky 코멘트를 찾을 때) — 값만
+// 맞으면 되고 이 모듈 밖에서 상수로 가져다 쓰는 곳은 없다.
+const STICKY_MARKER = "<!-- kimchi-claude-lint:summary -->";
 // REST API 는 봇 계정 로그인을 "github-actions[bot]"으로 준다. GraphQL 은 같은 계정을
 // login: "github-actions", __typename: "Bot" 로 다르게 준다(대괄호가 없다) — 실측.
 // 이 저장소가 REST(리뷰 코멘트 목록)와 GraphQL(스레드·리뷰)을 함께 쓰므로, 둘 중
@@ -46,9 +50,8 @@ const BOT_LOGIN_GRAPHQL = "github-actions";
  */
 export function isKimchiBot(author) {
   if (!author) return false;
-  if (author.login === BOT_LOGIN) return true; // REST
-  if (author.__typename === "Bot" && author.login === BOT_LOGIN_GRAPHQL) return true; // GraphQL
-  return false;
+  // REST: login만 본다. GraphQL: __typename까지 함께 봐야 한다(로그인 이름이 겹칠 수 있어서다).
+  return author.login === BOT_LOGIN || (author.__typename === "Bot" && author.login === BOT_LOGIN_GRAPHQL);
 }
 
 function parseArgs(argv) {
@@ -94,23 +97,6 @@ export function extractFingerprints(body) {
 }
 
 /**
- * 마크다운 인라인 코드로 안전하게 감싼다. 텍스트 안에 백틱이 있어도 깨지지 않도록
- * 감싸는 백틱 개수를 텍스트 안 최장 백틱 연속보다 하나 더 길게 잡는다(커먼마크 규칙).
- * 코드 스팬 안에서는 `@멘션`도 알림으로 파싱되지 않는다 — 파일 이름·지적 문구에 우연히
- * `@`가 들어 있어도 이 함수로 감싸면 별도 이스케이프 없이 안전하다.
- * @param {string} text
- * @returns {string}
- */
-export function mdCode(text) {
-  const s = String(text);
-  const runs = s.match(/`+/g) || [];
-  const maxRun = runs.reduce((m, r) => Math.max(m, r.length), 0);
-  const fence = "`".repeat(maxRun + 1);
-  const pad = s.startsWith("`") || s.endsWith("`") ? " " : "";
-  return `${fence}${pad}${s}${pad}${fence}`;
-}
-
-/**
  * unified diff hunk(`patch`)에서 코멘트를 달 수 있는 오른쪽(새 파일) 줄 번호를 모은다.
  * 추가된 줄과 문맥(변경 없는) 줄은 diff 에 보이므로 달 수 있고, 삭제된 줄(옛 파일에만
  * 있음)은 달 수 없다.
@@ -131,12 +117,7 @@ export function commentableLines(patch) {
     }
     if (raw.startsWith("\\")) continue; // "\ No newline at end of file"
     if (raw.startsWith("-")) continue; // 옛 파일에만 있는 줄. 새 줄 번호를 소비하지 않는다
-    if (raw.startsWith("+")) {
-      lines.add(newLine);
-      newLine += 1;
-      continue;
-    }
-    // 문맥 줄(접두사 없음). diff 에 보이므로 코멘트를 달 수 있다.
+    // 추가된 줄("+")과 문맥 줄(접두사 없음)은 둘 다 diff 에 그대로 보이므로 달 수 있다.
     lines.add(newLine);
     newLine += 1;
   }
@@ -206,11 +187,9 @@ export function buildComments(fileFindings, patchByFile) {
 
   for (const finding of fileFindings) {
     // 경로 자체에 주민등록번호로 보이는 값이 있던 파일은 인라인 코멘트를 절대 달지
-    // 않는다(요구사항 4). 리뷰 코멘트의 path 는 PR의 실제 파일 경로와 글자 그대로
-    // 같아야 하는데, finding.file 은 이미 가려진 표시용 값이라 그 값을 실제 경로로
-    // 쓰면 GitHub API가 찾지 못해 리뷰 전체가 422로 거부된다. 그렇다고 실제 경로를
-    // 되살려 쓰면 safeDisplayPath 가 막으려던 유출이 코멘트를 통해 그대로 일어난다.
-    // 이런 지적은 무조건 sticky 요약(가려진 이름으로)으로 보낸다.
+    // 않는다(요구사항 4, action-lint.mjs의 pathHasPii 판정 참고 — finding.file 을 실제
+    // 경로 대신 쓰면 GitHub API가 찾지 못해 리뷰 전체가 422로 거부된다). 이런 지적은
+    // 무조건 sticky 요약(가려진 이름으로)으로 보낸다.
     if (finding.pathHasPii) {
       outOfDiff.push(finding);
       continue;
@@ -222,16 +201,21 @@ export function buildComments(fileFindings, patchByFile) {
       outOfDiff.push(finding);
       continue;
     }
+    // 열쇠는 그룹을 가르는 용도로만 쓴다 — file·line 은 값 쪽에 그대로 들고 있어서
+    // 나중에 열쇠를 다시 분해할 필요가 없다.
     const key = `${finding.file}\u0000${finding.line}`;
-    if (!byLocation.has(key)) byLocation.set(key, []);
-    byLocation.get(key).push(finding);
+    const entry = byLocation.get(key);
+    if (entry) entry.group.push(finding);
+    else byLocation.set(key, { file: finding.file, line: finding.line, group: [finding] });
   }
 
-  const comments = [];
-  for (const [key, group] of byLocation) {
-    const [file, lineText] = key.split("\u0000");
-    comments.push({ path: file, line: Number(lineText), side: "RIGHT", group, fingerprints: group.map(fingerprint) });
-  }
+  const comments = [...byLocation.values()].map(({ file, line, group }) => ({
+    path: file,
+    line,
+    side: "RIGHT",
+    group,
+    fingerprints: group.map(fingerprint),
+  }));
 
   return { comments, outOfDiff };
 }
@@ -347,13 +331,11 @@ export function reviewsToMinimize(existingReviews) {
 
 function countFindings(findings) {
   const prText = findings.prText || { title: [], body: [] };
-  return {
-    files: (findings.files || []).length,
-    commits: (findings.commits || []).length,
-    title: (prText.title || []).length,
-    body: (prText.body || []).length,
-    pii: (findings.pii || []).length,
-  };
+  const files = (findings.files || []).length;
+  const commits = (findings.commits || []).length;
+  const title = (prText.title || []).length;
+  const body = (prText.body || []).length;
+  return { files, commits, title, body, pii: (findings.pii || []).length, total: files + commits + title + body };
 }
 
 /**
@@ -364,9 +346,8 @@ function countFindings(findings) {
  */
 export function buildReviewBody(findings, stickyCommentUrl) {
   const c = countFindings(findings);
-  const total = c.files + c.commits + c.title + c.body;
   const pointer = stickyCommentUrl ? `자세한 목록은 ${stickyCommentUrl} 코멘트를 보십시오.` : "자세한 목록은 아래 sticky 코멘트를 보십시오.";
-  return [REVIEW_MARKER, `kimchi-claude 가 어색한 표현 ${total}건, 주민등록번호로 보이는 값 ${c.pii}건을 찾았습니다.`, pointer].join(
+  return [REVIEW_MARKER, `kimchi-claude 가 어색한 표현 ${c.total}건, 주민등록번호로 보이는 값 ${c.pii}건을 찾았습니다.`, pointer].join(
     "\n"
   );
 }
@@ -406,8 +387,7 @@ export function buildStickyBody(findings, outOfDiff) {
   }
 
   const c = countFindings(findings);
-  const total = c.files + c.commits + c.title + c.body;
-  const summary = total > 0 || pii.length > 0 ? `현재 남은 지적 ${total}건, 주민등록번호로 보이는 값 ${pii.length}건입니다.` : "걸리는 표현이 없습니다.";
+  const summary = c.total > 0 || pii.length > 0 ? `현재 남은 지적 ${c.total}건, 주민등록번호로 보이는 값 ${pii.length}건입니다.` : "걸리는 표현이 없습니다.";
 
   return [STICKY_MARKER, summary, ...(bodyParts.length > 0 ? ["", ...bodyParts] : [])].join("\n");
 }
@@ -425,14 +405,9 @@ async function main() {
     reviewThreads: Array.isArray(reviewThreads) ? reviewThreads : [],
     comments,
   });
-  const toMinimize = reviewsToMinimize(Array.isArray(existingReviews) ? existingReviews : []);
-
-  const stickyBody = buildStickyBody(findings, outOfDiff);
-  const hasNewComments = toPost.length > 0;
   const commitId = typeof args["commit-id"] === "string" ? args["commit-id"] : undefined;
-
   const review =
-    hasNewComments
+    toPost.length > 0
       ? {
           event: "COMMENT",
           body: buildReviewBody(findings),
@@ -444,8 +419,8 @@ async function main() {
   const output = {
     review,
     toResolveThreadIds,
-    toMinimizeReviewIds: toMinimize,
-    stickyBody,
+    toMinimizeReviewIds: reviewsToMinimize(Array.isArray(existingReviews) ? existingReviews : []),
+    stickyBody: buildStickyBody(findings, outOfDiff),
   };
 
   const json = JSON.stringify(output, null, 2);
@@ -453,11 +428,7 @@ async function main() {
   else console.log(json);
 }
 
-function isEntrypoint() {
-  return process.argv[1] && process.argv[1].endsWith("build-review.mjs");
-}
-
-if (isEntrypoint()) {
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exitCode = 1;
