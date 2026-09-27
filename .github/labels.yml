@@ -33,6 +33,9 @@
 - name: ci
   color: "1d76db"
   description: GitHub Actions 워크플로에 관련된 일이다
+- name: links
+  color: "1d76db"
+  description: 출처 링크 점검 봇이 연 이슈다(link-check.yml)
 - name: claude-review
   color: "1d76db"
   description: 이 라벨을 붙이면 Claude 코드 리뷰 워크플로가 이 PR에서 돈다
