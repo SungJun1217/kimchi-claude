@@ -1,0 +1,92 @@
+name: rule-impact
+
+# 규칙(rules/*.md), 스타일 생성기, 린트 엔진, 생성된 출력 스타일이 바뀐 PR에서
+# scripts/rule-impact.mjs(오프라인)로 base→head 영향을 계산해 sticky 코멘트와 워크플로
+# 요약에 남긴다. 이 액션의 pull_request 토큰은 읽기 전용일 수 있다 — fork PR이면
+# 코멘트 게시 대신 $GITHUB_STEP_SUMMARY에만 쓴다(never pull_request_target — 신뢰할 수
+# 없는 head 브랜치의 코드를 쓰기 권한 토큰으로 돌리지 않는다).
+on:
+  pull_request:
+    paths:
+      - "rules/**"
+      - "scripts/build-style.mjs"
+      - "hooks/lib/**"
+      - "output-styles/**"
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: rule-impact-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rule-impact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: head 체크아웃
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+
+      - name: base 체크아웃
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: 규칙 영향 계산
+        run: |
+          node head/scripts/rule-impact.mjs --base base --head head --out impact.md
+
+      - name: 워크플로 요약에 기록
+        run: cat impact.md >> "$GITHUB_STEP_SUMMARY"
+
+      # fork에서 온 PR은 기본 토큰이 읽기 전용이라 코멘트 게시가 403으로 실패한다 —
+      # 그 경우 위 요약만 남기고 이 단계부터는 건너뛴다.
+      - name: 쓰기 권한 판정
+        id: perm
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+            echo "can-write=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can-write=false" >> "$GITHUB_OUTPUT"
+            echo "fork PR이라 코멘트를 올리지 못합니다. 워크플로 요약만 남깁니다." >&2
+          fi
+
+      - name: 기존 kimchi 코멘트를 찾는다
+        id: existing
+        if: steps.perm.outputs.can-write == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | test("kimchi-claude-rule-impact")) | .id' \
+            > existing-ids.txt 2>/dev/null
+          ID=$(tail -n 1 existing-ids.txt)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: 코멘트를 올리거나 갱신한다
+        if: steps.perm.outputs.can-write == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          if [ -n "${{ steps.existing.outputs.id }}" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/${{ steps.existing.outputs.id }}" \
+              -F body=@impact.md >/dev/null \
+              || echo "::warning::rule-impact 코멘트 갱신에 실패했습니다." >&2
+          else
+            gh api --method POST "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+              -F body=@impact.md >/dev/null \
+              || echo "::warning::rule-impact 코멘트 작성에 실패했습니다." >&2
+          fi
+          exit 0

@@ -128,6 +128,7 @@ kimchi-claude/
 │   ├── action-lint.mjs            GitHub Action(action.yml)의 오프라인 검사. 변경 파일·커밋·PR 텍스트를 훅과 같은 규칙으로 검사해 JSON을 낸다
 │   ├── build-review.mjs           action-lint.mjs의 JSON을 PR 리뷰 페이로드(인라인 코멘트 + 본문)로 바꾼다. 이것도 오프라인이다
 │   ├── triage-report.mjs          오탐·놓친 표현 이슈 본문을 현재 규칙으로 재현해 JSON과 이슈 코멘트를 낸다. 이것도 오프라인이다
+│   ├── rule-impact.mjs            PR의 rules/ 변경이 스타일 본문 예산과 린트 결과에 미치는 영향을 base→head로 계산한다. 이것도 오프라인이다
 │   └── lib/
 │       ├── markdown.mjs           마크다운 인라인 코드·펜스 블록. build-review.mjs·triage-report.mjs가 같이 쓴다
 │       └── cli.mjs                인자 파싱·JSON/텍스트 출력·main() 실패 처리. action-lint.mjs·triage-report.mjs가 같이 쓴다
@@ -1222,6 +1223,77 @@ author_association은 대개 `NONE`이라 위 조건에 이미 걸리지만 의�
 처리한다)이고, 리뷰 쪽은 `cancel-in-progress: true`(라벨을 여러 번 떼었다 붙이면 최신
 diff만 리뷰하면 되고, 옛 세션을 계속 돌릴 이유가 없다). `timeout-minutes: 30`은 어느
 쪽이든 한 세션이 통제 불능으로 길어지는 것을 막는 상한이다.
+
+## 규칙 변경 영향 코멘트 (v0.22.0)
+
+`buildBody(rules, maxChars)`(`build-style.mjs`)는 상한(`MAX_CHARS`, 6000자)을 넘기면 낮은
+순위 행부터 잘라낸다 — `rules/*.md`에 행 하나를 보태는 PR이 그 한 줄만 늘리는 것이 아니라
+예산 안에서 다른 행을 조용히 밀어낼 수 있다는 뜻이다. 지금까지는 리뷰어가 diff를 보고
+이 부작용을 직접 알아채야 했다. `.github/workflows/rule-impact.yml`이 `rules/**`·
+`scripts/build-style.mjs`·`hooks/lib/**`·`output-styles/**`를 건드리는 PR마다
+`scripts/rule-impact.mjs`(오프라인)로 base→head 영향을 계산해 sticky 코멘트와 워크플로
+요약에 남긴다.
+
+설계 원칙은 다른 봇들과 같다. `rule-impact.mjs`는 로컬 파일만 읽고 표준 출력(또는 `--out`
+파일)에 마크다운만 쓴다 — PR 코멘트를 올리는 것은 워크플로의 `gh` 셸 단계가 한다. base와
+head는 각각 완전한 저장소 체크아웃이라, 규칙 파싱기·스타일 생성기·린트 엔진을 그 트리
+자신의 파일에서 `pathToFileURL`로 동적으로 불러온다 — 규칙표만이 아니라 파서나 예산 배분
+로직 자체를 바꾼 PR이어도 그 변경이 그대로 비교에 반영된다.
+
+규칙 하나는 파일 이름 + `쓰지 말 것`으로 식별한다(`ruleKey`). 이 열쇠로 추가·제거·칸 단위
+변경을 가르고, 규칙이 실제로 스타일 본문에 담겼는지는 `toRow`가 내는 행의 앞부분
+(`| 원어 | 쓰지 말 것 | 쓸 것 | `)이 본문에 부분 문자열로 있는지로 판정한다(`styleContainsRule`)
+— 이유 칸만 줄여 적으므로(`shortenWhy`) 그 축약 규칙까지 복제할 필요가 없다. base·head
+양쪽에 다 있는 규칙 가운데 본문 소속이 바뀐 것만 "본문에서 빠진 행"/"본문에 새로 들어간
+행"으로 추려낸다(`bodyTransitions`) — 추가되거나 제거된 행 자체는 이미 다른 항목에서
+보이므로 여기 다시 섞지 않는다. 칸 자체가 바뀐 행(`diff.changed`)도 이 둘에서 뗀다 —
+행 텍스트가 달라지면 소속이 바뀐 원인이 분량 상한인지 칸 변경인지 구분이 안 되므로
+"행 자체가 바뀌어 본문에서 빠진/들어간 행"으로 따로 보여준다. 이 구분이 핵심이다 —
+어떤 PR도 의도한 적 없는 부작용만 따로 눈에 띄어야 한다. 규칙 diff가 비어 있어도
+`build-style.mjs` 자체가 바뀌어(PREAMBLE 길이 등) 본문 길이나 `MAX_CHARS`가 달라졌으면
+"영향 없음"으로 뭉개지 않고 요약 줄을 그대로 찍는다.
+
+린트 결과 비교는 텍스트가 아니라 규칙 집합만 바꾼다. 처음에는 `tests/fixtures/**`와
+head 트리가 추적하는 한국어 `.md` 문서 전체를 대상으로 삼았는데, 실측해 보니 구조적으로
+0건→0건이었다 — 자료 파일은 dogfood 시험(불변식 8)에서 빠지려고 전부
+`<!-- kimchi-ignore-file ... -->`로 시작하고, 이 표시는 `lint()`의 `isIgnoredFile()`도
+그대로 걸러 버린다. 저장소가 추적하는 일반 문서는 애초에 dogfood를 통과한 깨끗한 글이라
+규칙을 지우거나 넓혀도 대개 0건에서 0건으로 그대로다. 그래서 대상을 두 벌로 바꿨다.
+`tests/improvement.test.mjs`의 `readAnswer`와 같은 규칙(맨 앞 주석 한 덩어리만 벗긴다)으로
+이그노어 표시를 벗긴 뒤, "잡아야 할 표현" 자료(`*-without-plugin.md`, `draft-before.md`,
+`evals/experiments/**/answers/none-*.md`·`fluent-*.md` — 플러그인이 없거나 다른 스타일로
+받은 실제 답변)와 "오탐 신호" 자료(`*-with-plugin.md`·`*-forced.md`, `draft-after.md`,
+`kimchi-*.md`·`merged-*.md` — 플러그인을 켠 상태로 받은 실제 답변)로 갈라 따로 보고한다.
+전자에서 적발이 줄어드는 것은 규칙이 실제로 하던 일을 그만뒀다는 뜻이고, 후자에서 적발이
+느는 것은 새 규칙이 지나치게 넓어 정상적인 문장까지 잡았다는 신호다 — 부호가 반대인 두
+신호를 하나의 총건수로 합치면 서로 상쇄되어 안 보인다. 텍스트는 head 한 벌만 모아 그
+위에 base 규칙과 head 규칙을 각각 `lint()`로 돌린다 — 텍스트까지 base·head로 나누면 규칙
+변화와 문서 변화가 뒤섞여 어느 쪽 때문에 건수가 바뀌었는지 알 수 없다.
+
+목록은 20개(`MAX_LISTED`), 린트 변화가 큰 규칙은 집합별로 10개(`MAX_TOP_LINT_RULES`)까지만
+나열하고 나머지는 "외 N개 더"로 요약한다(`hooks/lib/format.mjs`의 `formatGroupedList`, 다른
+봇들과 같은 원칙). 전체 마크다운은 60KB를 넘으면 뒤에서부터 잘라내고 마커는 항상 맨 앞에
+남긴다 — sticky 코멘트가 규칙 수에 비례해 무한정 커지면 안 된다. 규칙 문구는
+`scripts/lib/markdown.mjs`의 `mdCode`로 감싸 백틱이 섞여 있어도 코드 스팬이 깨지지 않는다.
+
+base 또는 head 트리가 이 스크립트가 기대하는 모양과 다르면(모듈이 옮겨졌거나, export
+이름이 바뀌었거나, `loadRules`·`buildBody`의 반환 모양이 바뀐 PR) 실패한다. `loadTree`는
+`assertTreeShape`로 `lint`가 함수인지, `rules`가 배열인지, `body`가 문자열인지,
+`included`·`maxChars`가 정수인지를 그 자리에서 확인해 던진다 — `lintMod.lint`처럼 이름이
+바뀐 export는 동적 import 자체는 그냥 성공하고 값만 `undefined`가 되므로, 이 확인이
+없으면 한참 뒤 `countLintHits`가 `lint(...)`를 호출할 때에야 TypeError로 터진다. 다만
+이 확인이 모든 경우를 다 잡는다는 보장은 없으므로(예: `rules` 배열 안 규칙 객체 자체가
+이상한 모양이면 `diffRules`·`countLintHits` 안에서 나중에 터질 수 있다), `main()`은
+`loadTree`부터 `buildMarkdown`까지 전체를 하나의 try로 감싼다. 어디서 실패하든 결과는
+같다 — 마커가 든 짧은 "트리를 불러오지 못했습니다" 본문을 내고 exit 0으로 끝낸다.
+여기서 예외가 그대로 새 나가 워크플로 스텝이 실패하면, 코멘트를 갱신하는 뒷단계가 아예
+안 돌아 이전 푸시의 낡은 sticky 코멘트가 최신인 것처럼 남는다. 실패를 감추는 것이 아니라
+그 실패 자체를 코멘트 내용으로 보고하는 것이다.
+
+워크플로 자체는 `pull_request`로만 돈다(`pull_request_target`은 쓰지 않는다) — 신뢰할 수
+없는 head 브랜치의 코드를 쓰기 권한 토큰으로 실행하면 안 되기 때문이다. fork PR은 기본
+토큰이 읽기 전용이라 코멘트 게시가 403으로 실패할 수 있으므로, 그 경우 워크플로 요약
+(`$GITHUB_STEP_SUMMARY`)에만 남기고 job은 실패시키지 않는다.
 
 ## 알려진 한계
 
