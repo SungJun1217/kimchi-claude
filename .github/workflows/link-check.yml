@@ -130,6 +130,16 @@ jobs:
             --out "${{ steps.prep.outputs.workdir }}/report.md" \
             --summary-out "${{ steps.prep.outputs.workdir }}/summary.json"
 
+      # 문제가 없으면 이슈를 만들지 않으므로, 이번 실행에서 무엇을 어떻게 판정했는지는
+      # 실행 요약에만 남는다 — 확인 못 함으로 둔 링크가 있었는지도 여기서 본다.
+      - name: 결과를 실행 요약에 남긴다
+        run: |
+          WORKDIR="${{ steps.prep.outputs.workdir }}"
+          jq -r --argjson total "$(jq 'length' "$WORKDIR/links.json")" \
+            '"링크 \($total)개 — 끊김 \(.dead), 오류 페이지 \(.suspect), 확인 못 함 \(.unverified)\n"' \
+            "$WORKDIR/summary.json" >> "$GITHUB_STEP_SUMMARY"
+          sed '1{/^<!--/d;}' "$WORKDIR/report.md" >> "$GITHUB_STEP_SUMMARY"
+
       # 이 봇이 이미 열어 둔 이슈가 있으면(숨은 마커로 찾는다) 새로 열지 않고 그것을
       # 갱신하거나 닫는다 — triage.yml이 코멘트를 다루는 것과 같은 원칙, 대상만 이슈
       # 자체다. 전문 검색(`--search ... in:body`)은 토큰 단위라 HTML 주석(`<!--`)이
