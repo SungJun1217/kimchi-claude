@@ -1,0 +1,203 @@
+name: link-check
+
+# skills·rules·docs·README 등이 가리키는 출처 링크(law.go.kr, 국립국어원 등)가 죽었는지
+# 매주 확인한다. 죽으면 스킬이 조용히 낡은 안내를 계속하기 때문이다(불변식 7). 실제
+# curl 은 이 워크플로의 셸 단계만 연다 — scripts/extract-links.mjs·scripts/link-report.mjs
+# 는 둘 다 오프라인이다(불변식 10, docs/design.md "출처 링크 점검" 참고).
+on:
+  schedule:
+    # 매주 월요일 00:17 UTC. 정각을 피해 GitHub Actions 가 몰리는 시각을 비켜 간다.
+    - cron: "17 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: link-check
+  cancel-in-progress: true
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    env:
+      MARKER: "<!-- kimchi-claude-link-check -->"
+    steps:
+      # "현재 자료"는 항상 최신 릴리스(main) 기준이다 — triage.yml과 같은 이유다.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      # 라벨 생성(POST /repos/{owner}/{repo}/labels)은 GitHub의 REST 권한 모델에서
+      # "issues" 쓰기 권한으로 충분하다(이슈·PR에 공통으로 붙는 메타데이터라 같은 권한을
+      # 쓴다) — 위 permissions 를 더 늘릴 필요가 없다. --force 라 이미 있으면 색·설명만
+      # 덮어써 안전하게 반복 실행된다. 실패해도(예: 권한 모델이 바뀌었으면) job을
+      # 실패시키지 않는다 — 라벨 없이도 이슈 자체는 만들 수 있다. 성공 여부를
+      # outputs.ok 로 남겨 아래 두 단계(이슈 찾기·이슈 만들기)가 라벨에 기대도 되는지
+      # 판단하게 한다.
+      - name: links 라벨을 만들거나 갱신한다
+        id: label
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh label create links --repo "${{ github.repository }}" --color 1d76db \
+            --description "출처 링크 점검 봇이 연 이슈다(link-check.yml)" --force; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::links 라벨 생성/갱신에 실패했습니다 — 아래 단계들이 라벨 없이 마커만으로 찾거나 만듭니다. .github/labels.yml 로 한 번 수동 동기화해 주십시오." >&2
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 작업 디렉터리를 만든다
+        id: prep
+        run: |
+          WORKDIR="${RUNNER_TEMP}/kimchi-link-check"
+          mkdir -p "$WORKDIR"
+          echo "workdir=$WORKDIR" >> "$GITHUB_OUTPUT"
+
+      - name: 출처 링크를 오프라인으로 모은다
+        run: |
+          node scripts/extract-links.mjs --out "${{ steps.prep.outputs.workdir }}/links.json"
+
+      # URL 을 절대 셸 문자열로 보간하지 않는다 — 저장소 문서에서 뽑은 값이라도 curl 에
+      # 넘기기 전에 신뢰할 수 없는 입력으로 다룬다(triage.yml 이 이슈 본문을 다루는 것과
+      # 같은 원칙). 파일에서 한 줄씩 읽어 인자로만 넘긴다.
+      #
+      # HEAD 대신 늘 GET 한 번만 보낸다. law.go.kr·korean.go.kr 둘 다 HTTP 200을 그대로
+      # 주면서 본문만 "이 문서는 없다"고 말하는 연성 404(soft 404)를 실측했다 — 상태
+      # 코드만으로는 이걸 못 잡아서 title을 봐야 하는데, title을 보려면 어차피 본문을
+      # 받아야 한다. HEAD로 먼저 아끼려던 이전 시도는 law.go.kr이 HEAD에만 404를 주는
+      # 것까지 겹쳐 더 복잡했다(문서 참고) — GET 하나로 통일하면 그 문제도 함께 없어진다.
+      - name: 링크마다 curl 로 두드려 본다
+        id: probe
+        run: |
+          set +e
+          WORKDIR="${{ steps.prep.outputs.workdir }}"
+          UA="Mozilla/5.0 (compatible; kimchi-claude-link-check/1.0; +https://github.com/SungJun1217/kimchi-claude)"
+          : > "$WORKDIR/results.jsonl"
+          jq -r '.[].url' "$WORKDIR/links.json" > "$WORKDIR/urls.txt"
+
+          while IFS= read -r URL; do
+            [ -z "$URL" ] && continue
+
+            # curl이 연결조차 못 하면(DNS 실패 등) -o 대상 파일을 아예 안 건드릴 수 있다
+            # — 지우지 않으면 이전 URL의 body.html이 그대로 남아 title이 엉뚱한 URL의
+            # 것으로 뒤섞인다.
+            rm -f "$WORKDIR/body.html" "$WORKDIR/meta.txt"
+
+            # --retry-connrefused: 기본 --retry는 연결 자체가 거부된 경우(예: 러너
+            # 네트워크가 막 올라오는 사이)는 재시도하지 않는다 — 이 옵션을 더해야
+            # 진짜로 죽은 것과 러너 쪽 일시적 문제를 재시도로 가른다.
+            curl -sS -L --max-time 20 --retry 2 --retry-connrefused -A "$UA" \
+              -w '%{http_code} %{url_effective}' -o "$WORKDIR/body.html" -- "$URL" > "$WORKDIR/meta.txt"
+            EXIT=$?
+            CODE=$(cut -d' ' -f1 "$WORKDIR/meta.txt")
+            EFFECTIVE=$(cut -d' ' -f2- "$WORKDIR/meta.txt")
+
+            # title은 항상 문서 맨 앞쪽에 있다 — 처음 64KB만 읽어 크기와 무관하게
+            # 판정을 O(1)에 가깝게 유지한다(PDF·이미지처럼 title이 없는 응답도 있다).
+            # 셸 문자열로 보간하지 않고 파일 내용을 grep/sed로만 다뤄, 응답 본문에
+            # 무엇이 들어 있든 명령으로 해석되지 않는다.
+            TITLE=$(head -c 65536 "$WORKDIR/body.html" 2>/dev/null \
+              | tr -d '\000' \
+              | grep -o -i '<title[^>]*>[^<]*' \
+              | head -1 \
+              | sed -E 's/<title[^>]*>//I; s/^[[:space:]]+//; s/[[:space:]]+$//')
+
+            jq -n --arg url "$URL" --arg code "$CODE" --arg exit "$EXIT" --arg eff "$EFFECTIVE" --arg title "$TITLE" \
+              '{url: $url,
+                httpCode: (if $code == "" or $code == "000" then null else ($code | tonumber) end),
+                curlExit: ($exit | tonumber),
+                effectiveUrl: (if $eff == "" then null else $eff end),
+                title: (if $title == "" then null else $title end)}' \
+              >> "$WORKDIR/results.jsonl"
+          done < "$WORKDIR/urls.txt"
+
+          jq -s 'map({(.url): {httpCode, curlExit, effectiveUrl, title}}) | add // {}' "$WORKDIR/results.jsonl" \
+            > "$WORKDIR/results.json"
+          exit 0
+
+      - name: 결과를 이슈 본문으로 바꾼다
+        run: |
+          node scripts/link-report.mjs \
+            --links "${{ steps.prep.outputs.workdir }}/links.json" \
+            --results "${{ steps.prep.outputs.workdir }}/results.json" \
+            --out "${{ steps.prep.outputs.workdir }}/report.md" \
+            --summary-out "${{ steps.prep.outputs.workdir }}/summary.json"
+
+      # 이 봇이 이미 열어 둔 이슈가 있으면(숨은 마커로 찾는다) 새로 열지 않고 그것을
+      # 갱신하거나 닫는다 — triage.yml이 코멘트를 다루는 것과 같은 원칙, 대상만 이슈
+      # 자체다. 전문 검색(`--search ... in:body`)은 토큰 단위라 HTML 주석(`<!--`)이
+      # 그대로 안 걸릴 수 있어 쓰지 않는다 — 마커 문자열은 항상 jq로 정확히 찾는다.
+      # `links` 라벨은 후보를 좁히는 최적화일 뿐이다 — 라벨 단계가 실패했으면(위
+      # steps.label.outputs.ok) 과거에 라벨 없이 만들어진 이슈가 있을 수 있어, 라벨
+      # 필터 없이 열린 이슈 전체에서 마커로 찾는다.
+      - name: 기존 링크 점검 이슈를 찾는다
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          if [ "${{ steps.label.outputs.ok }}" = "true" ]; then
+            RAW=$(gh issue list --repo "${{ github.repository }}" --state open --label links --json number,body --limit 200)
+          else
+            RAW=$(gh issue list --repo "${{ github.repository }}" --state open --json number,body --limit 200)
+          fi
+          ID=$(printf '%s' "$RAW" | jq -r --arg marker "$MARKER" '[.[] | select(.body | contains($marker))][0].number // empty')
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: 이슈를 열거나 갱신하거나 닫는다
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          WORKDIR="${{ steps.prep.outputs.workdir }}"
+          RUNNER_OUTAGE=$(jq -r '.runnerOutage' "$WORKDIR/summary.json")
+
+          # 링크가 하나라도 있는데 전부 DNS·연결 실패면 출처가 죽은 게 아니라 이 러너가
+          # 이번 실행에서 바깥 네트워크에 못 나갔을 가능성이 높다 — 이슈를 열거나
+          # 갱신하면 "전부 끊겼다"는 잘못된 신호를 남긴다. 경고만 남기고 건너뛴다.
+          if [ "$RUNNER_OUTAGE" = "true" ]; then
+            echo "::warning::링크가 전부 DNS·연결 실패로 나왔습니다 — 출처가 죽었다기보다 이 러너가 이번 실행에서 네트워크에 못 나갔을 가능성이 높아 이슈를 열거나 갱신하지 않고 건너뜁니다." >&2
+            exit 0
+          fi
+
+          # 연성 404(suspect)는 죽음(dead)과 같은 무게로 이슈를 열고/유지한다 — softDead도
+          # "출처 자체가 문제"라는 신호이지, "확인 못 함"처럼 봇 차단·일시 장애일 수 있는
+          # 약한 신호가 아니다(scripts/link-report.mjs 참고).
+          DEAD=$(jq -r '.dead' "$WORKDIR/summary.json")
+          SUSPECT=$(jq -r '.suspect' "$WORKDIR/summary.json")
+          ISSUE_ID="${{ steps.existing.outputs.id }}"
+
+          if [ "$((DEAD + SUSPECT))" -gt 0 ]; then
+            TITLE="출처 링크 점검: 확인이 필요한 링크 $((DEAD + SUSPECT))개"
+            if [ -n "$ISSUE_ID" ]; then
+              gh issue edit "$ISSUE_ID" --repo "${{ github.repository }}" --title "$TITLE" \
+                --body-file "$WORKDIR/report.md" \
+                || echo "::warning::링크 점검 이슈 갱신에 실패했습니다." >&2
+            else
+              # links 라벨이 없으면(방금 만들지 못했거나, 만들었다는 응답을 받고도 그 사이
+              # 지워졌으면) --label links 를 준 gh issue create 자체가 실패한다 — 라벨
+              # 없이 다시 시도한다. 이슈 자체를 못 만드는 것이 라벨 하나 못 붙이는 것보다
+              # 나쁜 실패다.
+              if ! gh issue create --repo "${{ github.repository }}" --title "$TITLE" \
+                    --body-file "$WORKDIR/report.md" --label links; then
+                echo "::warning::라벨을 붙여 이슈를 만들지 못했습니다 — 라벨 없이 다시 시도합니다." >&2
+                gh issue create --repo "${{ github.repository }}" --title "$TITLE" \
+                  --body-file "$WORKDIR/report.md" \
+                  || echo "::warning::링크 점검 이슈 생성에 실패했습니다(라벨 없이도)." >&2
+              fi
+            fi
+          elif [ -n "$ISSUE_ID" ]; then
+            gh issue comment "$ISSUE_ID" --repo "${{ github.repository }}" --body-file "$WORKDIR/report.md" \
+              || echo "::warning::링크 점검 이슈 코멘트 작성에 실패했습니다." >&2
+            gh issue close "$ISSUE_ID" --repo "${{ github.repository }}" --reason completed \
+              || echo "::warning::링크 점검 이슈 닫기에 실패했습니다." >&2
+          fi
+          exit 0
