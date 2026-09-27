@@ -6,10 +6,12 @@ on:
       - main
       - develop
   pull_request:
-  # GITHUB_TOKEN으로 한 push는 새 workflow run을 만들지 않는다(GitHub의 의도된 동작 —
-  # 재귀 실행 방지). pr-version.yml의 dependabot-bump job이 그 push 뒤에 이 이벤트로
-  # 직접 재실행을 요청한다(gh workflow run test.yml --ref <branch>) — 그래야 필수 검사
-  # (test, test-macos)가 그 커밋 SHA에 체크런으로 다시 붙는다.
+  # pr-version.yml의 dependabot-bump job은 이제 KIMCHI_BOT_TOKEN(PAT)으로 push하므로
+  # 그 push 자체가 pull_request synchronize를 일으켜 필수 검사(test, test-macos)가
+  # 자연스럽게 다시 붙는다 — 예전의 gh workflow run 디스패치는 더 이상 안 쓴다
+  # (docs/design.md 참고, 실측: 디스패치로 만든 체크런은 PR의 필수 검사 목록에 안
+  # 잡혔다). 이 트리거는 그래도 남겨 둔다 — 수동으로 아무 브랜치나 다시 돌려 보고
+  # 싶을 때 쓰는 것으로, 남겨 둬도 해가 없다.
   workflow_dispatch:
 
 permissions:

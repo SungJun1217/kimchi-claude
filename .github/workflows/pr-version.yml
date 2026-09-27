@@ -16,6 +16,13 @@ name: pr-version
 # 버전이 develop을 못 따라가는 채로 남을 수 있다 — nudge-stale-dependabot-prs job이
 # 그런 PR에 재생성(recreate)을 요청한다(docs/design.md "develop이 앞서가면 열린
 # Dependabot PR을 깨워야 한다" 참고).
+#
+# dependabot-bump는 secrets.KIMCHI_BOT_TOKEN(레포 전용 fine-grained PAT)으로 push한다
+# (docs/design.md "봇 토큰으로 실제 필수 검사를 받는다" 참고 — 실측: `gh workflow run`
+# 디스패치로는 PR의 statusCheckRollup에 안 잡혀 mergeStateStatus가 BLOCKED로 남았다).
+# PAT로 한 push는 GITHUB_TOKEN과 달리 진짜 사람(또는 앱)이 한 push라 pull_request
+# synchronize를 그대로 일으키므로, test.yml과 이 파일의 version-check가 그 커밋 SHA에
+# 실제 필수 검사로 다시 붙는다 — workflow_dispatch로 대신 돌리던 이전 방식은 지운다.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -37,12 +44,14 @@ jobs:
   # 이벤트만 쓴다 — PR 헤드가 이 저장소 안이든 fork 든 checkout@head.sha 로 안전하게
   # 읽을 수 있고, 쓰기 토큰이 필요 없다.
   #
-  # Dependabot PR은 여기서 아예 건너뛴다. Dependabot이 처음 여는 PR은 아직 버전을 안
-  # 올린 상태라 이 검사에 당연히 걸리는데, GITHUB_TOKEN으로 한 push(dependabot-bump가
-  # 하는 바로 그것)는 새 workflow run을 만들지 않으므로(GitHub의 의도된 동작) 이
-  # job이 "다시 돌아 통과"하는 일이 자동으로는 없다 — 그 push가 붙기 전까지 이 job만
-  # 영원히 빨갛게 남는다. 그래서 Dependabot PR의 버전 정합성은 전적으로
-  # dependabot-bump job의 책임으로 두고, 이 job은 알림만 남기고 넘어간다.
+  # Dependabot PR은 "아직 버전을 안 올린 동안만" 건너뛴다. 이제 dependabot-bump가
+  # KIMCHI_BOT_TOKEN(사람 계정의 PAT)으로 push하므로 그 push가 진짜 synchronize를
+  # 일으켜 이 job이 다시 돈다(위 워크플로 첫머리 주석 참고) — 그래서 "Dependabot PR은
+  # 통째로 건너뛴다"가 아니라 "head 커밋이 아직 dependabot[bot] 본인 것일 때만
+  # 건너뛴다"로 좁혔다. bump 커밋(작성자 github-actions[bot])이 push된 뒤에는 이
+  # job이 그 커밋을 대상으로 정상적으로 확인한다. PR 작성자가 아니라 head 커밋 하나의
+  # 작성자를 보는 이유는, PR 작성자는 병합될 때까지 항상 dependabot[bot]로 고정돼
+  # 있어 그것만으로는 "이미 bump됐는지"를 가릴 수 없기 때문이다.
   version-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -50,19 +59,33 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-        if: github.event.pull_request.user.login != 'dependabot[bot]'
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      - name: Dependabot PR이 아직 버전을 안 올렸는지 본다
+        id: dependabot-state
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          SKIP=false
+          if [ "$PR_AUTHOR" = "dependabot[bot]" ]; then
+            HEAD_AUTHOR=$(git log -1 --format='%an' "$HEAD_SHA")
+            if [ "$HEAD_AUTHOR" = "dependabot[bot]" ]; then
+              SKIP=true
+            fi
+          fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v7
-        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        if: steps.dependabot-state.outputs.skip != 'true'
         with:
           node-version: "24"
 
       - name: 버전을 읽는다
         id: read
-        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        if: steps.dependabot-state.outputs.skip != 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -80,7 +103,7 @@ jobs:
       # 찾아낸다. base가 main(develop → main 릴리스 PR)이거나 범위 안에 병합이 아닌
       # 커밋이 하나도 없으면 스크립트가 스스로 판단해 제목 검사를 건너뛰고 버전만 본다.
       - name: 버전·형식을 확인한다
-        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        if: steps.dependabot-state.outputs.skip != 'true'
         env:
           HEAD_PKG: ${{ steps.read.outputs.head-pkg }}
           HEAD_PLUGIN: ${{ steps.read.outputs.head-plugin }}
@@ -98,19 +121,31 @@ jobs:
             --head-sha "$HEAD_SHA" \
             --repo-root "$GITHUB_WORKSPACE"
 
-      - name: Dependabot PR은 여기서 건너뛴다
-        if: github.event.pull_request.user.login == 'dependabot[bot]'
-        run: echo "::notice::Dependabot PR의 버전은 dependabot-bump job이 대신 맞춥니다. 여기서는 건너뜁니다."
+      - name: Dependabot PR은 bump 전이라 여기서 건너뛴다
+        if: steps.dependabot-state.outputs.skip == 'true'
+        run: echo "::notice::Dependabot PR의 버전은 dependabot-bump job이 올린 뒤(작성자가 github-actions[bot]인 새 커밋) 이 job이 다시 돌아 확인합니다. 여기서는 건너뜁니다."
 
-  # Dependabot PR의 버전을 대신 올려 push한다. pull_request_target 이라 시크릿을 쓸 수
-  # 있는 쓰기 토큰이 있다 — 그래서 PR 헤드의 어떤 코드도 실행하지 않는다(체크아웃만
-  # 하고 npm install/스크립트 실행이 전혀 없다). base(이 저장소, develop)의
-  # scripts/pr-version.mjs 만 실행해서 head 체크아웃의 두 파일을 고친다.
+  # Dependabot PR의 버전을 대신 올려 push한다. pull_request_target 이라 이 저장소의
+  # 시크릿(KIMCHI_BOT_TOKEN)을 읽을 수 있다 — 그래도 PR 헤드의 어떤 코드도 실행하지
+  # 않는다(체크아웃만 하고 npm install/스크립트 실행이 전혀 없다). base(이 저장소,
+  # develop)의 scripts/pr-version.mjs 만 실행해서 head 체크아웃의 두 파일을 고친다.
   #
-  # 이 job이 실패하면(예: 두 파일 다 이미 base보다 한참 앞서 있는데 형식이 이상한
-  # 경우 등 bumpVersionFiles가 예외를 던지는 모든 경우) job 자체가 빨간 X로 실패한다
-  # — 조용히 넘어가지 않는다. Dependabot PR의 버전이 맞는지는 오직 이 job만 책임진다
-  # (version-check는 Dependabot PR을 건너뛴다).
+  # push는 GITHUB_TOKEN이 아니라 KIMCHI_BOT_TOKEN(사람 계정의 fine-grained PAT, Contents
+  # RW + Pull requests RW만 있는 이 저장소 전용 토큰)으로 한다 — GITHUB_TOKEN이 한
+  # push는 새 workflow run을 만들지 않아(GitHub의 재귀 실행 방지) 필수 검사(test,
+  # test-macos)가 그 커밋에 영영 안 붙는 것을 실측으로 확인했다(docs/design.md 참고,
+  # 더미 PR #15: `gh workflow run --ref`로 대신 돌린 체크런은 PR의 statusCheckRollup에
+  # 안 잡혔고 mergeStateStatus가 BLOCKED로 남았다). PAT의 push는 진짜 synchronize를
+  # 일으키므로 test.yml·version-check가 실제 필수 검사로 그 커밋에 다시 붙는다.
+  #
+  # 시크릿이 없으면(설정을 아직 안 한 저장소) push를 시도하지 않고 "커밋하고 push한다"
+  # 단계 첫머리에서 ::error::로 job을 실패시킨다 — bump를 조용히 건너뛴 채 초록불로
+  # 끝나는 것이 실패로 보이는 것보다 나쁘다(설정이 비어 있는데 통과한 것처럼 보인다).
+  #
+  # 이 job이 실패하면(시크릿이 없거나, 두 파일이 이미 base보다 한참 앞서 있는데 형식이
+  # 이상한 경우 등 bumpVersionFiles가 예외를 던지는 모든 경우) job 자체가 빨간 X로
+  # 실패한다 — 조용히 넘어가지 않는다. Dependabot PR의 버전이 맞는지는 오직 이 job만
+  # 책임진다(version-check는 아직 안 올라간 동안만 건너뛴다).
   dependabot-bump:
     if: >
       github.event_name == 'pull_request_target' &&
@@ -118,15 +153,28 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      actions: write
+      contents: read
     steps:
       # base 스크립트는 이 경로(base/)에, PR 헤드 파일은 head/ 에 각각 체크아웃한다.
-      # head/ 는 순전히 데이터다 — 여기서 무엇 하나 실행하지 않는다.
+      # head/ 는 순전히 데이터다 — 여기서 무엇 하나 실행하지 않는다. 읽기만 하는
+      # 체크아웃이라 기본 GITHUB_TOKEN으로 충분하다 — push에 쓸 KIMCHI_BOT_TOKEN은
+      # 이 체크아웃 어디에도 넣지 않고 "커밋하고 push한다" 단계의 그 push 명령
+      # 하나에만 실어 쓴다.
+      #
+      # 두 체크아웃 모두 persist-credentials: false를 준다 — 실측(로컬 재현):
+      # actions/checkout은 기본값(persist-credentials: true)이면 GITHUB_TOKEN을
+      # 로컬 git 설정(`http.https://github.com/.extraheader`)에 심어 둔다. 이
+      # extraheader는 git이 그 호스트로 보내는 모든 요청에 항상 실리고, remote
+      # URL에 다른 자격 증명(예: KIMCHI_BOT_TOKEN을 넣은 URL)을 나중에 얹어도
+      # 우선순위에서 이기지 않는다 — 그러면 push가 읽기 전용 GITHUB_TOKEN으로
+      # 나가 403이 나거나(설령 쓰기 권한이 있어도) 여전히 GITHUB_TOKEN이 한 push라
+      # 재귀 실행 방지에 걸려 synchronize를 못 낸다. `persist-credentials: false`로
+      # 아예 심지 않아야 아래 push 단계가 준 자격 증명만 쓰인다.
       - name: base(develop) 스크립트를 체크아웃한다
         uses: actions/checkout@v7
         with:
           path: base
+          persist-credentials: false
 
       - name: PR 헤드를 데이터로만 체크아웃한다
         uses: actions/checkout@v7
@@ -134,8 +182,7 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           path: head
-          persist-credentials: true
-          token: ${{ github.token }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -200,34 +247,40 @@ jobs:
       # 그대로 박아 넣으면 그 값에 셸 메타 문자가 섞였을 때 명령 주입이 된다). env로만
       # 넘기고 "$SUBJECT"로 참조한다 — 셸이 값을 통째로 한 인자로 넘길 뿐, 값 안의
       # 내용을 다시 셸 문법으로 해석하지 않는다. head.ref도 같은 이유로 env를 거친다.
+      # KIMCHI_BOT_TOKEN도 같은 이유로 env로만 받는다 — `${{ secrets.KIMCHI_BOT_TOKEN }}`을
+      # run: 문자열에 직접 박아 넣지 않는다(시크릿이 로그에 그대로 찍히는 사고를 막는
+      # GitHub Actions의 일반 원칙이자, 이 저장소가 지키는 "run: 안에 표현식을 직접
+      # 박아 넣지 않는다" 원칙과 같다).
+      #
+      # 토큰을 `git remote set-url`로 URL에 넣지 않는다 — 위 체크아웃에서 이미
+      # persist-credentials: false로 GITHUB_TOKEN을 안 심었지만, remote URL에 자격
+      # 증명을 넣는 방식은 그 자체로도 `.git/config`에 시크릿을 평문으로 남긴다(로그가
+      # 아니라 파일에). 대신 `git -c http.<url>.extraheader`로 이 push 명령 하나에만
+      # Authorization 헤더를 실어 보낸다 — 프로세스 인자로만 존재하고 어떤 파일에도
+      # 안 남는다. extraheader 값은 시크릿 문자열을 그대로 이어 붙인 게 아니라
+      # base64로 인코딩한 파생값이라 GitHub Actions의 자동 마스킹(원문 시크릿만
+      # 가린다)이 못 가린다 — `::add-mask::`로 그 파생값 자체도 직접 가린다.
       - name: 커밋하고 push한다
         if: steps.needs.outputs.needs-bump == 'true' && steps.bump.outputs.skipped != 'true'
         working-directory: head
         env:
           SUBJECT: ${{ steps.bump.outputs.subject }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BOT_TOKEN: ${{ secrets.KIMCHI_BOT_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
+          if [ -z "$BOT_TOKEN" ]; then
+            echo "::error::KIMCHI_BOT_TOKEN 시크릿이 없어 Dependabot PR의 버전을 push할 수 없습니다. Settings → Secrets and variables → Actions 에서 이 저장소 전용 fine-grained PAT(권한: Contents Read and write, Pull requests Read and write)을 KIMCHI_BOT_TOKEN 이름으로 등록하십시오(docs/design.md 참고)."
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json .claude-plugin/plugin.json
           git commit -m "$SUBJECT" -m "Dependabot 이 올린 버전을 AGENTS.md 규칙대로 커밋 하나에 반영합니다."
-          git push origin "HEAD:$HEAD_REF"
-
-      # push는 GITHUB_TOKEN으로 하므로 그 자체로는 워크플로를 다시 트리거하지
-      # 않는다(GitHub의 의도된 동작 — 무한 루프 방지). 그래서 필요한 검사를 직접
-      # 실행 요청한다. workflow_dispatch로 돈 실행도 그 커밋 SHA에 체크런으로
-      # 붙으므로(같은 커밋을 ref로 지정했다) 브랜치 보호에 필요한 필수 검사로
-      # 잡힌다 — 다만 실제로 만족되는지는 이 저장소 밖에서(실제 Dependabot PR로)
-      # 검증이 필요하다는 점을 기록해 둔다(design.md). head.ref는 브랜치 이름이라
-      # env를 거치지 않아도 git ref 문법이 이미 공백 등을 제한하지만, 일관성을 위해
-      # 여기도 env로 넘긴다.
-      - name: 필수 검사를 다시 돌아가게 한다
-        if: steps.needs.outputs.needs-bump == 'true' && steps.bump.outputs.skipped != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          gh workflow run test.yml --repo "${{ github.repository }}" --ref "$HEAD_REF"
+          AUTH_HEADER_VALUE=$(printf 'x-access-token:%s' "$BOT_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH_HEADER_VALUE"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH_HEADER_VALUE" \
+            push "https://github.com/${REPOSITORY}.git" "HEAD:$HEAD_REF"
 
   # develop에 push될 때마다(다른 단위가 먼저 병합되는 등) 그 시점에 열려 있는
   # Dependabot PR들의 버전이 develop을 못 따라가는 채로 남을 수 있다. 그 자리에서
@@ -270,9 +323,15 @@ jobs:
             --jq '[.[] | select(.user.login == "dependabot[bot]")] | map({number, head_sha: .head.sha})' \
             > "${RUNNER_TEMP}/prs.json"
 
+      # "@dependabot recreate" 코멘트는 실제 쓰기 권한이 있는 사람 계정이 달아야
+      # Dependabot이 확실히 받아들인다(공식 문서는 사람이 단 코멘트만 예로 든다) —
+      # github-actions[bot] 이름으로 남는 GITHUB_TOKEN 코멘트는 인식 여부가
+      # 불확실하다(design.md "develop이 앞서가면..." 참고). KIMCHI_BOT_TOKEN이
+      # 있으면 그 PAT(사람 계정)로 달고, 없으면 GITHUB_TOKEN으로 물러난다 — 어느
+      # 쪽이든 코멘트 본문의 사람이 읽을 안내(맨 아래 fallback 문구)는 그대로 둔다.
       - name: 뒤처진 PR에 재생성을 요청한다
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.KIMCHI_BOT_TOKEN || github.token }}
           REPO: ${{ github.repository }}
           DEVELOP_VERSION: ${{ steps.develop.outputs.version }}
           DEVELOP_SHA: ${{ github.sha }}

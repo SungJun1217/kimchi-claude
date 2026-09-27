@@ -1576,40 +1576,143 @@ Dependabot은 자기 PR 브랜치에 다른 사람(또는 봇)이 커밋을 push
 애초에 버전을 자동으로 못 올린다 — "버전이 항상 맞다"와 "리베이스가 항상 자동이다"는
 동시에 가질 수 없어 앞의 것을 골랐다.
 
-### push가 워크플로를 다시 트리거하지 않는 문제
+### 봇 토큰으로 실제 필수 검사를 받는다
 
-`GITHUB_TOKEN`으로 한 push는 새 workflow run을 만들지 않는다(GitHub이 재귀 실행을
-막으려고 의도한 동작). `dependabot-bump`가 push한 커밋에는 그래서 아무 체크런도
-안 붙는다 — 브랜치 보호가 요구하는 필수 검사(`test (22)`, `test (24)`, `test-macos`)가
-영영 안 뜬다. `gh workflow run test.yml --ref <branch>`로 직접 재실행을 요청해
-피해 간다 — `test.yml`에 `workflow_dispatch:`를 열어 뒀다. `--ref`로 준 브랜치의
-최신 커밋(방금 push한 그 커밋)을 그대로 체크아웃해서 도니 체크런이 그 커밋 SHA에
-붙는다 — 브랜치 보호는 SHA 기준으로 필수 검사를 찾지 브랜치 이름 기준이 아니므로
-이걸로 충분하다는 것이 이 설계의 전제다. 이 전제 자체(실제로 필수 검사가 만족되는지)는
-실제 Dependabot PR로 한 번 확인이 필요하다 — 이 저장소 안에서 오프라인으로 재현할
-수 있는 성격의 판정이 아니다.
+첫 버전은 `GITHUB_TOKEN`으로 push했다. `GITHUB_TOKEN`으로 한 push는 새 workflow
+run을 만들지 않는다(GitHub이 재귀 실행을 막으려고 의도한 동작) — `dependabot-bump`가
+push한 커밋에는 그래서 아무 체크런도 안 붙었다. 그 자리를 `gh workflow run
+test.yml --ref <branch>` 디스패치로 메우려 했으나(`test.yml`의 `workflow_dispatch:`),
+**더미 PR #15(2026-09-27, 이미 닫음)로 직접 실측하니 이 전제 자체가 틀렸다.**
+디스패치로 도는 체크런은 그 커밋 SHA에 실제로 붙긴 했지만(`test (22)`/`test
+(24)`/`test-macos`가 그 SHA를 대상으로 성공했다), PR의 `statusCheckRollup`에는
+전혀 잡히지 않았고 `gh pr checks --required`는 "No required checks reported"를
+냈다 — `mergeStateStatus`는 계속 `BLOCKED`로 남았다. 브랜치 보호는 체크런이 SHA에
+붙어 있는 것만으로는 부족하고, 그 체크런이 **그 PR을 향한 `pull_request`(또는
+`check_suite`) 이벤트에서 난 것**이어야 PR의 필수 검사 목록에 실제로 반영된다 —
+`workflow_dispatch`로 별도로 돌린 실행은 같은 SHA를 대상으로 해도 다른 이벤트라
+PR과 묶이지 않는다.
 
-`pr-version.yml`의 `version-check` job도 같은 이유로 이 push에는 다시 안 돈다 — 다만
-이 job은 애초에 Dependabot PR에서는 처음부터 돌지 않는다(바로 다음 문단). 브랜치
-보호의 필수 검사 목록에는 없으니(`test`, `test-macos`만 있다) 병합 자체를 막지는
-않지만, 그렇다고 "이 PR의 버전은 확인된 적이 없다"는 상태로 영영 남는 것도 이상하다.
+그래서 디스패치 대신 **push 자체가 `pull_request`의 `synchronize`를 내게** 만든다.
+`GITHUB_TOKEN`이 아니라 `secrets.KIMCHI_BOT_TOKEN`(이 저장소 하나에만 권한을 준
+fine-grained PAT — 아래 "설정" 참고)으로 push하면, 그 push는 재귀 실행 방지 예외에
+걸리지 않는 진짜(사람 계정의) push라 GitHub이 정상적으로 `pull_request:
+synchronize`를 낸다. `test.yml`도 `pr-version.yml`의 `version-check`도 그 이벤트로
+다시 돌아 그 커밋 SHA에 필수 검사로 붙는다 — 별도의 디스패치 단계 자체가 필요 없어져
+`gh workflow run test.yml --ref <branch>` 단계와 그 단계가 필요로 했던 `actions:
+write` 권한을 지웠다. `test.yml`의 `workflow_dispatch:` 트리거는 그대로 남겨
+뒀다(수동으로 아무 브랜치나 다시 돌려 보고 싶을 때 쓰는 것으로, 남겨 둬도 해가
+없다) — 다만 그 트리거를 이 bump 흐름이 쓴다는 낡은 설명은 지웠다.
 
-### `version-check`가 Dependabot PR을 건너뛰는 이유
+시크릿이 비어 있으면(PAT를 아직 등록하지 않은 저장소를 이 워크플로 그대로 fork해
+쓰는 경우 등) push를 시도하지 않는다 — "커밋하고 push한다" 단계 첫머리에서
+`::error::`를 내고 `exit 1`로 job 자체를 실패시킨다. 조용히 bump를 건너뛰고
+초록불로 끝나는 편이 더 나빠 보인다 — Dependabot PR의 버전이 하나도 안 올라간 채
+"이 job은 문제없다"는 신호를 내면, 그 PR은 `version-check`의 스킵 조건(head 커밋이
+아직 `dependabot[bot]` 본인 것)에도 걸려 있어 두 job 모두 초록인데 버전은 하나도
+안 맞는 상태로 남는다 — 눈에 아예 안 띄는 실패다.
 
-처음에는 "Dependabot PR도 결국 `dependabot-bump`가 형식에 맞는 커밋을 만들어 push
-하니, 그다음 `synchronize`에서 `version-check`가 자연스럽게 다시 돌아 통과할 것"이라고
-가정했다. 틀렸다 — `dependabot-bump`의 push는 방금 설명한 대로 `GITHUB_TOKEN`으로
-하는 push라 **애초에 새 `synchronize` 이벤트 자체를 안 만든다.** 즉 `version-check`는
-Dependabot PR에서 한 번 빨간불이 켜지면 그 이후 누가 그 브랜치에 직접 push하지 않는
-한 영영 다시 안 돈다 — "버전이 맞다"는 사실을 검사가 확인해 준 적이 없는데도 PR
-목록에는 계속 실패로 남는다.
+토큰을 두 체크아웃(`base/`, `head/`) 어디에도 심지 않는다 — 둘 다
+`persist-credentials: false`를 준다. 처음 버전은 이걸 빠뜨렸고, **로컬 재현으로
+실제 버그를 찾았다**: `actions/checkout`은 기본값(`persist-credentials: true`)이면
+체크아웃 직후 `GITHUB_TOKEN`을 그 작업 디렉터리의 로컬 git 설정에
+`http.https://github.com/.extraheader`로 심어 둔다. 이 extraheader는 git이 그
+호스트로 보내는 **모든** 요청에 항상 실리고, 나중에 `git remote set-url`로 URL에
+다른 자격 증명(예: `https://x-access-token:$BOT_TOKEN@...`)을 얹어도 그 URL
+자격 증명보다 우선한다 — git은 403을 만나도 URL 쪽으로 넘어가 재시도하지 않는다.
+그래서 처음 버전(`git remote set-url` 방식)은 실제로는 여전히 `GITHUB_TOKEN`으로
+push를 시도했다 — 읽기 전용 토큰이라 403이 났고, 설령 쓰기 권한을 줬더라도
+`GITHUB_TOKEN`이 한 push는 이 절 첫머리에서 설명한 재귀 실행 방지에 걸려
+`synchronize`를 못 냈을 것이다. 어느 쪽으로도 이 워크플로의 목적(진짜
+`synchronize`를 내는 것) 자체가 성립하지 않았다.
 
-그래서 `version-check`는 PR 작성자가 `dependabot[bot]`이면 실제 확인 스텝을 전부
-건너뛰고 `::notice::`만 남긴다. Dependabot PR의 버전이 실제로 맞는지는 전적으로
-`dependabot-bump`의 몫이다 — 그 job은 `bumpVersionFiles`가 예외를 던지면(두 파일
-버전이 심하게 어긋나 있는 등 스스로 감당 못 하는 상황) job 자체가 빨간 X로
-실패한다. 확인하는 job과 고치는 job을 하나로 합쳐 "확인했지만 못 고쳤다"는 상태를
-만들지 않고, 애초에 고치는 job 하나가 성공/실패를 전부 책임지게 했다.
+고친 방법은 두 체크아웃에 `persist-credentials: false`를 줘 애초에 `GITHUB_TOKEN`을
+로컬 설정에 안 남기고, push 명령 하나에만 `git -c http.https://github.com/
+.extraheader="AUTHORIZATION: basic <값>"`로 자격 증명을 실어 보낸다 — 이 `-c`는
+그 한 번의 git 프로세스에만 적용되고 `.git/config` 파일에는 전혀 안 남는다(remote
+URL에 자격 증명을 넣는 방식은 그 자체로 파일에 시크릿을 평문으로 남긴다는 점에서도
+더 나쁘다). `<값>`은 `x-access-token:$BOT_TOKEN`을 base64로 인코딩한
+파생값이다(git의 HTTP Basic 인증 규약) — GitHub Actions의 자동 마스킹은 시크릿
+원문 문자열만 가리므로, 이 파생값은 `::add-mask::`로 따로 가린다. 시크릿은 다른
+값과 같은 원칙대로 `env:`로만 받아 `"$BOT_TOKEN"`으로 참조하지, `${{ secrets.
+KIMCHI_BOT_TOKEN }}`을 `run:` 문자열에 직접 잇지 않는다.
+
+### 설정 — `KIMCHI_BOT_TOKEN`
+
+유지자가 한 번 준비해 둬야 하는 것은 다음과 같다.
+
+1. GitHub 개인 계정(이 저장소에 쓰기 권한이 있는 계정) 설정에서 fine-grained
+   personal access token을 새로 만든다.
+2. **Repository access**를 "Only select repositories"로 좁히고
+   `SungJun1217/kimchi-claude` 하나만 선택한다 — 다른 저장소에는 이 토큰이 아무
+   권한도 없다.
+3. **Permissions**는 딱 두 가지만 준다 — **Contents: Read and write**(브랜치에
+   커밋을 push하는 데 필요하다), **Pull requests: Read and write**(재생성 요청
+   코멘트를 사람 계정으로 달려면 필요하다 — 아래 "재생성 요청" 참고). 그 밖의
+   권한(Actions, Issues, Workflows 등)은 필요 없다.
+4. 만료(expiration)를 설정한다 — 무기한 토큰은 만들지 않는다. 만료가 오면
+   재발급하고 아래 5번을 다시 한다.
+5. 저장소 Settings → Secrets and variables → Actions → New repository secret에
+   이름 `KIMCHI_BOT_TOKEN`, 값에 방금 만든 토큰을 넣는다. 이걸로 끝이다 — 아래
+   절에서 설명하듯, 이 저장소 구성에서는 Dependabot 시크릿에 따로 등록할 필요가
+   없다(오히려 등록하면 노출 범위만 넓어진다).
+
+### `pull_request_target`과 Dependabot 액터 — 저장소 시크릿은 그대로 온다
+
+GitHub 문서가 명시하는 규칙은 이렇다 — Dependabot이 **직접** 낸 이벤트
+(`pull_request`, `push` 등, Dependabot이 자기 브랜치에 커밋하는 그 이벤트 자체)에서는
+`GITHUB_TOKEN`이 읽기 전용으로 내려오고 저장소 Actions 시크릿은 아예 전달되지
+않는다(대신 별도 저장소인 Dependabot 시크릿만 전달된다) — 시크릿이 Dependabot이
+통제하는 의존성 매니페스트를 거쳐 유출되는 것을 막으려는 조치다. 이 제한은
+**`pull_request_target`에는 적용되지 않는다 — base 브랜치 자체가 Dependabot이
+만든 것이 아닌 한.** `dependabot-bump`의 base는 `develop`이고, `develop`은 사람이
+만든 브랜치라 Dependabot이 만든 브랜치가 아니다. 그러므로 `pull_request_target`으로
+도는 이 job에는 저장소 Actions 시크릿(`KIMCHI_BOT_TOKEN` 포함)이 정상적으로
+전달된다 — `github.token`을 지금까지 문제없이 써 온 이력도 이 규칙과 일치한다.
+
+이 규칙을 안다고 해서 Dependabot 시크릿에도 같은 값을 등록해 둘 이유는 없다 —
+오히려 하지 않는 편이 낫다. Dependabot 시크릿은 Dependabot이 **직접** 트리거하는
+이벤트(`pull_request` 등 — `test.yml`이 Dependabot PR마다 `npm test`를 돌리는
+그 이벤트가 정확히 여기 해당한다)에도 전달된다. 그 이벤트들은 이 저장소 안 어느
+워크플로도 `KIMCHI_BOT_TOKEN`을 참조하지 않으니 지금 당장 새는 경로는 없지만,
+쓰지 않는 곳에까지 시크릿의 노출 범위를 넓힐 이유가 없다(최소 권한 원칙) — 필요한
+`pull_request_target` 쪽에서 이미 정상적으로 오므로, Actions 시크릿 하나로 충분하다.
+
+### `version-check`가 Dependabot PR을 건너뛰는 조건을 좁혔다
+
+이전 버전은 "PR 작성자가 `dependabot[bot]`이면 통째로 건너뛴다"였다. 이유는
+간단했다 — `dependabot-bump`의 push가 `GITHUB_TOKEN`으로 하는 push라 **애초에
+새 `synchronize` 이벤트 자체를 안 만들었기 때문**이다. `version-check`는
+Dependabot PR에서 한 번 빨간불이 켜지면 그 이후 누가 그 브랜치에 직접 push하지
+않는 한 영영 다시 안 돌았다 — "버전이 맞다"는 사실을 검사가 확인해 준 적이 없는데도
+PR 목록에는 계속 실패로 남았다.
+
+`dependabot-bump`가 `KIMCHI_BOT_TOKEN`으로 push하도록 바꾸면서 이 전제가 사라졌다
+— push가 진짜 `synchronize`를 내므로, bump 커밋이 올라간 뒤에는 `version-check`가
+자연스럽게 다시 돈다. 그런데 "PR 작성자"는 병합될 때까지 항상 `dependabot[bot]`로
+고정돼 있어, 그 값만으로는 "이미 bump된 뒤의 재실행"과 "아직 bump되지 않은 최초
+실행"을 가를 수 없다 — 작성자 하나만 보면 여전히 통째로 건너뛰거나 통째로 안
+건너뛰거나 둘 중 하나만 고를 수 있는데, 필요한 것은 그 사이의 상태 전환이다.
+
+그래서 판정 기준을 **head 커밋 하나의 작성자**로 옮겼다. bump 전에는 head 커밋이
+Dependabot이 만든 커밋 그대로라 작성자가 `dependabot[bot]`이고, `dependabot-bump`가
+push한 뒤에는 head 커밋이 그 bump 커밋(작성자 `github-actions[bot]`)으로 바뀐다.
+`version-check`는 체크아웃 직후 `git log -1 --format='%an' <head sha>`로 이 값을
+직접 읽는다 — 이미 `fetch-depth: 0`으로 전체 이력을 받아 둔 그 자리에서 읽으므로
+추가 API 호출이 없다. PR 작성자가 `dependabot[bot]`이면서 **동시에** head 커밋
+작성자도 아직 `dependabot[bot]`일 때만 건너뛰고, 그 밖의 모든 경우(작성자가 애초에
+Dependabot이 아니거나, bump 커밋이 이미 올라갔거나)는 평소대로 전체를 확인한다.
+
+무한 루프 걱정은 없다 — `dependabot-bump`의 "다시 올릴 것이 있는지 본다" 단계가
+이미 멱등성을 보장한다(head가 base를 이미 앞서 있고 두 파일이 같으면 `needs-bump`가
+`false`). bump 커밋이 올라간 뒤 그 push가 낸 `synchronize`에서 `dependabot-bump`가
+다시 돌아도, 이번엔 손볼 것이 없다고 판단해 아무것도 push하지 않는다 — 그래서
+`version-check`가 다시 도는 것도 딱 한 번뿐이다.
+
+Dependabot PR의 버전이 실제로 맞는지는 여전히 전적으로 `dependabot-bump`의 몫이다
+— 그 job은 시크릿이 없거나 `bumpVersionFiles`가 예외를 던지면(두 파일 버전이 심하게
+어긋나 있는 등) job 자체가 빨간 X로 실패한다. 확인하는 job과 고치는 job을 하나로
+합쳐 "확인했지만 못 고쳤다"는 상태를 만들지 않는다는 원칙은 그대로다 — 다만 이제는
+고친 뒤에 확인하는 job도 실제로 한 번 더 돌아 그 사실을 스스로 검증한다.
 
 ### develop이 앞서가면 열려 있는 Dependabot PR을 깨워야 한다
 
@@ -1643,9 +1746,14 @@ explain why we can't rebase"). 대신 `@dependabot recreate`를 쓴다 — 이�
 이 명령을 Dependabot이 실제로 받아 처리하는지(공식 문서는 사람이 단 코멘트만
 예로 들고, `github-actions[bot]`처럼 다른 봇이 단 코멘트도 인식하는지는 명시하지
 않는다)는 이 저장소 안에서 확인할 방법이 없다 — 실제 Dependabot PR로 검증이
-필요한 부분으로 남겨 둔다. 그래서 코멘트 본문에 사람이 읽을 설명도 함께 적는다 —
-Dependabot이 명령을 무시하더라도 사람이 같은 명령을 직접 달 수 있게, 코멘트 자체가
-"무엇을 해야 하는지"는 항상 전달한다.
+필요한 부분으로 남겨 둔다. 그래서 이 job은 코멘트를 `secrets.KIMCHI_BOT_TOKEN`이
+있으면 그 값으로 단다 — 실제 쓰기 권한이 있는 사람 계정의 코멘트라 `github-actions
+[bot]`보다 인식될 가능성이 높다고 본다. 시크릿이 없으면 `github.token`으로
+물러난다(이 job은 `pull_request_target`이 아니라 `push`로 도는 job이라 애초에
+액터 제한과 무관하고, PR 헤드를 체크아웃하지도 않으므로 `github.token`을 쓰는 데
+`dependabot-bump`와 같은 우려는 없다). 어느 토큰으로 달든 코멘트 본문에 사람이
+읽을 설명도 함께 적는다 — Dependabot이 명령을 무시하더라도 사람이 같은 명령을
+직접 달 수 있게, 코멘트 자체가 "무엇을 해야 하는지"는 항상 전달한다.
 
 같은 develop sha에 대해 같은 PR에 코멘트를 두 번 달지 않는다 — 코멘트 본문에
 `<!-- kimchi-claude-recreate-nudge:<develop sha> -->` 마커를 심어 두고, 새로 달기
