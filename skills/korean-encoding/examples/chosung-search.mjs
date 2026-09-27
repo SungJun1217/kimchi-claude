@@ -10,30 +10,21 @@
 // "기" → "김" → "김ㅊ" → "김치" 를 차례로 보낸다. 글자를 칠 때마다 결과를 보여 주는
 // 검색창에서 완성된 질의만 받으면, 결과가 사라졌다가 마지막 글자에서 다시 나타난다.
 
-import { decompose } from "./hangul-jamo.mjs";
+import { decompose, INITIALS } from "./hangul-jamo.mjs";
 
 const SYLLABLE_BASE = 0xac00;
 const SYLLABLE_LAST = 0xd7a3;
 const MEDIAL_COUNT = 21;
 const FINAL_COUNT = 28;
 
-// 초성 19개. 순서가 유니코드 배열 순서와 같아야 한다.
-const INITIALS = [
-  "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ",
-  "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
-];
-
-// 겹받침의 첫 자음. "달" 까지 친 사람은 "닭" 을 찾고 있을 수 있다.
-const COMPOUND_FINAL_HEAD = {
-  "ㄳ": "ㄱ", "ㄵ": "ㄴ", "ㄶ": "ㄴ", "ㄺ": "ㄹ", "ㄻ": "ㄹ", "ㄼ": "ㄹ",
-  "ㄽ": "ㄹ", "ㄾ": "ㄹ", "ㄿ": "ㄹ", "ㅀ": "ㄹ", "ㅄ": "ㅂ",
-};
-
-// 겹받침의 둘째 자음. 겹받침을 다 친 질의("닭")가 대상에서는 다음 음절 초성으로 넘어가
-// 나뉘어 있을 때("달" + "걀") 맞춰 보는 데 쓴다.
-const COMPOUND_FINAL_TAIL = {
-  "ㄳ": "ㅅ", "ㄵ": "ㅈ", "ㄶ": "ㅎ", "ㄺ": "ㄱ", "ㄻ": "ㅁ", "ㄼ": "ㅂ",
-  "ㄽ": "ㅅ", "ㄾ": "ㅌ", "ㄿ": "ㅍ", "ㅀ": "ㅎ", "ㅄ": "ㅅ",
+// 겹받침을 이루는 두 홑자음. [첫 자음, 둘째 자음] 이다.
+// 첫 자음  "달" 까지 친 사람은 "닭" 을 찾고 있을 수 있다.
+// 둘째 자음  겹받침을 다 친 질의("닭")가 대상에서는 다음 음절 초성으로 넘어가
+//           나뉘어 있을 때("달" + "걀") 맞춰 보는 데 쓴다.
+const COMPOUND_FINALS = {
+  "ㄳ": ["ㄱ", "ㅅ"], "ㄵ": ["ㄴ", "ㅈ"], "ㄶ": ["ㄴ", "ㅎ"], "ㄺ": ["ㄹ", "ㄱ"],
+  "ㄻ": ["ㄹ", "ㅁ"], "ㄼ": ["ㄹ", "ㅂ"], "ㄽ": ["ㄹ", "ㅅ"], "ㄾ": ["ㄹ", "ㅌ"],
+  "ㄿ": ["ㄹ", "ㅍ"], "ㅀ": ["ㄹ", "ㅎ"], "ㅄ": ["ㅂ", "ㅅ"],
 };
 
 /**
@@ -94,11 +85,11 @@ function composingMatches(typed, char, next) {
   if (q.initial !== h.initial || q.medial !== h.medial) return false;
 
   if (q.final === "") return true;
-  if (COMPOUND_FINAL_HEAD[h.final] === q.final) return true;
+  if (COMPOUND_FINALS[h.final]?.[0] === q.final) return true;
   // 질의가 겹받침이고 대상은 그 첫 자음까지만 종성으로 갖고 있으면, 둘째 자음이 다음
   // 음절의 초성으로 넘어갔는지 본다. "닭" 질의가 "달"(종성 ㄹ) + "걀"(초성 ㄱ) 과 만난다.
-  if (COMPOUND_FINAL_HEAD[q.final] === h.final && next !== undefined && initialOf(next) === COMPOUND_FINAL_TAIL[q.final])
-    return true;
+  const [head, tail] = COMPOUND_FINALS[q.final] ?? [];
+  if (head === h.final && next !== undefined && initialOf(next) === tail) return true;
   return h.final === "" && next !== undefined && initialOf(next) === q.final;
 }
 

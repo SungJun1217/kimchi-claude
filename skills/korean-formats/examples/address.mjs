@@ -111,9 +111,7 @@ export function sameAddress(a, b) {
 
     // 시도 이름이 다음 낱말과 붙어 올 때가 있다("서울강남구"). 아는 시도 이름이 앞에
     // 있으면 떼어 낸다.
-    const known = [...REGION_CANONICAL.keys()]
-      .sort((x, y) => y.length - x.length)
-      .find((name) => first.startsWith(name));
+    const known = REGION_NAMES_BY_LENGTH.find((name) => first.startsWith(name));
     const joined =
       known && known.length < first.length
         ? [canonicalRegion(known), first.slice(known.length), ...rest].join(" ")
@@ -153,6 +151,9 @@ const REGION_ALIASES = {
 const REGION_CANONICAL = new Map(
   Object.entries(REGION_ALIASES).flatMap(([short, names]) => [[short, short], ...names.map((name) => [name, short])])
 );
+// 긴 이름부터 맞춰야 한다("서울특별시"가 "서울"에 먹히면 안 된다). 목록이 안 바뀌므로
+// sameAddress 가 불릴 때마다 다시 정렬할 필요는 없다.
+const REGION_NAMES_BY_LENGTH = [...REGION_CANONICAL.keys()].sort((x, y) => y.length - x.length);
 
 /**
  * 시도 이름을 짧은 이름 하나로 모은다. 시도가 아니면 그대로 돌려준다.

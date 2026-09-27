@@ -12,13 +12,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { loadRules } from "../hooks/lib/rules.mjs";
 import { lint } from "../hooks/lib/lint.mjs";
 import { findParticleErrors } from "../hooks/lib/particle.mjs";
+import { ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { rules } = loadRules(join(ROOT, "rules"));
 
 /** 예외 표시를 떼고 읽는다. 자료 파일이라 dogfood 시험에서 빠지도록 표시를 달아 두었다. */

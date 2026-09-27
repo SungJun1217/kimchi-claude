@@ -6,30 +6,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { findResidentNumbers, redact, redactText, formatLeak } from "../hooks/lib/pii.mjs";
 import { extractPiiTargets as extractTargets } from "../hooks/lib/pii.mjs";
 import { findResidentNumbers as skillFind } from "../skills/korean-identifiers/examples/resident-number.mjs";
-import { fastestMs } from "./helpers.mjs";
+import { fastestMs, ROOT, runNodeJson, toolCall } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "guard.mjs");
 
 function runHook(payload, env = {}) {
-  const stdout = execFileSync("node", [HOOK], {
-    input: JSON.stringify(payload),
-    encoding: "utf8",
-    env: { ...process.env, KIMCHI_DISABLE: "", KIMCHI_PII: "", ...env },
-  });
-  return stdout.trim() === "" ? null : JSON.parse(stdout);
+  return runNodeJson(HOOK, payload, { env, clear: ["KIMCHI_DISABLE", "KIMCHI_PII"] });
 }
 
-const write = (content, filePath = "src/seed.ts") => ({
-  hook_event_name: "PreToolUse",
-  tool_name: "Write",
-  tool_input: { file_path: filePath, content },
-});
+const write = (content, filePath = "src/seed.ts") => toolCall("PreToolUse", "Write", { file_path: filePath, content });
 
 // 한글 문서에서 복사한 번호는 전각으로 온다. 형식만 맞는 가짜 번호다.
 const FULLWIDTH_SAMPLE = "９００１０１－１２３４５６７"; // kimchi-allow-rrn
@@ -247,11 +236,7 @@ test("KIMCHI_PII=off 와 KIMCHI_DISABLE=1 은 아무것도 하지 않는다", ()
 });
 
 test("커밋 명령에서도 막는다", () => {
-  const output = runHook({
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: 'git commit -m "사용자 900101-1234567 자료 추가"' },
-  });
+  const output = runHook(toolCall("PreToolUse", "Bash", { command: 'git commit -m "사용자 900101-1234567 자료 추가"' }));
   assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
 });
 
@@ -450,11 +435,7 @@ test("NotebookEdit 의 new_source 도 검사 대상이다", () => {
 });
 
 test("훅이 NotebookEdit 을 실제로 막는다", () => {
-  const output = runHook({
-    hook_event_name: "PreToolUse",
-    tool_name: "NotebookEdit",
-    tool_input: { notebook_path: "nb.ipynb", new_source: 'x = "900101-1234567"' },
-  });
+  const output = runHook(toolCall("PreToolUse", "NotebookEdit", { notebook_path: "nb.ipynb", new_source: 'x = "900101-1234567"' }));
   assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
   assert.match(output.hookSpecificOutput.permissionDecisionReason, /주민등록번호로 보이는 값/);
 });
@@ -532,24 +513,20 @@ test("경로에서 찾았으면 kimchi-allow-rrn 대신 이름을 바꾸라고 �
 // ── 위치를 더 정확히 말한다(결함 6) ───────────────────────────
 
 test("MultiEdit 은 몇 번째 편집인지 메시지에 밝힌다", () => {
-  const output = runHook({
-    hook_event_name: "PreToolUse",
-    tool_name: "MultiEdit",
-    tool_input: {
+  const output = runHook(
+    toolCall("PreToolUse", "MultiEdit", {
       file_path: "a.ts",
       edits: [{ new_string: "깨끗한 텍스트" }, { new_string: 'const seed = "900101-1234567";' }],
-    },
-  });
+    })
+  );
   assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
   assert.match(output.hookSpecificOutput.permissionDecisionReason, /2번째 편집/);
 });
 
 test("Edit 은 새 텍스트 기준임을 밝힌다", () => {
-  const output = runHook({
-    hook_event_name: "PreToolUse",
-    tool_name: "Edit",
-    tool_input: { file_path: "a.ts", old_string: "x", new_string: 'const seed = "900101-1234567";' },
-  });
+  const output = runHook(
+    toolCall("PreToolUse", "Edit", { file_path: "a.ts", old_string: "x", new_string: 'const seed = "900101-1234567";' })
+  );
   assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
   assert.match(output.hookSpecificOutput.permissionDecisionReason, /새 텍스트 기준/);
 });

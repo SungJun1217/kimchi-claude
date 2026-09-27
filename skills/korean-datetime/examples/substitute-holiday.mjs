@@ -57,8 +57,8 @@ const NAME_ALIASES = {
 /**
  * 공휴일 이름을 정규 이름으로 접는다. 겹침을 셀 때와 대체 대상인지 볼 때 이 이름을 쓴다.
  *
- * 근로자의 날은 특별하다. 2026년 대통령령 제36290호로 이름이 노동절로 바뀌며 대체
- * 대상이 됐다 — 그 이전 연도의 근로자의 날은 대체 대상이 아니었으므로 접지 않는다.
+ * 근로자의 날은 특별하다. 파일 위쪽에 적은 2026년 개정(제3조)으로 이름이 노동절로
+ * 바뀌며 대체 대상이 됐다 — 그 이전 연도의 근로자의 날은 대체 대상이 아니었으므로 접지 않는다.
  *
  * @param {string} name
  * @param {number} year
@@ -73,9 +73,11 @@ function isCovered(name) {
   return SUNDAY_ONLY.has(name) || WEEKEND_OR_OVERLAP.has(name);
 }
 
+const isWeekend = (weekday) => weekday === 0 || weekday === 6;
+
 function weekdayTriggers(name, weekday) {
   if (SUNDAY_ONLY.has(name)) return weekday === 0;
-  return weekday === 0 || weekday === 6;
+  return isWeekend(weekday);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -167,7 +169,7 @@ export function withSubstitutes(holidays) {
         break;
       }
       const candidateWeekday = candidate.getUTCDay();
-      if (candidateWeekday !== 0 && candidateWeekday !== 6 && !occupied.has(key)) {
+      if (!isWeekend(candidateWeekday) && !occupied.has(key)) {
         occupied.add(key);
         added.push({ date: key, name: "대체공휴일", substituteFor: coveredNames.join(", ") });
         break;
@@ -184,9 +186,9 @@ export function withSubstitutes(holidays) {
 // **2025년까지는 근로자의 날(5월 1일)이 그랬다.** 관공서의 공휴일에 관한 규정에 없어서
 // 공공데이터포털 공휴일 목록에도 나오지 않았다. 관공서는 정상 근무하고 은행만 휴무였다.
 //
-// 2026년 대통령령 제36290호(2026-04-30 개정)로 이름이 노동절로 바뀌며 관공서 공휴일이
-// 됐다. 그 해부터는 withSubstitutes() 에 넘기는 공휴일 목록(API) 에 이미 들어 있으므로
-// 여기서 또 더하지 않는다 — 더하면 이미 공휴일인 날을 "은행만 쉬는 날"로 착각하게 된다.
+// 파일 위쪽에 적은 2026년 개정으로 이름이 노동절로 바뀌며 관공서 공휴일이 됐다. 그
+// 해부터는 withSubstitutes() 에 넘기는 공휴일 목록(API) 에 이미 들어 있으므로 여기서
+// 또 더하지 않는다 — 더하면 이미 공휴일인 날을 "은행만 쉬는 날"로 착각하게 된다.
 const BANK_ONLY_HOLIDAYS = [{ month: 5, day: 1, name: "근로자의 날" }];
 const BANK_ONLY_LAST_YEAR = 2025;
 
@@ -252,8 +254,7 @@ export function addBusinessDays(from, businessDays, holidayKeys) {
 
   while (remaining > 0) {
     date = addDays(date, 1);
-    const weekday = date.getUTCDay();
-    if (weekday === 0 || weekday === 6) continue;
+    if (isWeekend(date.getUTCDay())) continue;
     if (keys.has(toKey(date))) continue;
     remaining -= 1;
   }

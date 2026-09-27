@@ -3,32 +3,24 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { extractTargets, autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
 import { extractCommitTargets } from "../hooks/lib/bash-commit.mjs";
-import { fastestMs } from "./helpers.mjs";
+import { fastestMs, ROOT, runNodeJson, toolCall } from "./helpers.mjs";
 
 // artifact.mjs가 쓰는 것과 같은 위치 정보 없이, 문자열만 필요한 이 파일의 시험을 위한 얇은 래퍼다.
 const extractCommitMessages = (command) => extractCommitTargets(command).map((t) => t.text);
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "guard.mjs");
+const CLEAR = ["KIMCHI_DISABLE", "KIMCHI_AUTOFIX", "KIMCHI_BLOCK"];
 
 function runHook(payload, env = {}) {
-  const stdout = execFileSync("node", [HOOK], {
-    input: JSON.stringify(payload),
-    encoding: "utf8",
-    env: { ...process.env, KIMCHI_DISABLE: "", KIMCHI_AUTOFIX: "", KIMCHI_BLOCK: "", ...env },
-  });
-  return stdout.trim() === "" ? null : JSON.parse(stdout);
+  return runNodeJson(HOOK, payload, { env, clear: CLEAR });
 }
 
-const commit = (message) => ({
-  hook_event_name: "PostToolUse",
-  tool_name: "Bash",
-  tool_input: { command: `git commit -m "${message}"` },
-});
+const RULES = loadToneRules();
+
+const commit = (message) => toolCall("PostToolUse", "Bash", { command: `git commit -m "${message}"` });
 
 test("커밋 메시지에서 -m 형태를 뽑는다", () => {
   assert.deepEqual(extractCommitMessages('git commit -m "메시지입니다"'), ["메시지입니다"]);
@@ -78,11 +70,10 @@ test("영어 커밋 메시지에는 개입하지 않는다", () => {
 });
 
 test("소스 파일에는 개입하지 않는다", () => {
-  const payload = {
-    hook_event_name: "PostToolUse",
-    tool_name: "Write",
-    tool_input: { file_path: "/tmp/a.js", content: "// 리팩토링이 필요한 컨텐츠입니다" },
-  };
+  const payload = toolCall("PostToolUse", "Write", {
+    file_path: "/tmp/a.js",
+    content: "// 리팩토링이 필요한 컨텐츠입니다",
+  });
   assert.equal(runHook(payload), null);
 });
 
@@ -173,11 +164,11 @@ ${content}`, "utf8");
 
   try {
     // Write: 넘어온 글 안에 선언이 있으면 lint 가 알아서 걸러 낸다
-    assert.equal(runHook({
-      hook_event_name: "PostToolUse", tool_name: "Write",
-      tool_input: { file_path: declared, content: `<!-- kimchi-ignore-file -->
-${content}` },
-    }), null);
+    assert.equal(runHook(toolCall("PostToolUse", "Write", {
+      file_path: declared,
+      content: `<!-- kimchi-ignore-file -->
+${content}`,
+    })), null);
 
     // Edit: 조각에는 선언이 없다. 파일을 읽어 확인해야 한다
     assert.equal(extractTargets("Edit", { file_path: declared, new_string: content }).length, 0);
@@ -190,32 +181,20 @@ ${content}` },
 });
 
 test("F2: 경로에 나온 같은 문자열은 그대로 두고 커밋 메시지만 고친다", () => {
-  const payload = {
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: 'git add docs/리팩토링.md && git commit -m "리팩토링"' },
-  };
+  const payload = toolCall("PreToolUse", "Bash", { command: 'git add docs/리팩토링.md && git commit -m "리팩토링"' });
   const output = runHook(payload, { KIMCHI_AUTOFIX: "1" });
   assert.match(output.hookSpecificOutput.updatedInput.command, /docs\/리팩토링\.md/);
   assert.match(output.hookSpecificOutput.updatedInput.command, /-m "리팩터링"/);
 });
 
 test("F4: -m 이 두 번이면 둘 다 고친다", () => {
-  const payload = {
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: 'git commit -m "컨텐츠" -m "리팩토링 컨텐츠"' },
-  };
+  const payload = toolCall("PreToolUse", "Bash", { command: 'git commit -m "컨텐츠" -m "리팩토링 컨텐츠"' });
   const output = runHook(payload, { KIMCHI_AUTOFIX: "1" });
   assert.match(output.hookSpecificOutput.updatedInput.command, /-m "콘텐츠" -m "리팩터링 콘텐츠"/);
 });
 
 test("F5: 실제로 바뀐 건수만 보고한다", () => {
-  const payload = {
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: 'git commit -m "컨텐츠 정리"' },
-  };
+  const payload = toolCall("PreToolUse", "Bash", { command: 'git commit -m "컨텐츠 정리"' });
   const output = runHook(payload, { KIMCHI_AUTOFIX: "1" });
   const dashCount = (output.systemMessage.match(/^- /gm) || []).length;
   const stated = Number(output.systemMessage.match(/(\d+)건을 고쳤습니다/)[1]);
@@ -223,11 +202,7 @@ test("F5: 실제로 바뀐 건수만 보고한다", () => {
 });
 
 test("F3: git commit -am 도 자동 교정한다", () => {
-  const payload = {
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: 'git commit -am "리팩토링"' },
-  };
+  const payload = toolCall("PreToolUse", "Bash", { command: 'git commit -am "리팩토링"' });
   const output = runHook(payload, { KIMCHI_AUTOFIX: "1" });
   assert.match(output.hookSpecificOutput.updatedInput.command, /-am "리팩터링"/);
 });
@@ -246,11 +221,7 @@ test("F6: 울타리 코드 블록 안의 Edit은 건드리지 않는다", () => 
     assert.equal(extractTargets("Edit", { file_path: file, old_string: oldFragment, new_string: newFragment }).length, 0);
 
     const output = runHook(
-      {
-        hook_event_name: "PreToolUse",
-        tool_name: "Edit",
-        tool_input: { file_path: file, old_string: oldFragment, new_string: newFragment },
-      },
+      toolCall("PreToolUse", "Edit", { file_path: file, old_string: oldFragment, new_string: newFragment }),
       { KIMCHI_AUTOFIX: "1" }
     );
     assert.equal(output, null);
@@ -335,11 +306,9 @@ test("항목3: PostToolUse에서는 파일에 이미 반영된 new_string으로 
     });
     assert.equal(targets.length, 0);
 
-    const output = runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Edit",
-      tool_input: { file_path: file, old_string: 'const msg = "메세지 컨텐츠";', new_string: newFragment },
-    });
+    const output = runHook(
+      toolCall("PostToolUse", "Edit", { file_path: file, old_string: 'const msg = "메세지 컨텐츠";', new_string: newFragment })
+    );
     assert.equal(output, null);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -378,10 +347,7 @@ test("항목5: 괄호나 조사가 바로 붙은 한글 경로도 손대지 않�
     "메세지_컨텐츠.md를 고쳤습니다.",
   ];
   for (const content of cases) {
-    const output = runHook(
-      { hook_event_name: "PreToolUse", tool_name: "Write", tool_input: { file_path: "/tmp/x.md", content } },
-      { KIMCHI_AUTOFIX: "1" }
-    );
+    const output = runHook(toolCall("PreToolUse", "Write", { file_path: "/tmp/x.md", content }), { KIMCHI_AUTOFIX: "1" });
     assert.equal(output, null, content);
   }
 });
@@ -390,11 +356,9 @@ test("항목A: 들여쓰기·AsciiDoc 가리개가 커밋 메시지 지적까지
   const indented = runHook(commit("    컨텐츠 메세지 정리"));
   assert.match(indented.hookSpecificOutput.additionalContext, /콘텐츠/);
 
-  const heredocPayload = {
-    hook_event_name: "PostToolUse",
-    tool_name: "Bash",
-    tool_input: { command: ["git commit -F - <<-EOF", "\t- 컨텐츠 항목", "EOF"].join("\n") },
-  };
+  const heredocPayload = toolCall("PostToolUse", "Bash", {
+    command: ["git commit -F - <<-EOF", "\t- 컨텐츠 항목", "EOF"].join("\n"),
+  });
   const heredoc = runHook(heredocPayload);
   assert.match(heredoc.hookSpecificOutput.additionalContext, /콘텐츠/);
 });
@@ -402,14 +366,10 @@ test("항목A: 들여쓰기·AsciiDoc 가리개가 커밋 메시지 지적까지
 test("항목B: 문서의 들여쓰기 코드·<pre> 안 조사는 PostToolUse도, KIMCHI_AUTOFIX도 건드리지 않는다", () => {
   // fixOne/warnAboutTone 이 findParticleErrors·fixParticles 에 ext 를 안 넘기면 이 두 블록형
   // 가리개가 빠져 코드 예시의 "commit를"·"json를" 까지 고치거나 지적한다(0.14.11 이전 버그).
-  const payload = {
-    hook_event_name: "PostToolUse",
-    tool_name: "Write",
-    tool_input: {
-      file_path: "/tmp/kimchi-ext-test.md",
-      content: "빈 줄 뒤:\n\n    git commit를 실행한다\n\n<pre>json를 출력</pre>",
-    },
-  };
+  const payload = toolCall("PostToolUse", "Write", {
+    file_path: "/tmp/kimchi-ext-test.md",
+    content: "빈 줄 뒤:\n\n    git commit를 실행한다\n\n<pre>json를 출력</pre>",
+  });
   assert.equal(runHook(payload), null, "코드 예시 안의 조사까지 경고했다");
 
   const autofixPayload = { ...payload, hook_event_name: "PreToolUse" };
@@ -419,30 +379,18 @@ test("항목B: 문서의 들여쓰기 코드·<pre> 안 조사는 PostToolUse도
 test("항목F: CMakeLists.txt/requirements-dev.txt 같은 빌드 도구 파일은 말투 검사에서 빠진다", () => {
   const content = "리팩토링과 컨텐츠를 정리해야 합니다.";
   for (const file of ["CMakeLists.txt", "requirements-dev.txt", "dev-requirements.txt", "constraints.txt", "robots.txt"]) {
-    const output = runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Write",
-      tool_input: { file_path: `/tmp/${file}`, content },
-    });
+    const output = runHook(toolCall("PostToolUse", "Write", { file_path: `/tmp/${file}`, content }));
     assert.equal(output, null, file);
   }
 });
 
 test("항목F: notes.txt 처럼 이름이 걸리지 않는 .txt 는 여전히 경고한다", () => {
-  const output = runHook({
-    hook_event_name: "PostToolUse",
-    tool_name: "Write",
-    tool_input: { file_path: "/tmp/notes.txt", content: "리팩토링과 컨텐츠를 정리해야 합니다." },
-  });
+  const output = runHook(toolCall("PostToolUse", "Write", { file_path: "/tmp/notes.txt", content: "리팩토링과 컨텐츠를 정리해야 합니다." }));
   assert.match(output.hookSpecificOutput.additionalContext, /리팩터링/);
 });
 
 test("항목F: 말투 검사에서 빠지는 파일이어도 주민등록번호는 여전히 막는다", () => {
-  const output = runHook({
-    hook_event_name: "PreToolUse",
-    tool_name: "Write",
-    tool_input: { file_path: "/tmp/CMakeLists.txt", content: "# 900101-1234567" },
-  });
+  const output = runHook(toolCall("PreToolUse", "Write", { file_path: "/tmp/CMakeLists.txt", content: "# 900101-1234567" }));
   assert.equal(output.hookSpecificOutput.permissionDecision, "deny");
 });
 
@@ -456,11 +404,7 @@ test("항목1: Edit 조각 밖에 있는 참조식 링크 정의도 파일에서
   try {
     const newFragment = "타겟 문서는 [설정 안내][타겟]을 보세요.";
     const output = runHook(
-      {
-        hook_event_name: "PreToolUse",
-        tool_name: "Edit",
-        tool_input: { file_path: file, old_string: oldFragment, new_string: newFragment },
-      },
+      toolCall("PreToolUse", "Edit", { file_path: file, old_string: oldFragment, new_string: newFragment }),
       { KIMCHI_AUTOFIX: "1" }
     );
     assert.ok(output, "자동 교정이 전혀 동작하지 않았다");
@@ -473,15 +417,11 @@ test("항목1: Edit 조각 밖에 있는 참조식 링크 정의도 파일에서
 
 test("항목1: 파일을 못 읽으면(새 파일 등) old_string 위치를 못 찾아 애초에 자동 교정하지 않는다", () => {
   const output = runHook(
-    {
-      hook_event_name: "PreToolUse",
-      tool_name: "Edit",
-      tool_input: {
-        file_path: "/tmp/kimchi-없는-파일.md",
-        old_string: "예전",
-        new_string: "안내는 [설정][타겟]을 보고 타겟 문서도 확인합니다.",
-      },
-    },
+    toolCall("PreToolUse", "Edit", {
+      file_path: "/tmp/kimchi-없는-파일.md",
+      old_string: "예전",
+      new_string: "안내는 [설정][타겟]을 보고 타겟 문서도 확인합니다.",
+    }),
     { KIMCHI_AUTOFIX: "1" }
   );
   assert.equal(output, null);
@@ -500,14 +440,13 @@ test("자동 교정 메시지는 같은 교정이 수천 번 반복돼도 종류
   // 실제 훅 프로세스(runHook)를 거치면 큰 출력이 execFileSync 의 기본 stdout 버퍼
   // 한도를 넘어 ENOBUFS 로 죽는다 — 여기서 재는 것은 메시지 크기 자체이므로 라이브러리를
   // 직접 부른다.
-  const rules = loadToneRules();
   const content = "commit를 올렸습니다.\n".repeat(1000);
   const toolInput = { file_path: "notes.md", content };
   const targets = extractTargets("Write", toolInput);
   let output;
   process.env.KIMCHI_AUTOFIX = "1";
   try {
-    output = autofixOrBlock("Write", toolInput, targets, rules);
+    output = autofixOrBlock("Write", toolInput, targets, RULES);
   } finally {
     delete process.env.KIMCHI_AUTOFIX;
   }
@@ -528,14 +467,13 @@ test("자동 교정 메시지는 같은 교정이 수천 번 반복돼도 종류
 test("자동 교정 메시지의 건수는 실제로 고친 건수와 같다(규칙당 보고 상한과 무관하게 전부 고친다)", () => {
   // lint()의 규칙당 보고 상한(3건)을 자동 교정에도 그대로 쓰면 "디렉토리" 10번 중
   // 3번만 고치고도 메시지는 "10건을 고쳤습니다"라고 말하는 불일치가 생긴다.
-  const rules = loadToneRules();
   const content = Array.from({ length: 10 }, (_, i) => `${i}번째 디렉토리를 만든다.`).join(" ");
   const toolInput = { file_path: "notes.md", content };
   const targets = extractTargets("Write", toolInput);
   let output;
   process.env.KIMCHI_AUTOFIX = "1";
   try {
-    output = autofixOrBlock("Write", toolInput, targets, rules);
+    output = autofixOrBlock("Write", toolInput, targets, RULES);
   } finally {
     delete process.env.KIMCHI_AUTOFIX;
   }
@@ -553,14 +491,13 @@ test("자동 교정은 문서가 너무 크면 건드리지 않고 원본 그대
   // updatedInput 이 고친 파일 전체를 되싣기 때문에, 상한 없이 큰 문서를 교정하면 훅
   // JSON 자체가 그만큼 커진다(실측: 2.48MB 문서 → 2.6MB JSON). 상한을 넘는 문서는
   // 자동 교정을 건너뛰고 PostToolUse 경고에 맡긴다.
-  const rules = loadToneRules();
   const content = "commit를 올렸습니다. 디렉토리를 만든다.\n".repeat(100000); // 약 2.5MB
   const toolInput = { file_path: "notes.md", content };
   const targets = extractTargets("Write", toolInput);
   let output;
   process.env.KIMCHI_AUTOFIX = "1";
   try {
-    output = autofixOrBlock("Write", toolInput, targets, rules);
+    output = autofixOrBlock("Write", toolInput, targets, RULES);
   } finally {
     delete process.env.KIMCHI_AUTOFIX;
   }
@@ -571,7 +508,6 @@ test("자동 교정 상한은 대상 하나가 아니라 호출 전체(대상을
   // MultiEdit처럼 대상이 여럿이면, 편집 하나하나는 상한(200만자) 밑이어도 다 더하면
   // 넘을 수 있다 — 훅 JSON 크기를 결정하는 것은 호출 전체다. 대상별 검사만 있으면
   // 이 경우를 놓친다.
-  const rules = loadToneRules();
   const chunk = "commit를 확인. ".repeat(90000); // 약 108만자, 개별로는 상한 밑
   assert.ok(chunk.length < 2_000_000, "개별 대상이 상한을 넘으면 시험 전제가 깨진다");
   assert.ok(chunk.length * 2 > 2_000_000, "둘을 합쳐도 상한을 안 넘으면 시험 전제가 깨진다");
@@ -583,7 +519,7 @@ test("자동 교정 상한은 대상 하나가 아니라 호출 전체(대상을
   let output;
   process.env.KIMCHI_AUTOFIX = "1";
   try {
-    output = autofixOrBlock("Write", { file_path: "notes.md" }, targets, rules);
+    output = autofixOrBlock("Write", { file_path: "notes.md" }, targets, RULES);
   } finally {
     delete process.env.KIMCHI_AUTOFIX;
   }
@@ -591,7 +527,6 @@ test("자동 교정 상한은 대상 하나가 아니라 호출 전체(대상을
 });
 
 test("타이밍: 자동 교정은 큰 문서에서도 선형에 가깝게 끝난다(이차 비용 회귀 방지)", () => {
-  const rules = loadToneRules();
   const unit = "commit를 올렸습니다. 디렉토리를 만든다.\n";
   const timeFor = (mb) => {
     const reps = Math.round((mb * 1_000_000) / unit.length);
@@ -600,7 +535,7 @@ test("타이밍: 자동 교정은 큰 문서에서도 선형에 가깝게 끝난
     const targets = extractTargets("Write", toolInput);
     // runs=1: 비율만 보면 되고, 다른 시험과 병렬로 돌 때의 흔들림보다 시험 전체
     // 실행 시간을 줄이는 쪽이 낫다(재측정 없이도 이차 비용 회귀는 비율에 그대로 남는다).
-    return fastestMs(() => autofixOrBlock("Write", toolInput, targets, rules), 1);
+    return fastestMs(() => autofixOrBlock("Write", toolInput, targets, RULES), 1);
   };
   let small;
   let large;

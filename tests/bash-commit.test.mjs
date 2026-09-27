@@ -1,13 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync, execFileSync } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { extractCommitTargets } from "../hooks/lib/bash-commit.mjs";
 import { autofixOrBlock, loadToneRules } from "../hooks/lib/artifact.mjs";
-import { fastestMs } from "./helpers.mjs";
+import { fastestMs, ROOT, runNodeJson, toolCall } from "./helpers.mjs";
 
-const HOOK = join(dirname(fileURLToPath(import.meta.url)), "..", "hooks", "guard.mjs");
+const HOOK = join(ROOT, "hooks", "guard.mjs");
 
 function autofixCommand(command) {
   const targets = extractCommitTargets(command).map((t) => ({
@@ -380,17 +379,10 @@ test("항목E: $(cat <<EOF ...) 처럼 종료 표시가 따옴표 없으면 본�
 test("항목E: 가드 종단 — 따옴표 없는 heredoc 안 $(...) 인자는 KIMCHI_AUTOFIX 에서도 그대로 남는다", () => {
   // "$(grep 리팩토링 a.txt)"를 글자 그대로 고치면 grep 의 검색어까지 바뀐다.
   const command = ["git commit -F - <<EOF", "리팩토링 $(grep 리팩토링 a.txt) 정리", "EOF"].join("\n");
-  const payload = {
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command },
-  };
-  const stdout = execFileSync("node", [HOOK], {
-    input: JSON.stringify(payload),
-    encoding: "utf8",
-    env: { ...process.env, KIMCHI_DISABLE: "", KIMCHI_AUTOFIX: "1", KIMCHI_BLOCK: "" },
+  const output = runNodeJson(HOOK, toolCall("PreToolUse", "Bash", { command }), {
+    clear: ["KIMCHI_DISABLE", "KIMCHI_BLOCK"],
+    env: { KIMCHI_AUTOFIX: "1" },
   });
-  const output = stdout.trim() === "" ? null : JSON.parse(stdout);
   // 위험해서 교체하지 않으므로 명령이 아예 안 바뀔 수 있다(출력 없음) — 바뀌었다면
   // grep 인자는 원문 그대로여야 한다.
   if (output) {

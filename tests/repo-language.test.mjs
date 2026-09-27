@@ -6,10 +6,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   koreanShare,
   classify,
@@ -19,35 +18,9 @@ import {
   detectRepoLanguage,
   describeRepoLanguage,
 } from "../hooks/lib/repo-language.mjs";
-import { fastestMs } from "./helpers.mjs";
+import { fastestMs, ROOT, makeRepo, withRepo, ENGLISH_DOC } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOOK = join(ROOT, "hooks", "session-language.mjs");
-
-/** 커밋 제목 목록으로 임시 저장소를 만든다. */
-function makeRepo(subjects, readme) {
-  const dir = mkdtempSync(join(tmpdir(), "kimchi-repo-"));
-  execFileSync("git", ["init", "-q", "."], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@t"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
-
-  for (const subject of subjects) {
-    appendFileSync(join(dir, "f.txt"), "x\n");
-    execFileSync("git", ["add", "-A"], { cwd: dir });
-    execFileSync("git", ["commit", "-q", "-m", subject], { cwd: dir });
-  }
-  if (readme !== undefined) writeFileSync(join(dir, "README.md"), readme, "utf8");
-  return dir;
-}
-
-function withRepo(subjects, readme, body) {
-  const dir = makeRepo(subjects, readme);
-  try {
-    return body(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 // ── 비율과 판정 ─────────────────────────────────────────────
 
@@ -119,17 +92,6 @@ test("커밋이 없는 저장소도 안전하다", () => {
     assert.equal(commitLanguage(dir), "알 수 없음");
   });
 });
-
-const ENGLISH_DOC = [
-  "# Project",
-  "",
-  "This project does a thing. The documentation is written in English for contributors",
-  "who may not read Korean. Everything here follows that convention consistently.",
-  "",
-  "Another paragraph explains how to build and test the project on a local machine",
-  "without any additional setup beyond a recent version of the runtime.",
-  "",
-].join("\n");
 
 // 시험 자료는 실제 README 만큼의 분량이어야 한다. 100자짜리 문서로는 판정하지 않는 것이
 // 맞고, 문턱을 자료에 맞춰 낮추면 실제 오판이 늘어난다.

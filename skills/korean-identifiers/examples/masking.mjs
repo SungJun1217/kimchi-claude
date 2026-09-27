@@ -3,6 +3,7 @@ import {
   RESIDENT_NUMBER_GLUED_PATTERN,
   looksLikeResidentNumber,
   foldForScan,
+  digitsOf,
 } from "./resident-number.mjs";
 
 // 개인정보 마스킹.
@@ -50,7 +51,7 @@ export function maskName(name) {
  * @returns {string}
  */
 export function maskResidentNumber(value) {
-  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length !== 13) return "*".repeat(String(value).length);
   return `${digits.slice(0, 6)}-*******`;
 }
@@ -62,7 +63,7 @@ export function maskResidentNumber(value) {
  * @returns {string}
  */
 export function maskPhone(value) {
-  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length < 9) return "*".repeat(String(value).length);
   // 서울만 지역번호가 두 자리다. 나머지 지역번호와 휴대전화 앞자리는 세 자리다.
   // 자리수를 전체 길이에서 빼서 구하면 9자리 번호에서 머리가 한 자리로 줄어든다.
@@ -98,7 +99,7 @@ export function maskEmail(value) {
  * @returns {string}
  */
 export function maskAccount(value) {
-  const digits = String(value).normalize("NFKC").replace(/\D/g, "");
+  const digits = digitsOf(value);
   if (digits.length <= 4) return "*".repeat(digits.length);
   return `${"*".repeat(digits.length - 4)}${digits.slice(-4)}`;
 }
@@ -207,6 +208,14 @@ function mergeSpans(spans) {
   return merged;
 }
 
+// 자유 텍스트에서 찾을 패턴들. isValid 가 없으면 매치된 것을 그대로 믿는다
+// (PHONE_IN_TEXT 는 패턴 자체가 이미 좁혀 놓았다).
+const SCAN_PATTERNS = [
+  [RESIDENT_NUMBER_SEPARATED_PATTERN, looksLikeResidentNumber],
+  [RESIDENT_NUMBER_GLUED_PATTERN, looksLikeResidentNumber],
+  [PHONE_IN_TEXT, undefined],
+];
+
 /**
  * 자유 텍스트에서 주민등록번호·전화번호로 보이는 조각을 찾아 가린다.
  *
@@ -226,9 +235,9 @@ function maskFreeText(text) {
   const { clean, spanToOriginal } = foldForScan(text);
   const spans = [];
 
-  collectSpans(clean, RESIDENT_NUMBER_SEPARATED_PATTERN, spanToOriginal, spans, looksLikeResidentNumber);
-  collectSpans(clean, RESIDENT_NUMBER_GLUED_PATTERN, spanToOriginal, spans, looksLikeResidentNumber);
-  collectSpans(clean, PHONE_IN_TEXT, spanToOriginal, spans);
+  for (const [pattern, isValid] of SCAN_PATTERNS) {
+    collectSpans(clean, pattern, spanToOriginal, spans, isValid);
+  }
 
   if (spans.length === 0) return null;
 

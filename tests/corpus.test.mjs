@@ -7,8 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   loadRules,
   CHECKS,
@@ -26,8 +25,8 @@ import {
   primaryGood,
 } from "../hooks/lib/lint.mjs";
 import { fixParticles } from "../hooks/lib/particle.mjs";
+import { ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { rules, skipped, files } = loadRules(join(ROOT, "rules"));
 
 test("규칙 파일을 읽었고 형식이 깨진 행이 없다", () => {
