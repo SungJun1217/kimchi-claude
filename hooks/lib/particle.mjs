@@ -104,7 +104,6 @@ const DIGIT_ENGLISH = [
 // 낱자를 읽는 법. 두음자어를 글자로 읽을 때 마지막 글자만 보면 된다.
 // 받침이 있는 것만 적는다. L 엘(ㄹ), R 알(ㄹ), M 엠(ㅁ), N 엔(ㄴ).
 const LETTER_FINAL = { l: RIEUL, r: RIEUL, m: OTHER_FINAL, n: OTHER_FINAL };
-const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 
 // 두음자어를 "글자로 읽는다"고 판단해도 되는 경우만 가린다.
 //
@@ -119,7 +118,7 @@ const SPELLED_ACRONYMS = new Set([
   "SSH", "SSL", "TLS", "HTTP", "HTTPS", "RAM", "SSD", "USB", "PDF", "CSV", "UUID", "ORM",
   "MVC", "DOM", "NPM", "VM",
 ]);
-const VOWEL_LETTERS = new Set(["A", "E", "I", "O", "U"]);
+const VOWEL_LETTER = /[AEIOU]/;
 
 // 읽는 법을 아는 낱말. **여기가 유일한 원본이다.** 값은 끝소리에 받침이 있는지다.
 //
@@ -312,9 +311,8 @@ export function finalSoundOf(word) {
   const token = word.trim();
   if (token.length === 0) return null;
 
-  // 한글로 끝나면 이 함수가 다룰 일이 아니다. lint.mjs 의 hasFinalConsonant 가 본다.
-  if (/[가-힣]$/.test(token)) return null;
-
+  // 한글로 끝나면(예: "커밋으로") 아래 어느 판정에도 걸리지 않아 결국 null을 돌려준다 —
+  // lint.mjs 의 hasFinalConsonant 가 그 자리를 본다. 따로 앞서 걸러낼 필요는 없다.
   const lower = token.toLowerCase();
   if (Object.hasOwn(LEXICON, lower)) return LEXICON[lower];
 
@@ -335,10 +333,8 @@ export function finalSoundOf(word) {
   // 것도 있다. 모음이 없으면 낱말로 읽을 방법이 없으니 글자로 읽고, 모음이 있으면
   // 글자로 읽는다고 확인된 것(SPELLED_ACRONYMS)만 판정한다. 나머지는 판정하지 않는다.
   if (/^[A-Z]{2,4}$/.test(token)) {
-    const hasVowel = [...token].some((ch) => VOWEL_LETTERS.has(ch));
-    if (hasVowel && !SPELLED_ACRONYMS.has(token)) return null;
+    if (VOWEL_LETTER.test(token) && !SPELLED_ACRONYMS.has(token)) return null;
     const last = token.at(-1).toLowerCase();
-    if (!LETTERS.includes(last)) return null;
     return LETTER_FINAL[last] ?? NO_FINAL;
   }
 
@@ -364,19 +360,13 @@ export function hasFinalSound(word) {
  * @returns {string|null} 고칠 필요가 없거나 판정할 수 없으면 null
  */
 export function correctParticle(word, particle) {
-  const pair = PAIRS.find(([withFinal, without]) => particle === withFinal || particle === without);
-  if (pair === undefined) return null;
   // "10여 개"의 "여"는 계사가 아니라 숫자 접미사(남짓)다. 순수 숫자 뒤에서는 겹치는
   // 계사 활용형을 판정하지 않는다.
   if (DIGIT_TOKEN.test(word) && NUMERAL_SUFFIX_COLLISION.has(particle)) return null;
 
   const final = finalSoundOf(word);
   if (final === null) return null;
-
-  // 으로/로 만 예외다. ㄹ 받침 뒤에는 로를 쓴다. 서울로, 1로(일), URL로(유알엘).
-  const usesShortForm = final === NO_FINAL || (final === RIEUL && pair[1].endsWith("로"));
-  const correct = usesShortForm ? pair[1] : pair[0];
-  return correct === particle ? null : correct;
+  return correctForFinal(final, particle);
 }
 
 /**
@@ -396,21 +386,22 @@ function correctForFinal(final, particle) {
   return correct === particle ? null : correct;
 }
 
-// 한글 음절 코드에서 종성(받침) 색인. lint.mjs의 finalConsonantClass와 같은 상수다 —
-// lint.mjs가 이미 particle.mjs를 임포트하므로(particleHeads 등) 거꾸로 임포트하면
-// 순환 참조가 생긴다. 상수 네 개뿐이라 각자 갖는 편이 회로를 끊는 것보다 싸다.
+// 한글 음절 코드에서 종성(받침) 색인.
 const HANGUL_START = 0xac00;
 const HANGUL_END = 0xd7a3;
 const JAMO_COUNT = 28;
 const RIEUL_FINAL_INDEX = 8;
 
 /**
- * 괄호 앞 한글 낱말의 끝 음절 받침을 판정한다. 한글이 아니면 null.
+ * 한글 음절 한 글자의 받침을 판정한다. 한글이 아니면 null.
+ *
+ * lint.mjs의 finalConsonantClass(여러 음절 중 마지막 한글을 찾는 판정)도 이 함수를
+ * 글자 단위로 불러 쓴다 — 종성 색인 계산은 여기 하나뿐이다.
  *
  * @param {string} ch 한 글자
  * @returns {""|"ㄹ"|"other"|null}
  */
-function hangulFinalOf(ch) {
+export function hangulFinalOf(ch) {
   if (typeof ch !== "string" || ch.length === 0) return null;
   const code = ch.charCodeAt(0);
   if (code < HANGUL_START || code > HANGUL_END) return null;
@@ -577,10 +568,10 @@ export function fixParticles(text, mask = {}) {
   const found = findParticleErrors(text, mask);
   if (found.length === 0) return { text: typeof text === "string" ? text : "", applied: [] };
 
-  // found는 TOKEN_WITH_PARTICLE이 왼쪽에서 오른쪽으로 훑어 찾은 순서라 index 오름차순이고
-  // 서로 겹치지 않는다. 교정마다 전체 문자열을 slice + concat 하면 교정 건수 × 문서
-  // 길이에 비례해 느려진다 — 실측: 1.2MB 문서, 교정 수만 건에서 10초 넘게 걸렸다(이차
-  // 비용). 조각을 모아 한 번만 이어 붙인다.
+  // findParticleErrors가 index 오름차순으로 정렬해 돌려주고 서로 겹치지 않는다.
+  // 교정마다 전체 문자열을 slice + concat 하면 교정 건수 × 문서 길이에 비례해
+  // 느려진다 — 실측: 1.2MB 문서, 교정 수만 건에서 10초 넘게 걸렸다(이차 비용).
+  // 조각을 모아 한 번만 이어 붙인다.
   const pieces = [];
   let cursor = 0;
   for (const hit of found) {
@@ -597,7 +588,6 @@ export function fixParticles(text, mask = {}) {
 // formatFindings와 같은 문제, 같은 해법). 목록은 종류 몇 가지만 보여 주고 나머지는
 // 개수로만 말한다 — pii.mjs의 MAX_LISTED와 같은 관례다. 묶고 나열하는 부분은
 // format.mjs 하나로 모았다.
-const MAX_LISTED_PARTICLES = MAX_LISTED;
 
 /**
  * 사람이 읽을 메시지로 만든다. 같은 교정(같은 낱말 → 같은 고침)은 한 줄로 묶고 건수를
@@ -620,7 +610,7 @@ export function formatParticleErrors(found) {
     entries,
     ({ item: hit, count }) =>
       `- "${hit.matched}" → "${hit.word}${hit.correct}"${count > 1 ? ` (총 ${count}곳)` : ""}`,
-    MAX_LISTED_PARTICLES
+    MAX_LISTED
   );
 
   return [header, "", ...lines].join("\n");

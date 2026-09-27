@@ -68,12 +68,8 @@ function escapeDoubleQuoted(text) {
 
 // 이중 따옴표 밖(또는 heredoc 본문)에서 셸이 그대로 확장하는 세 형태. 백틱도 이중
 // 따옴표 안에서는 여전히 명령 치환이다 — `$(...)`/`${...}`와 같은 취급이 일관된 정책이다.
+// raw 안에 이 자리가 있는지가 replaceable 판정에 그대로 쓰인다(아래 세 곳).
 const SHELL_EXPANSION = /\$\(|\$\{|`/;
-
-/** raw 안에 셸이 확장할 자리($(...)·${...}·백틱)가 있는지 본다. */
-function hasShellExpansion(raw) {
-  return SHELL_EXPANSION.test(raw);
-}
 
 /** 이중 따옴표 내용을 훑는다. i는 여는 따옴표 다음 위치. 닫는 따옴표의 인덱스를 돌려준다(없으면 길이). */
 function skipDoubleQuoted(command, i) {
@@ -106,21 +102,9 @@ function skipSubshell(command, i) {
   while (i < n) {
     const ch = command[i];
     if (ch === ")") return i;
-    if (ch === "\\" && i + 1 < n) {
-      i += 2;
-      continue;
-    }
-    if (ch === "'") {
-      const end = command.indexOf("'", i + 1);
-      i = end === -1 ? n : end + 1;
-      continue;
-    }
-    if (ch === '"') {
-      i = skipDoubleQuoted(command, i + 1) + 1;
-      continue;
-    }
-    if (ch === "$" && command[i + 1] === "(") {
-      i = skipSubshell(command, i + 2) + 1;
+    const next = skipOpaque(command, i, n);
+    if (next !== null) {
+      i = next;
       continue;
     }
     const hd = matchHeredocOperator(command, i);
@@ -139,19 +123,39 @@ function skipSubshell(command, i) {
   return n;
 }
 
+/**
+ * i 위치가 백슬래시 이스케이프·작은따옴표·이중따옴표·`$(...)` 서브셸 중 하나로 시작하면
+ * 그것을 통째로 건너뛴 다음 위치를, 아니면 null을 돌려준다. skipSubshell·parseSimpleCommands·
+ * tokenizeWords 세 곳이 같은 네 형태를 매번 따로 훑었다 — 여기 하나로 모은다.
+ *
+ * limit은 작은따옴표 탐색의 상한이다(주로 tokenizeWords가 토큰 구간 끝으로 넘긴다). 이중
+ * 따옴표·서브셸은 원래도 limit을 보지 않았다 — skipDoubleQuoted·skipSubshell 자신이
+ * 명령 전체(command.length)를 기준으로 닫는 짝을 찾으므로 그대로 둔다.
+ *
+ * @returns {number|null}
+ */
+function skipOpaque(command, i, limit) {
+  const ch = command[i];
+  if (ch === "\\" && i + 1 < limit) return i + 2;
+  if (ch === "'") {
+    const end = command.indexOf("'", i + 1);
+    return end === -1 || end >= limit ? limit : end + 1;
+  }
+  if (ch === '"') return skipDoubleQuoted(command, i + 1) + 1;
+  if (ch === "$" && command[i + 1] === "(") return skipSubshell(command, i + 2) + 1;
+  return null;
+}
+
 function matchHeredocOperator(command, i) {
   if (command[i] !== "<" || command[i + 1] !== "<") return null;
   let j = i + 2;
-  let dashStrip = false;
-  if (command[j] === "-") {
-    dashStrip = true;
-    j += 1;
-  }
+  const dashStrip = command[j] === "-";
+  if (dashStrip) j += 1;
   while (command[j] === " " || command[j] === "\t") j += 1;
   let marker = "";
-  let quoted = false; // 종료 표시를 따옴표로 감쌌는지 — 감쌌으면 본문 안의 $(…)·${…}·백틱이 셸에서 확장되지 않는다
-  if (command[j] === "'" || command[j] === '"') {
-    quoted = true;
+  // 종료 표시를 따옴표로 감쌌는지 — 감쌌으면 본문 안의 $(…)·${…}·백틱이 셸에서 확장되지 않는다
+  const quoted = command[j] === "'" || command[j] === '"';
+  if (quoted) {
     const q = command[j];
     const close = command.indexOf(q, j + 1);
     if (close === -1) return null;
@@ -176,8 +180,10 @@ function consumeHeredocBodies(command, pos, heredocs) {
   for (const hd of heredocs) {
     const bodyStart = pos;
     let searchFrom = pos;
-    let bodyEnd = n;
-    let resumeAt = n;
+    // 아래 루프는 둘 중 하나에서만 끝난다 — 종료 표시를 찾거나(첫 branch), 글이
+    // 끝나거나(둘째 branch). 어느 쪽이든 break 전에 둘 다 채워진다.
+    let bodyEnd;
+    let resumeAt;
     while (true) {
       const lineEnd = command.indexOf("\n", searchFrom);
       const lineTextEnd = lineEnd === -1 ? n : lineEnd;
@@ -204,6 +210,20 @@ function consumeHeredocBodies(command, pos, heredocs) {
 }
 
 /**
+ * i 위치의 문자가 단순 명령을 가르는 구분자면 그 길이(1 또는 2)를, 아니면 0을 돌려준다.
+ *
+ * `&&`·`||`는 두 글자, `;`·단독 `|`는 한 글자다. `;;`(case 문 종결)는 따로 다루지 않는다 —
+ * `;` 두 개가 한 글자씩 두 걸음으로 잘려 나가고, finalize가 빈 구간은 담지 않으므로
+ * 결과가 같다. 단독 `&`(백그라운드 실행)는 구분자가 아니다 — `&&`일 때만 잘라야 한다.
+ */
+function separatorLength(command, i) {
+  const ch = command[i];
+  if ((ch === "&" && command[i + 1] === "&") || (ch === "|" && command[i + 1] === "|")) return 2;
+  if (ch === "|" || ch === ";") return 1;
+  return 0;
+}
+
+/**
  * 명령을 `&&`, `||`, `;`, `|`, 줄바꿈 기준으로 단순 명령들로 나눈다. 따옴표와 `$(...)` 안은
  * 건드리지 않는다. 각 단순 명령에 딸린 heredoc의 본문 위치도 함께 기억한다.
  *
@@ -214,7 +234,7 @@ function consumeHeredocBodies(command, pos, heredocs) {
  * @param {{start: number, end: number}[]} [subshells] 채워 넣을 배열(부작용)
  * @returns {{start: number, end: number, heredocs: object[]}[]}
  */
-export function parseSimpleCommands(command, subshells) {
+function parseSimpleCommands(command, subshells) {
   const n = command.length;
   const commands = [];
   let i = 0;
@@ -229,24 +249,17 @@ export function parseSimpleCommands(command, subshells) {
 
   while (i < n) {
     const ch = command[i];
-    if (ch === "\\" && i + 1 < n) {
-      i += 2;
-      continue;
-    }
-    if (ch === "'") {
-      const end = command.indexOf("'", i + 1);
-      i = end === -1 ? n : end + 1;
-      continue;
-    }
-    if (ch === '"') {
-      i = skipDoubleQuoted(command, i + 1) + 1;
-      continue;
-    }
+    // $(...)는 subshells에 위치를 남겨야 하니 skipOpaque보다 먼저, 직접 본다.
     if (ch === "$" && command[i + 1] === "(") {
       const innerStart = i + 2;
       const innerEnd = skipSubshell(command, innerStart);
       if (subshells) subshells.push({ start: innerStart, end: innerEnd });
       i = innerEnd + 1;
+      continue;
+    }
+    const next = skipOpaque(command, i, n);
+    if (next !== null) {
+      i = next;
       continue;
     }
 
@@ -258,40 +271,21 @@ export function parseSimpleCommands(command, subshells) {
     }
 
     if (ch === "\n") {
-      if (pendingHeredocs.length > 0) {
-        i = consumeHeredocBodies(command, i + 1, pendingHeredocs);
-        pendingHeredocs = [];
-        finalize(i);
-        curStart = i;
-        continue;
-      }
-      finalize(i);
-      curStart = i + 1;
-      i += 1;
+      // heredoc이 걸려 있으면 명령은 줄바꿈이 아니라 heredoc 본문이 끝난 자리까지다.
+      // 없으면 보통 줄바꿈처럼 그 자리에서 끝난다.
+      const hadHeredocs = pendingHeredocs.length > 0;
+      const end = hadHeredocs ? consumeHeredocBodies(command, i + 1, pendingHeredocs) : i;
+      if (hadHeredocs) pendingHeredocs = [];
+      finalize(end);
+      i = hadHeredocs ? end : end + 1;
+      curStart = i;
       continue;
     }
 
-    if (ch === "&" && command[i + 1] === "&") {
+    const sepLen = separatorLength(command, i);
+    if (sepLen > 0) {
       finalize(i);
-      i += 2;
-      curStart = i;
-      continue;
-    }
-    if (ch === "|" && command[i + 1] === "|") {
-      finalize(i);
-      i += 2;
-      curStart = i;
-      continue;
-    }
-    if (ch === "|") {
-      finalize(i);
-      i += 1;
-      curStart = i;
-      continue;
-    }
-    if (ch === ";") {
-      finalize(i);
-      i += 1;
+      i += sepLen;
       curStart = i;
       continue;
     }
@@ -323,21 +317,10 @@ function tokenizeWords(command, start, end) {
       continue;
     }
     if (tokenStart === -1) tokenStart = i;
-    if (ch === "\\" && i + 1 < end) {
-      i += 2;
-      continue;
-    }
-    if (ch === "'") {
-      const e = command.indexOf("'", i + 1);
-      i = e === -1 || e >= end ? end : e + 1;
-      continue;
-    }
-    if (ch === '"') {
-      i = skipDoubleQuoted(command, i + 1) + 1;
-      continue;
-    }
-    if (ch === "$" && command[i + 1] === "(") {
-      i = skipSubshell(command, i + 2) + 1;
+    // 작은따옴표 탐색은 이 낱말 구간(end) 밖으로 못 나가게 죈다 — skipOpaque의 limit이 그 역할이다.
+    const next = skipOpaque(command, i, end);
+    if (next !== null) {
+      i = next;
       continue;
     }
     i += 1;
@@ -413,14 +396,12 @@ function findGitCommitCommand(tokens, command) {
 
 function matchMessageFlag(word) {
   if (word === "--message") return { type: "message", form: "alone" };
-  let m = /^--message=([\s\S]*)$/.exec(word);
-  if (m) return { type: "message", form: "inline", valueOffset: word.indexOf("=") + 1 };
+  if (word.startsWith("--message=")) return { type: "message", form: "inline", valueOffset: "--message=".length };
   if (word === "--file") return { type: "file", form: "alone" };
-  m = /^--file=([\s\S]*)$/.exec(word);
-  if (m) return { type: "file", form: "inline", valueOffset: word.indexOf("=") + 1 };
+  if (word.startsWith("--file=")) return { type: "file", form: "inline", valueOffset: "--file=".length };
 
   if (SHORT_M_ALONE.test(word)) return { type: "m", form: "alone" };
-  m = SHORT_M_INLINE.exec(word);
+  let m = SHORT_M_INLINE.exec(word);
   if (m) return { type: "m", form: "inline", valueOffset: word.length - m[1].length };
 
   if (SHORT_F_ALONE.test(word)) return { type: "file", form: "alone" };
@@ -461,9 +442,27 @@ function findDashCScriptIndex(tokens, command) {
   return null;
 }
 
+/** extractCommitTargets/extractShellDashCTargets가 돌려주는 대상 객체 하나를 만든다. */
+function target(start, end, text, quote, replaceable, escapeOnWrite = false) {
+  return { start, end, text, quote, replaceable, escapeOnWrite };
+}
+
+// heredoc 본문(file 플래그의 -F -, $(cat <<EOF ...))은 항상 quote: null, escapeOnWrite:
+// false다 — 본문은 애초에 따옴표로 감싼 값이 아니라 그 자체로 하나의 텍스트 블록이다.
+function heredocTarget(start, end, text, replaceable) {
+  return target(start, end, text, null, replaceable);
+}
+
+/** targets 각각의 start/end에 off를 더한 새 배열을 돌려준다. 재귀 호출이 안쪽 글의
+ * 위치로 찾은 대상을 바깥 글자 위치로 되짚을 때 쓴다($(...)·작은따옴표 -c 스크립트). */
+function shift(targets, off) {
+  return targets.map((t) => ({ ...t, start: t.start + off, end: t.end + off }));
+}
+
+// 재귀 깊이는 호출부(extractCommitTargets)가 자기 진입점에서 이미 검사한다 — 이 함수는
+// 그 검사를 통과한 depth로만 불린다. 여기서 다시 볼 필요가 없다.
 /** git ... commit 이 아닌, `sh`/`bash`/`zsh`/`dash -c "..."` 안에 숨은 커밋도 살핀다. */
 function extractShellDashCTargets(command, sc, depth) {
-  if (depth >= MAX_RECURSION_DEPTH) return [];
   const tokens = tokenizeWords(command, sc.start, sc.end);
   if (tokens.length < 2) return [];
   const first = stripLeadingGroup(command.slice(tokens[0].start, tokens[0].end));
@@ -480,11 +479,7 @@ function extractShellDashCTargets(command, sc, depth) {
     const innerEnd = command.indexOf("'", innerStart);
     if (innerEnd === -1) return [];
     const inner = command.slice(innerStart, innerEnd);
-    return extractCommitTargets(inner, depth + 1).map((t) => ({
-      ...t,
-      start: t.start + innerStart,
-      end: t.end + innerStart,
-    }));
+    return shift(extractCommitTargets(inner, depth + 1), innerStart);
   }
 
   if (quote === '"') {
@@ -569,18 +564,13 @@ export function extractCommitTargets(command, depth = 0) {
           const hd = sc.heredocs[sc.heredocs.length - 1];
           if (!hd || hd.bodyEnd <= hd.bodyStart) continue;
           const hdBody = command.slice(hd.bodyStart, hd.bodyEnd);
-          targets.push({
-            start: hd.bodyStart,
-            end: hd.bodyEnd,
-            text: hdBody,
-            quote: null,
-            // 종료 표시가 따옴표로 감싸여 있으면(quoted) 본문의 $(…)·${…}·백틱은 셸이
-            // 확장하지 않는 글자 그대로다 — 자동 교정이 그 글자를 고쳐도 실행에 영향이
-            // 없다. 감싸지 않았다면(unquoted) -m 경로(아래)와 같은 정책으로, 그런 문자가
-            // 없을 때만 안전하다.
-            replaceable: hd.quoted || !hasShellExpansion(hdBody),
-            escapeOnWrite: false,
-          });
+          // 종료 표시가 따옴표로 감싸여 있으면(quoted) 본문의 $(…)·${…}·백틱은 셸이
+          // 확장하지 않는 글자 그대로다 — 자동 교정이 그 글자를 고쳐도 실행에 영향이
+          // 없다. 감싸지 않았다면(unquoted) -m 경로(아래)와 같은 정책으로, 그런 문자가
+          // 없을 때만 안전하다.
+          targets.push(
+            heredocTarget(hd.bodyStart, hd.bodyEnd, hdBody, hd.quoted || !SHELL_EXPANSION.test(hdBody))
+          );
           continue;
         }
 
@@ -596,14 +586,14 @@ export function extractCommitTargets(command, depth = 0) {
             // catMatch[1]은 종료 표시를 감싼 따옴표 글자('든 "든) 자체는 안 본다 — 감쌌는지
             // 여부만 중요하다. 감쌌으면(quoted) -F - 경로와 같은 정책을 그대로 적용한다.
             const catQuoted = catMatch[1] !== "";
-            targets.push({
-              start: value.innerStart + bStart,
-              end: value.innerStart + bEnd,
-              text: catBody,
-              quote: null,
-              replaceable: catQuoted || !hasShellExpansion(catBody),
-              escapeOnWrite: false,
-            });
+            targets.push(
+              heredocTarget(
+                value.innerStart + bStart,
+                value.innerStart + bEnd,
+                catBody,
+                catQuoted || !SHELL_EXPANSION.test(catBody)
+              )
+            );
             continue;
           }
           // 백슬래시가 하나도 없으면 이스케이프를 걱정할 게 없다 — 원문 그대로 잘라 붙인다.
@@ -612,14 +602,7 @@ export function extractCommitTargets(command, depth = 0) {
           // 백틱은 명령 치환이다). 가림 처리가 그 안을 덮지 못하므로 고치지 않고 알리기만
           // 한다. "$(grep 리팩토링 a.txt)"의 검색어가 바뀌었다.
           if (!raw.includes("\\")) {
-            targets.push({
-              start: value.innerStart,
-              end: value.innerEnd,
-              text: raw,
-              quote: '"',
-              replaceable: !hasShellExpansion(raw),
-              escapeOnWrite: false,
-            });
+            targets.push(target(value.innerStart, value.innerEnd, raw, '"', !SHELL_EXPANSION.test(raw)));
             continue;
           }
           // 백슬래시가 하나라도 있으면(예: \" 로 이스케이프한 따옴표) 되돌릴 때도 다시
@@ -631,25 +614,11 @@ export function extractCommitTargets(command, depth = 0) {
           // 이스케이프를 밀어 넣는 것보다는 사람이 보고 고치는 편이 안전하다.
           const text = unescapeDoubleQuoted(raw);
           const roundtrip = escapeDoubleQuoted(text) === raw;
-          targets.push({
-            start: value.innerStart,
-            end: value.innerEnd,
-            text,
-            quote: '"',
-            replaceable: roundtrip,
-            escapeOnWrite: true,
-          });
+          targets.push(target(value.innerStart, value.innerEnd, text, '"', roundtrip, true));
           continue;
         }
 
-        targets.push({
-          start: value.innerStart,
-          end: value.innerEnd,
-          text: raw,
-          quote: value.quote,
-          replaceable: true,
-          escapeOnWrite: false,
-        });
+        targets.push(target(value.innerStart, value.innerEnd, raw, value.quote, true));
       }
     }
 
@@ -658,12 +627,10 @@ export function extractCommitTargets(command, depth = 0) {
 
   for (const sub of subshells) {
     const inner = command.slice(sub.start, sub.end);
-    for (const t of extractCommitTargets(inner, depth + 1)) {
-      targets.push({ ...t, start: t.start + sub.start, end: t.end + sub.start });
-    }
+    targets.push(...shift(extractCommitTargets(inner, depth + 1), sub.start));
   }
 
   return targets;
 }
 
-export { escapeDoubleQuoted, unescapeDoubleQuoted };
+export { escapeDoubleQuoted };
