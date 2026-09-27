@@ -4,7 +4,7 @@
 // 코드나 경로 안에서는 애초에 매치가 일어나지 않는다. 위치 비교를 따로 할 필요가 없다.
 
 import { maskProtected, isIgnoredFile } from "./segment.mjs";
-import { particleHeads, RIEUL, OTHER_FINAL, NO_FINAL } from "./particle.mjs";
+import { particleHeads, hangulFinalOf, OTHER_FINAL, NO_FINAL } from "./particle.mjs";
 import { CHECK_SUBSTITUTE, SCANNABLE_CHECKS } from "./rules.mjs";
 import { groupCounted, formatGroupedList } from "./format.mjs";
 
@@ -28,20 +28,14 @@ const MAX_HITS_PER_RULE = 3;
 // 먼저 채워 버리면 진짜 지적을 하나도 못 잡는다. 대신 정규식이 도는 횟수 자체는
 // MAX_PATTERN_ITERATIONS 로 따로 막는다.
 //
-// 이 상한은 **보고**(lint()의 기본값) 전용이다. 자동 교정(applyFixes)은 문서에 실제로
-// 있는 만큼 다 고쳐야 한다 — 이 상한을 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고
-// 말하는" 불일치가 생긴다(실측, 0.14.13). applyFixes는 lint()를 exhaustive: true로
-// 불러 이 상한을 끈다.
+// 이 상한은 **보고**(lint()의 기본값) 전용이다. applyFixes는 lint()를 exhaustive: true로
+// 불러 이 상한을 끈다 — 이유는 lint()의 exhaustive 옵션 문서를 보라.
 const MAX_RAW_HITS_PER_RULE = 50;
 
 // 경계에 막혀 버려지는 매치까지 포함한, 정규식이 한 규칙당 돌 수 있는 총 횟수의 상한.
 // MAX_RAW_HITS_PER_RULE 보다 넉넉해야 "경계에 막힌 매치가 많은 문서"에서도 진짜 매치를
 // 찾을 때까지 계속 돈다.
 const MAX_PATTERN_ITERATIONS = 1000;
-
-const HANGUL_START = 0xac00;
-const HANGUL_END = 0xd7a3;
-const JAMO_COUNT = 28;
 
 // 완성형 음절과 낱자(자모) 모두 "한글이 이어진다"로 본다. 완성형만 보면 "ㄱ"으로 시작하는
 // 드문 표기를 경계로 오판한다.
@@ -54,16 +48,6 @@ function isHangulChar(ch) {
 // 조사 지식은 particle.mjs 의 짝 표가 원본이다. 여기서는 첫 글자만 유도해 쓴다.
 // 두 곳에 적으면 한쪽만 고치게 된다.
 const PARTICLE_HEADS = particleHeads();
-
-/** 앞말의 받침에 따라 목적격 조사를 고른다. */
-function objectParticle(word) {
-  return hasFinalConsonant(word) ? "을" : "를";
-}
-
-/** 앞말의 받침에 따라 주격 조사를 고른다. */
-function subjectParticle(word) {
-  return hasFinalConsonant(word) ? "이" : "가";
-}
 
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -112,25 +96,29 @@ export function alternativesOf(bad) {
   return result;
 }
 
+// 대안 하나(물결표로 조각난 문자열)를 정규식 소스로 바꾼다. 각 조각은 이스케이프하고
+// 물결표 자리는 WILDCARD_PATTERN으로 잇는다. compilePattern(매치용)과
+// matchedAlternative(역추적용)가 같은 변환을 쓴다 — 따로 만들면 둘이 어긋난다.
+function altSource(alt) {
+  return alt.split(WILDCARD).map(escapeRegExp).join(WILDCARD_PATTERN);
+}
+
 function compilePattern(bad) {
   const alternatives = alternativesOf(bad);
   if (alternatives.length === 0) return null;
 
   const sources = [];
   for (const alt of alternatives) {
-    const parts = alt.split(WILDCARD);
-    const literalLength = parts.join("").replace(/\s+/g, "").length;
+    const literalLength = alt.split(WILDCARD).join("").replace(/\s+/g, "").length;
     if (literalLength < MIN_LITERAL_LENGTH) continue;
-    sources.push(parts.map(escapeRegExp).join(WILDCARD_PATTERN));
+    sources.push(altSource(alt));
   }
   if (sources.length === 0) return null;
 
+  // altSource가 조각마다 escapeRegExp를 거치므로 정규식 특수문자가 하나도 안 남는다 —
+  // 여기서 조립한 source는 항상 문법이 유효한 정규식이라 new RegExp가 던질 일이 없다.
   const source = sources.length === 1 ? sources[0] : `(?:${sources.join("|")})`;
-  try {
-    return new RegExp(source, "g");
-  } catch {
-    return null;
-  }
+  return new RegExp(source, "g");
 }
 
 /**
@@ -145,22 +133,16 @@ function compilePattern(bad) {
 function matchedAlternative(bad, matchedText) {
   const alts = alternativesOf(bad);
   if (alts.length <= 1) return alts[0] ?? "";
+  // compilePattern과 같은 이유로 new RegExp가 던질 일이 없다.
   for (const alt of alts) {
-    const parts = alt.split(WILDCARD);
-    const source = `^(?:${parts.map(escapeRegExp).join(WILDCARD_PATTERN)})$`;
-    try {
-      if (new RegExp(source).test(matchedText)) return alt;
-    } catch {
-      continue;
-    }
+    const source = `^(?:${altSource(alt)})$`;
+    if (new RegExp(source).test(matchedText)) return alt;
   }
   return alts[0];
 }
 
 /**
  * 마지막 한글 음절에 받침이 있는지 알려준다. 판정할 수 없으면 null.
- *
- * 한글 음절은 (코드 - 0xAC00) % 28 이 0이면 받침이 없다.
  *
  * @param {string} text
  * @returns {boolean|null}
@@ -170,17 +152,13 @@ export function hasFinalConsonant(text) {
   return cls === null ? null : cls !== NO_FINAL;
 }
 
-// 한글 음절 코드에서 종성(받침) 색인. 8이 ㄹ이다 — (코드 - 0xAC00) % 28 의 나머지가
-// 그대로 국립국어원 종성 순서(ㄱㄲㄳㄴㄵㄶㄷㄹ…)의 색인이다.
-const RIEUL_FINAL_INDEX = 8;
-
 /**
  * 마지막 한글 음절의 받침을 받침 없음/ㄹ/그 밖 셋으로 가른다. 판정할 수 없으면 null.
  *
  * 으로/로 조사만 받침 유무 두 가지로 못 가른다 — ㄹ 받침 뒤에도 "로"를 쓴다(일로,
  * 책임으로가 아니라 "책임으로"는 ㅁ받침이라 "으로"가 맞고, "일로"는 ㄹ받침이라 "로"가
- * 맞다). particle.mjs 의 RIEUL/OTHER_FINAL/NO_FINAL 과 값을 맞춰, 영어 낱말(particle.mjs)과
- * 한글 낱말(여기) 두 판정기가 같은 세 값을 쓰게 한다.
+ * 맞다). 글자 하나의 받침 판정은 particle.mjs 의 hangulFinalOf 가 원본이다 — 여기서는
+ * 문자열 끝에서부터 공백을 건너뛰며 첫 한글 음절을 찾아 그 함수에 넘긴다.
  *
  * @param {string} text
  * @returns {""|"ㄹ"|"other"|null}
@@ -188,13 +166,8 @@ const RIEUL_FINAL_INDEX = 8;
 function finalConsonantClass(text) {
   if (typeof text !== "string") return null;
   for (let i = text.length - 1; i >= 0; i -= 1) {
-    const code = text.charCodeAt(i);
-    if (code >= HANGUL_START && code <= HANGUL_END) {
-      const finalIndex = (code - HANGUL_START) % JAMO_COUNT;
-      if (finalIndex === 0) return NO_FINAL;
-      if (finalIndex === RIEUL_FINAL_INDEX) return RIEUL;
-      return OTHER_FINAL;
-    }
+    const cls = hangulFinalOf(text[i]);
+    if (cls !== null) return cls;
     if (!/\s/.test(text[i])) return null;
   }
   return null;
@@ -331,20 +304,12 @@ export function particleRisk(bad, good, nextChar, prevChar = "") {
   const before = hasFinalConsonant(bad);
   const after = hasFinalConsonant(good);
   if (before === null || after === null) {
-    return `받침을 판정할 수 없어 뒤따르는 조사 "${nextChar}"${objectParticle(nextChar)} 지킬 수 없습니다`;
+    return `받침을 판정할 수 없어 뒤따르는 조사 "${nextChar}"${hasFinalConsonant(nextChar) ? "을" : "를"} 지킬 수 없습니다`;
   }
   if (before !== after) {
-    return `뒤따르는 조사 "${nextChar}"${subjectParticle(nextChar)} 깨집니다`;
+    return `뒤따르는 조사 "${nextChar}"${hasFinalConsonant(nextChar) ? "이" : "가"} 깨집니다`;
   }
   return null;
-}
-
-/**
- * particleRisk 의 참/거짓 판.
- * @returns {boolean}
- */
-export function isParticleSafe(bad, good, nextChar, prevChar = "") {
-  return particleRisk(bad, good, nextChar, prevChar) === null;
 }
 
 /**
@@ -424,9 +389,14 @@ const FOLLOWER_TOKENS = [
   // 여기서는 "다른 낱말 속이 아니다"만 넉넉하게 인정한다.
   "습", "았", "었", "겠", "으", "게", "죠", "네", "든", "려",
 ];
-const FOLLOWER_PATTERN = new RegExp(
-  `^(?:${[...FOLLOWER_TOKENS].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`
-);
+// 토큰 목록을 "맨 앞에서 이 중 하나로 시작하는가"를 보는 정규식으로 만든다. 긴 토큰을
+// 먼저 두어야 짧은 토큰이 먼저 걸려 뒤가 잘리지 않는다(대체가 아니라 존재 확인이라
+// 교대 순서가 결과를 가른다). FOLLOWER_PATTERN과 RO_CONTINUATION_PATTERN이 함께 쓴다.
+function prefixAlternation(tokens) {
+  return new RegExp(`^(?:${[...tokens].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`);
+}
+
+const FOLLOWER_PATTERN = prefixAlternation(FOLLOWER_TOKENS);
 const JEOK_PATTERN = /^적/;
 
 // 마지막 낱말이 한자어·외래어 명사로 세 음절 이상일 때만 "-적"을 받는다. "효과적"·
@@ -447,9 +417,7 @@ const RO_CONTINUATION_TOKENS = [
   "는", "도", "만", "서", "써", "부터", "의", "까지", "라도", "라면", "나", "요", "선", "은",
   "야", "밖에", "조차", "마저", "든", "인", "다가",
 ];
-const RO_CONTINUATION_PATTERN = new RegExp(
-  `^(?:${RO_CONTINUATION_TOKENS.sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`
-);
+const RO_CONTINUATION_PATTERN = prefixAlternation(RO_CONTINUATION_TOKENS);
 
 function isAllowedFollower(rest, allowJeok) {
   if (rest.length === 0) return true;
@@ -461,8 +429,9 @@ function isAllowedFollower(rest, allowJeok) {
     if (after.length === 0 || !isHangulChar(after[0]) || RO_CONTINUATION_PATTERN.test(after)) return true;
     // "로"/"으로"는 여기서 조사로 인정할 수 없다. FOLLOWER_TOKENS 에 "로"가 실려 있어
     // FOLLOWER_PATTERN(접두만 봄)은 "로그"·"로직"도 그대로 받아들인다 — 아래 일반 검사로
-    // 넘기면 위에서 이미 가려낸 오판이 되살아나므로, 여기서 명시적으로 끊는다.
-    return allowJeok && JEOK_PATTERN.test(rest);
+    // 넘기면 위에서 이미 가려낸 오판이 되살아나므로, 여기서 명시적으로 끊는다. rest는
+    // "로"/"으로"로 시작하니(위 ro 매치) "적"으로 시작할 수 없어 allowJeok 예외도 없다.
+    return false;
   }
 
   if (FOLLOWER_PATTERN.test(rest)) return true;
@@ -514,14 +483,11 @@ function hangulSyllableCount(word) {
 // 다른 낱말에 붙어 있어도 표기가 틀린 건 마찬가지다 — 오탐의 성격이 다른 규칙과 다르다.
 //
 // rules.mjs 의 parseTable 이 이유 칸 맨 앞 [표기]/[외래어] 표지를 읽어 rule.kind 로 넘겨준다.
-// 예전에는 이유 문장 낱말(표기·맞춤법·띄어 …)을 정규식으로 매칭했는데, 이유를 다듬어
-// 적다 보니 매칭 낱말이 우연히 빠지거나 들어가 판정이 조용히 바뀌었다. 0.13.19에서 실제로
-// 그랬다 — 레지스터리는 이유에서 "외래어"라는 말이 빠져 왼쪽·오른쪽 경계 판정을 둘 다
-// 잃었고, "50 %"는 반대로 새 이유에 "붙여도 띄어도 된다"는 "띄어"가 우연히 들어가 없던
-// 왼쪽 경계 예외를 얻었다(첫 글자가 숫자라 동작은 그대로였다). 판정은 표지 하나로만 하고, 이유 문장은 사람이 읽기 좋게
-// 자유로 고친다. 파일 위치(source)는 더 안 본다 — 표지 자체가 이미 명시적이라 register.md
-// 로 한정할 이유가 없고, 한정하면 다른 규칙 파일에 표지를 적어도 조용히 무시되는 두 번째
-// 함정이 생긴다.
+// 이유 문장의 낱말(표기·맞춤법·띄어 …)을 정규식으로 매칭하던 예전 방식은 이유를 다듬을
+// 때마다 판정이 조용히 바뀌었다(실측, 0.13.19). 판정은 표지 하나로만 하고, 이유 문장은
+// 사람이 읽기 좋게 자유로 고친다. 파일 위치(source)는 더 안 본다 — 표지 자체가 이미
+// 명시적이라 register.md 로 한정할 이유가 없고, 한정하면 다른 규칙 파일에 표지를 적어도
+// 조용히 무시되는 두 번째 함정이 생긴다.
 function isOrthographyRule(rule) {
   return rule?.kind === "orthography" || rule?.kind === "loanword";
 }
@@ -530,15 +496,12 @@ function isOrthographyRule(rule) {
 // "어떻게 할 지침이"의 "지침"까지 "할지침이"로 잘못 고친다. 표기가 틀렸다는 사실이 뒤에
 // 다른 낱말이 와도 된다는 뜻은 아니다.
 //
-// 예외는 [외래어] 표지가 붙은 규칙뿐이다. "메세지"+"큐", "데이타"+"베이스", "쓰레드"+"풀"
-// 처럼 한국어 개발 현장은 외래어 명사 둘을 조사 없이 그대로 붙여 쓴다 — 뒤에 오는 것도
-// 한글 조사가 아니라 또 다른 외래어라서 FOLLOWER_TOKENS 로는 절대 다 셀 수 없다. 이
-// 부류만 오른쪽도 뺀다. "어떻게 할 지"·"하는것"·"궁굼한" 같은 [표기] 규칙은
-// 뒤에 오는 것이 보통 조사·어미라 FOLLOWER_TOKENS 로 이미 받는다 — 그쪽은 오른쪽
-// 검사를 켜 둬도 손해가 없다.
-function isLoanwordSpellingRule(rule) {
-  return rule?.kind === "loanword";
-}
+// 예외는 [외래어] 표지가 붙은 규칙뿐이다("rule.kind === loanword", 아래 requirement.right).
+// "메세지"+"큐", "데이타"+"베이스", "쓰레드"+"풀"처럼 한국어 개발 현장은 외래어 명사
+// 둘을 조사 없이 그대로 붙여 쓴다 — 뒤에 오는 것도 한글 조사가 아니라 또 다른 외래어라서
+// FOLLOWER_TOKENS 로는 절대 다 셀 수 없다. 이 부류만 오른쪽도 뺀다. "어떻게 할 지"·
+// "하는것"·"궁굼한" 같은 [표기] 규칙은 뒤에 오는 것이 보통 조사·어미라 FOLLOWER_TOKENS
+// 로 이미 받는다 — 그쪽은 오른쪽 검사를 켜 둬도 손해가 없다.
 
 // 숫자로 시작하는 규칙의 왼쪽 경계 판정에 쓴다. 선행 숫자만 뽑는다.
 function leadingDigits(text) {
@@ -585,7 +548,7 @@ function boundaryRequirement(rule, alt) {
     left: !orthography && !leadsWithWildcard && isHangulChar(alt[0]),
     leftDigit: !leadsWithWildcard && badDigits !== null && badDigits !== goodDigits,
     right:
-      !isLoanwordSpellingRule(rule) &&
+      rule?.kind !== "loanword" &&
       !trailsWithWildcard &&
       !endsWithVerbStem(alt) &&
       !endsInsideClauseFragment(alt) &&
@@ -730,10 +693,12 @@ function capPerRule(findings) {
  * @param {{exhaustive?: boolean}} [options]
  *   exhaustive를 true로 주면 규칙당 보고 상한(MAX_HITS_PER_RULE)도, 원시 매치·반복
  *   상한(MAX_RAW_HITS_PER_RULE/MAX_PATTERN_ITERATIONS)도 적용하지 않는다 — applyFixes가
- *   문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다. 대신 masked 문자열 길이로 상한을
- *   둔다 — 매치 하나가 최소 MIN_LITERAL_LENGTH(2)자를 먹고, 길이 0짜리 매치도 매번
- *   lastIndex를 최소 1씩 미니 반복 횟수든 매치 수든 masked.length를 넘을 수 없다. 병적인
- *   입력에서도 무한히 돌지 않는다는 것이 이 값 자체로 증명된다.
+ *   문서에 실제로 있는 매치를 전부 고쳐야 할 때 쓴다. 이 상한을 그대로 쓰면 "2838건을
+ *   2835건만 고치고 고쳤다고 말하는" 불일치가 생긴다(실측, 0.14.13). 대신 masked
+ *   문자열 길이로 상한을 둔다 — 매치 하나가 최소 MIN_LITERAL_LENGTH(2)자를 먹거나,
+ *   길이 0짜리 매치라도 매번 lastIndex가 최소 1씩 밀리므로, 반복 횟수도 매치 수도
+ *   masked.length를 넘을 수 없다. 병적인 입력에서도 무한히 돌지 않는다는 것이 이 값
+ *   자체로 증명된다.
  * @returns {object[]}
  */
 export function lint(text, rules, mask = {}, options = {}) {
@@ -752,9 +717,7 @@ export function lint(text, rules, mask = {}, options = {}) {
   const masked = maskProtected(normalized, { ext, refDefs });
   const findings = [];
 
-  // exhaustive면 masked.length + 1로 넉넉히 잡는다 — 매치 하나가 최소 두 자를 먹거나
-  // (MIN_LITERAL_LENGTH) 길이 0짜리 매치라도 매번 lastIndex가 최소 1씩 밀리므로, 반복
-  // 횟수도 매치 수도 이 값을 넘을 수 없다(위 lint() 문서 참고).
+  // exhaustive의 상한 근거는 위 lint() 문서를 보라.
   const maxHitsPerRule = exhaustive ? masked.length + 1 : MAX_RAW_HITS_PER_RULE;
   const maxIterations = exhaustive ? masked.length + 1 : MAX_PATTERN_ITERATIONS;
 
@@ -803,8 +766,7 @@ export function lint(text, rules, mask = {}, options = {}) {
     }
   }
 
-  // find 기반 발견(overlapFree: true)은 resolveOverlaps 안에서 isOverlapFree가 걸러내
-  // 겹침 다툼에서 아예 빠진다 — 여기서 따로 나눠 담을 필요가 없다.
+  // find 기반 발견(overlapFree: true)의 처리는 isOverlapFree 문서를 보라.
   const resolved = resolveOverlaps(findings);
   return exhaustive ? resolved : capPerRule(resolved);
 }
@@ -828,11 +790,10 @@ export function applyFixes(text, rules, mask = {}) {
   // `검사` 칸이 치환인 것은 규칙을 쓴 사람의 의사 표시이고, 실제로 꽂을 수 있는지는
   // autoFixReplacement 가 따로 판정한다. 둘을 모두 만족해야 고친다.
   //
-  // lint()의 기본 상한(규칙당 3건 보고)을 그대로 쓰지 않는다 — 자동 교정은 문서에 실제로
-  // 있는 만큼 다 고쳐야 한다. 그대로 쓰면 "2838건을 2835건만 고치고 고쳤다고 말하는"
-  // 불일치가 생긴다(실측, 0.14.13). exhaustive: true로 보고 상한도 원시 매치·반복 상한도 끈다.
-  // find 기반 builtin(예: latin-hada.mjs의 LATIN_HADA_RULE)은 항상 check가 정규식이라
-  // 아래 필터에서 저절로 버려진다 — 자동 교정 대상에서 빼려고 따로 끌 필요가 없다.
+  // lint()의 기본 상한(규칙당 3건 보고)을 그대로 쓰지 않고 exhaustive: true로 부른다 —
+  // 이유는 lint()의 exhaustive 옵션 문서를 보라. find 기반 builtin(예: latin-hada.mjs의
+  // LATIN_HADA_RULE)은 항상 check가 정규식이라 아래 필터에서 저절로 버려진다 — 자동
+  // 교정 대상에서 빼려고 따로 끌 필요가 없다.
   const candidates = lint(text, rules, mask, { exhaustive: true }).filter(
     (finding) => finding.check === CHECK_SUBSTITUTE
   );
@@ -880,10 +841,10 @@ export function applyFixes(text, rules, mask = {}) {
     // 안 맞닿았으면 원문 그대로다 — 어느 쪽이든 이 자리는 다른 매치가 손대지 않았으므로
     // 원문에서 그대로 읽어도 안전하다.
     const next = candidates[i + 1];
-    const nextOutcome = i + 1 < outcomes.length ? outcomes[i + 1] : undefined;
+    const nextOutcome = outcomes[i + 1];
     const nextChar = next && next.index === end && nextOutcome ? nextOutcome[0] ?? "" : text[end] ?? "";
     // prevChar는 항상 아직 판정하지 않은 왼쪽 매치 앞이라 원문 그대로다(오른쪽부터
-    // 판정하므로 왼쪽은 아직 안 바뀐 것으로 본다 — 예전 구현도 같은 순서였다).
+    // 판정하므로 왼쪽은 아직 안 바뀐 것으로 본다).
     const prevChar = text[finding.index - 1] ?? "";
     const risk = particleRisk(finding.matched, replacement, nextChar, prevChar);
     if (risk !== null) {
@@ -933,19 +894,16 @@ export function formatFindings(findings, label = "") {
       ? `어색한 표현 ${entries.length}가지를 찾았습니다.`
       : `어색한 표현 ${entries.length}가지(총 ${findings.length}곳)를 찾았습니다.`;
 
-  const lines = [label ? `${label}에서 ${header}` : header, ""];
-  lines.push(
-    ...formatGroupedList(
-      entries,
-      ({ item: finding }) => {
-        const reason = finding.why ? ` (${finding.why})` : "";
-        // 쓸 것을 적힌 그대로 보여 준다. "~될", "~습니다"처럼 어미를 적는 물결표는
-        // 한국어에서 자연스러운 표기이므로 지우면 오히려 읽기 어려워진다.
-        return `- "${finding.matched}" → "${finding.good}"${reason}`;
-      },
-      Infinity
-    )
+  const lines = formatGroupedList(
+    entries,
+    ({ item: finding }) => {
+      const reason = finding.why ? ` (${finding.why})` : "";
+      // 쓸 것을 적힌 그대로 보여 준다. "~될", "~습니다"처럼 어미를 적는 물결표는
+      // 한국어에서 자연스러운 표기이므로 지우면 오히려 읽기 어려워진다.
+      return `- "${finding.matched}" → "${finding.good}"${reason}`;
+    },
+    Infinity
   );
 
-  return lines.join("\n");
+  return [label ? `${label}에서 ${header}` : header, "", ...lines].join("\n");
 }

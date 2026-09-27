@@ -4,7 +4,7 @@ import { rule as base } from "./helpers.mjs";
 import {
   applyFixes,
   hasFinalConsonant,
-  isParticleSafe,
+  particleRisk,
   primaryGood,
   autoFixReplacement,
   lint,
@@ -29,24 +29,24 @@ test("받침 유무를 판정한다", () => {
 });
 
 test("뒤에 조사가 없으면 언제나 안전하다", () => {
-  assert.ok(isParticleSafe("얇은 계약", "낮은 결합도", " "));
-  assert.ok(isParticleSafe("얇은 계약", "낮은 결합도", ""));
-  assert.ok(isParticleSafe("얇은 계약", "낮은 결합도", "."));
+  assert.equal(particleRisk("얇은 계약", "낮은 결합도", " "), null);
+  assert.equal(particleRisk("얇은 계약", "낮은 결합도", ""), null);
+  assert.equal(particleRisk("얇은 계약", "낮은 결합도", "."), null);
 });
 
 test("받침이 달라지면 조사 앞에서 막는다", () => {
   // 계약(받침 있음) → 결합도(받침 없음). "결합도을"이 되면 안 된다.
-  assert.ok(!isParticleSafe("얇은 계약", "낮은 결합도", "을"));
-  assert.ok(!isParticleSafe("얇은 계약", "낮은 결합도", "이"));
+  assert.notEqual(particleRisk("얇은 계약", "낮은 결합도", "을"), null);
+  assert.notEqual(particleRisk("얇은 계약", "낮은 결합도", "이"), null);
 });
 
 test("받침이 같으면 조사 앞에서도 통과한다", () => {
-  assert.ok(isParticleSafe("제출", "커밋", "을"));
-  assert.ok(isParticleSafe("합치기", "머지", "를"));
+  assert.equal(particleRisk("제출", "커밋", "을"), null);
+  assert.equal(particleRisk("합치기", "머지", "를"), null);
 });
 
 test("한글로 끝나지 않으면 조사 앞에서 막는다", () => {
-  assert.ok(!isParticleSafe("깊은 모듈", "deep module", "을"));
+  assert.notEqual(particleRisk("깊은 모듈", "deep module", "을"), null);
 });
 
 test("단순 치환을 적용한다", () => {
@@ -274,14 +274,14 @@ test("으로/로 조사는 bad가 아니라 실제로 뒤에 온 조사와 good�
   // "같은 무리인가"만 보면 그 원문 오류가 good에 그대로 옮겨 붙는다("커버리지으로").
   // "으"가 왔으면 good은 ㄹ이 아닌 받침이 있어야 하고, "로"만 왔으면 good은 받침이
   // 없거나 ㄹ받침이어야 한다 — 이 판정에 bad의 받침은 들어가지 않는다.
-  assert.ok(isParticleSafe("일", "책임", "으"), "책임은 으로 앞에 실제로 안전한데 위험하다고 봤다");
-  assert.ok(isParticleSafe("책임", "일", "로"), "일은 로 앞에 실제로 안전한데 위험하다고 봤다");
-  assert.ok(!isParticleSafe("포함률", "커버리지", "으"), "커버리지는 으로 앞에 위험한데 안전하다고 봤다");
+  assert.equal(particleRisk("일", "책임", "으"), null, "책임은 으로 앞에 실제로 안전한데 위험하다고 봤다");
+  assert.equal(particleRisk("책임", "일", "로"), null, "일은 로 앞에 실제로 안전한데 위험하다고 봤다");
+  assert.notEqual(particleRisk("포함률", "커버리지", "으"), null, "커버리지는 으로 앞에 위험한데 안전하다고 봤다");
   // ㄹ받침과 받침 없음은 둘 다 "로"를 쓰므로 서로 바뀌어도 안전하다.
-  assert.ok(isParticleSafe("일", "나무", "로"));
-  assert.ok(isParticleSafe("나무", "일", "로"));
+  assert.equal(particleRisk("일", "나무", "로"), null);
+  assert.equal(particleRisk("나무", "일", "로"), null);
   // 다른 받침끼리는 으로 앞에서 안전하다.
-  assert.ok(isParticleSafe("책임", "권한", "으"));
+  assert.equal(particleRisk("책임", "권한", "으"), null);
 });
 
 test("실제 규칙표: 문지기 구문으로 → 가드 절으로처럼 ㄹ받침이 깨지는 치환은 건너뛴다", () => {

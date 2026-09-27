@@ -48,15 +48,17 @@ function collectRanges(text, patterns, accept) {
 // 필요 없어 캡처만 뺀 버전을 이 소스에서 파생시킨다(아래).
 const REF_DEF_LINE = /^ {0,3}\[([^\]\n]+)\]:[ \t]+\S[^\n]*$/gm;
 
+// scripts/publish-docs.mjs 도 링크 재작성에서 이 패턴을 그대로 가져다 쓴다 — 펜스·인라인
+// 코드가 "검사에서 뺄 자리"라는 정의는 검사기든 퍼블리시 스크립트든 하나여야 한다.
+export const CODE_ONLY_PATTERNS = [/```[\s\S]*?```/g, /~~~[\s\S]*?~~~/g, /`[^`\n]*`/g];
+
 // 순서가 중요하다. 울타리 코드 블록을 먼저 덮어야 그 안의 백틱이 인라인 코드로 잘못 잡히지 않는다.
 //
 // 여기 있는 패턴은 대상 종류를 가리지 않고 항상 적용한다 — 커밋 메시지에도, 어떤 문서
 // 확장자에도. 들여쓰기 코드·rST·AsciiDoc·HTML 리터럴 블록처럼 "이 파일 형식에서만
-// 코드로 읽힌다"는 판단이 필요한 것들은 DOC_ONLY_PATTERNS 와 아래 함수들에 따로 둔다.
+// 코드로 읽힌다"는 판단이 필요한 것들은 아래 확장자별 함수들(findIndentedBlockRanges 등)에 따로 둔다.
 const ALWAYS_PATTERNS = [
-  /```[\s\S]*?```/g, // 울타리 코드 블록
-  /~~~[\s\S]*?~~~/g,
-  /`[^`\n]*`/g, // 인라인 코드
+  ...CODE_ONLY_PATTERNS, // 울타리 코드 블록(펜스 둘) · 인라인 코드
   /<[^>\n]{1,200}>/g, // HTML 태그, <https://...>
   /\bhttps?:\/\/\S+/g, // URL
   /\bwww\.[^\s)]+/g,
@@ -125,13 +127,17 @@ function findHangulAsciiJoinRanges(text) {
 // 들여쓰기 코드·pre/code 태그·참조식 링크·프런트매터는 전부 "마크다운이다"라는 같은 판단을
 // 쓴다 — 따로 둔 두 집합이 갈라질 일이 없어 하나로 합친다.
 const MARKDOWN_EXTS = new Set(["md", "mdx", "markdown"]);
-const RST_EXTS = new Set(["rst"]);
-const ASCIIDOC_EXTS = new Set(["adoc"]);
 
 const PRE_CODE_PATTERNS = [
   /<pre[^>]*>[\s\S]*?<\/pre>/gi,
   /<code[^>]*>[\s\S]*?<\/code>/gi,
 ];
+
+// 경로/슬래시 토큰.
+const PATH_TOKEN = new RegExp(
+  LEAD + String.raw`(?:[\p{L}\p{N}_.-]+[/\\][\p{L}\p{N}_./\\-]*|[\p{L}\p{N}_.-]*[/\\][\p{L}\p{N}_./\\-]+)` + TAIL,
+  "gu"
+);
 
 /**
  * 경로/슬래시 토큰. 앞뒤로 한글이 섞일 수 있지만(docs/컨텐츠.md), 슬래시 양쪽이 모두
@@ -139,19 +145,7 @@ const PRE_CODE_PATTERNS = [
  * 하나도 없으면 경로로 보지 않는다.
  */
 function findPathRanges(text) {
-  const re = new RegExp(
-    LEAD +
-      String.raw`(?:[\p{L}\p{N}_.-]+[/\\][\p{L}\p{N}_./\\-]*|[\p{L}\p{N}_.-]*[/\\][\p{L}\p{N}_./\\-]+)` +
-      TAIL,
-    "gu"
-  );
-  const ranges = [];
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    if (/[A-Za-z0-9]/.test(m[0])) ranges.push([m.index, m.index + m[0].length]);
-    else if (m[0].length === 0) re.lastIndex += 1;
-  }
-  return ranges;
+  return collectRanges(text, [PATH_TOKEN], (m) => /[A-Za-z0-9]/.test(m[0]));
 }
 
 /**
@@ -192,6 +186,13 @@ function findPromptLineRanges(text) {
 // 단, 바로 앞의 안 비어 있는 줄이 목록 항목(- , * , 1. 등)이면 그 들여쓰기는 코드가 아니라
 // 목록의 연속 내용이다(CommonMark). 목록 연속까지 코드로 덮으면 평범한 글이 사라진다.
 const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+\S/;
+const INDENT_START = /^(?: {4,}|\t)/;
+
+// 빈 줄(trim 결과가 빈 줄)은 들여쓰기 여부와 무관하게 들여쓰기 줄로 치지 않는다 —
+// findIndentedBlockRanges 안의 시작 판정과 블록 확장 판정이 같은 기준을 쓴다.
+function isIndentedLine(line, trimmed) {
+  return trimmed.length > 0 && INDENT_START.test(line);
+}
 
 function findIndentedBlockRanges(text) {
   const ranges = [];
@@ -204,7 +205,7 @@ function findIndentedBlockRanges(text) {
     const end = lineEnd === -1 ? n : lineEnd;
     const line = text.slice(i, end);
     const trimmed = line.trim();
-    const indented = trimmed.length > 0 && /^(?: {4,}|\t)/.test(line);
+    const indented = isIndentedLine(line, trimmed);
 
     if (indented && prevBlank && !LIST_ITEM.test(lastNonBlankLine)) {
       let blockEnd = end;
@@ -214,7 +215,7 @@ function findIndentedBlockRanges(text) {
         const nEnd = nextEnd === -1 ? n : nextEnd;
         const nextLine = text.slice(cursor, nEnd);
         const nextTrimmed = nextLine.trim();
-        const nextIndented = nextTrimmed.length > 0 && /^(?: {4,}|\t)/.test(nextLine);
+        const nextIndented = isIndentedLine(nextLine, nextTrimmed);
         if (nextIndented) {
           blockEnd = nEnd;
           cursor = nEnd + 1;
@@ -278,11 +279,14 @@ function findRstLiteralRanges(text, blocks) {
   return ranges;
 }
 
-// AsciiDoc 구분선(----, ...., ++++)으로 감싼 리스팅 블록.
+// AsciiDoc 구분선(----, ...., ++++)으로 감싼 리스팅 블록. 정규식 이스케이프는 이미
+// 손으로 해 두었다 — 셋 다 고정 리터럴이라 호출마다 다시 이스케이프할 이유가 없다.
+const ASCIIDOC_DELIMS = ["----", "\\.\\.\\.\\.", "\\+\\+\\+\\+"];
+
 function findAsciidocRanges(text) {
   const ranges = [];
-  for (const delim of ["----", "....", "++++"]) {
-    const re = new RegExp(`^${delim.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[ \\t]*$`, "gm");
+  for (const delim of ASCIIDOC_DELIMS) {
+    const re = new RegExp(`^${delim}[ \\t]*$`, "gm");
     const starts = [];
     let m;
     while ((m = re.exec(text)) !== null) starts.push(m.index);
@@ -402,12 +406,8 @@ function maskRanges(text, ranges) {
   return out + text.slice(cursor);
 }
 
-// scripts/publish-docs.mjs 도 링크 재작성에서 이 패턴을 그대로 가져다 쓴다 — 펜스·인라인
-// 코드가 "검사에서 뺄 자리"라는 정의는 검사기든 퍼블리시 스크립트든 하나여야 한다.
-export const CODE_ONLY_PATTERNS = [/```[\s\S]*?```/g, /~~~[\s\S]*?~~~/g, /`[^`\n]*`/g];
-
 /**
- * 코드로 보고 가릴 구간만 모은다. 정의 줄 스캔(maskCodeForDefScan)과 maskProtected가
+ * 코드로 보고 가릴 구간만 모은다. 정의 줄 스캔(scanDefLabels 호출부)과 maskProtected가
  * 둘 다 필요로 하는 부분 집합이라 여기 하나로 둔다 — maskProtected는 이미 알고 있는
  * 결과를 넘겨받아 다시 계산하지 않는다.
  */
@@ -421,17 +421,11 @@ function codeRanges(text, ext) {
 }
 
 /**
- * 정의 줄을 찾기 전에 코드만 가려 둔 사본을 만든다. 울타리·인라인 코드 안의
- * `` `[타겟]` `` 나 펜스 안 ` ```\n[타겟]: x\n``` `는 진짜 정의가 아니다 — 코드 예시로
- * 인용했을 뿐인데 실제 정의로 세면 그 라벨을 쓰는 모든 자리가 부당하게 검사에서 빠진다.
- *
- * @param {(number[])[]} [precomputed] maskProtected가 이미 구한 codeRanges 결과. 없으면
- *   새로 구한다(collectReferenceDefLabels처럼 codeRanges를 따로 안 가진 호출자용).
+ * 정의 줄(`[label]: url`)을 찾아 into에 정규화해 담는다. 호출부가 먼저 코드만 가려 둔
+ * 사본을 넘겨야 한다 — 울타리·인라인 코드 안의 `` `[타겟]` `` 나 펜스 안
+ * ` ```\n[타겟]: x\n``` `는 진짜 정의가 아니다. 코드 예시로 인용했을 뿐인데 실제 정의로
+ * 세면 그 라벨을 쓰는 모든 자리가 부당하게 검사에서 빠진다.
  */
-function maskCodeForDefScan(text, ext, precomputed) {
-  return maskRanges(text, precomputed || codeRanges(text, ext));
-}
-
 function scanDefLabels(maskedText, into) {
   REF_DEF_LINE.lastIndex = 0;
   let dm;
@@ -450,7 +444,7 @@ function scanDefLabels(maskedText, into) {
 export function collectReferenceDefLabels(text, ext) {
   if (typeof text !== "string" || text.length === 0) return new Set();
   const defs = new Set();
-  scanDefLabels(maskCodeForDefScan(text, ext), defs);
+  scanDefLabels(maskRanges(text, codeRanges(text, ext)), defs);
   return defs;
 }
 
@@ -472,7 +466,7 @@ function findReferenceLabelRanges(text, ext, extraDefs, precomputedCodeRanges) {
   // 이 지름길에서 뺀다.
   if (!conservative && (!extraDefs || extraDefs.size === 0) && !text.includes("]:")) return [];
   const defs = new Set(conservative ? [] : extraDefs || []);
-  scanDefLabels(maskCodeForDefScan(text, ext, precomputedCodeRanges), defs);
+  scanDefLabels(maskRanges(text, precomputedCodeRanges || codeRanges(text, ext)), defs);
 
   const ranges = [];
 
@@ -525,24 +519,22 @@ export function isIgnoredFile(text) {
  *   refDefs: 참조식 링크 라벨 판정에 쓸, 이 글 밖에서 모은 정의 라벨. collectReferenceDefLabels 참고.
  * @returns {string}
  */
-// 한 훅 호출 안에서 같은 글을 여러 번 가린다 — locateAndClassify가 old_string/new_string
-// 둘 다 찾아보고(artifact.mjs), fixOne이 조사 교정 전후로 다시 가리고, warnAboutTone이
-// lint와 findParticleErrors에 각각 넘긴다. 매번 text·ext가 똑같은 값(대개 같은 문자열
-// 인스턴스)이라 마지막 한 번만 기억해 두면 대부분 그대로 맞는다 — 단칸 캐시로 충분하다.
-let lastMaskKey = null;
-let lastMaskResult = null;
+let lastMask = null;
 
 export function maskProtected(text, mask = {}) {
   if (typeof text !== "string" || text.length === 0) return "";
   const { ext, refDefs } = mask;
 
-  if (lastMaskKey && lastMaskKey.text === text && lastMaskKey.ext === ext && lastMaskKey.refDefs === refDefs) {
-    return lastMaskResult;
+  // 한 훅 호출 안에서 같은 글을 여러 번 가린다 — locateAndClassify가 old_string/new_string
+  // 둘 다 찾아보고(artifact.mjs), fixOne이 조사 교정 전후로 다시 가리고, warnAboutTone이
+  // lint와 findParticleErrors에 각각 넘긴다. 매번 text·ext가 똑같은 값(대개 같은 문자열
+  // 인스턴스)이라 마지막 한 번만 기억해 두면 대부분 그대로 맞는다 — 단칸 캐시로 충분하다.
+  if (lastMask && lastMask.text === text && lastMask.ext === ext && lastMask.refDefs === refDefs) {
+    return lastMask.result;
   }
 
   const result = maskProtectedUncached(text, ext, refDefs);
-  lastMaskKey = { text, ext, refDefs };
-  lastMaskResult = result;
+  lastMask = { text, ext, refDefs, result };
   return result;
 }
 
@@ -561,8 +553,8 @@ function maskProtectedUncached(text, ext, refDefs) {
     ranges.push(...findFrontmatterRanges(text));
     ranges.push(...findReferenceLabelRanges(text, ext, refDefs, code));
   }
-  if (RST_EXTS.has(ext)) ranges.push(...findRstLiteralRanges(text, findIndentedBlockRanges(text)));
-  if (ASCIIDOC_EXTS.has(ext)) ranges.push(...findAsciidocRanges(text));
+  if (ext === "rst") ranges.push(...findRstLiteralRanges(text, findIndentedBlockRanges(text)));
+  if (ext === "adoc") ranges.push(...findAsciidocRanges(text));
 
   return maskRanges(text, ranges);
 }
