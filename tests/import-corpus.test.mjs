@@ -8,14 +8,13 @@
 // 그대로 승격시키면 손으로 내린 판단이 조용히 되돌아간다 — 강등만 허용해야 한다.
 
 import { readdirSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { recheckLine } from "../scripts/import-corpus.mjs";
 import { parseTable } from "../hooks/lib/rules.mjs";
+import { ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RULES_DIR = join(ROOT, "rules");
 
 test("recheck 로 강등될 때(치환 → 정규식) [표기] 표지는 살아남는다", () => {

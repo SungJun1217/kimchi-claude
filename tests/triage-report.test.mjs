@@ -1,10 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   parseIssueForm,
   extractFields,
@@ -18,20 +16,11 @@ import {
   MARKER,
 } from "../scripts/triage-report.mjs";
 import { loadToneRules } from "../hooks/lib/artifact.mjs";
+import { ROOT, withTempDir } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = join(ROOT, "scripts", "triage-report.mjs");
 const RULES = loadToneRules();
 const REPO = "SungJun1217/kimchi-claude";
-
-function withTempDir(fn) {
-  const dir = mkdtempSync(join(tmpdir(), "kimchi-triage-"));
-  try {
-    return fn(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 function runTriage(args) {
   const stdout = execFileSync("node", [SCRIPT, ...args], { encoding: "utf8" });

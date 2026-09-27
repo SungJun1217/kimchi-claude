@@ -1,10 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { writeFileSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { withTempDir, ROOT } from "./helpers.mjs";
 import {
   globToRegExp,
   matchesAnyPattern,
@@ -34,18 +33,8 @@ import {
 const GRAPHQL_BOT_AUTHOR = { login: "github-actions", __typename: "Bot" };
 import { loadToneRules } from "../hooks/lib/artifact.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ACTION_LINT = join(ROOT, "scripts", "action-lint.mjs");
 const RULES = loadToneRules();
-
-function withTempDir(fn) {
-  const dir = mkdtempSync(join(tmpdir(), "kimchi-action-lint-"));
-  try {
-    return fn(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 function runActionLint(args, extraEnv = {}) {
   const stdout = execFileSync("node", [ACTION_LINT, ...args], {

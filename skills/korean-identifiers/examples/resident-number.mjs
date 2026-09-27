@@ -39,8 +39,9 @@
 export const RESIDENT_NUMBER_PATTERN =
   /(?<![0-9０-９A-Za-z_])[0-9０-９]{6}(?: ?[-－] ?| {1,2})[1-8１-８][0-9０-９]{6}(?![0-9０-９A-Za-z_])/g;
 
-// 전각 숫자를 반각으로 되돌리고 숫자만 남긴다.
-const digitsOf = (value) => String(value ?? "").normalize("NFKC").replace(/\D/g, "");
+// 전각 숫자를 반각으로 되돌리고 숫자만 남긴다. masking.mjs 도 같은 규칙을 쓴다(같은
+// 스킬 안이라 가져다 쓰는 편이 낫다).
+export const digitsOf = (value) => String(value ?? "").normalize("NFKC").replace(/\D/g, "");
 
 // 눈에 안 보이는 서식 문자. 붙여넣기 과정에서 숫자 사이에 흔히 섞인다.
 const ZERO_WIDTH = new Set([0x200b, 0x200c, 0x200d, 0x2060, 0x00ad, 0xfeff]);
@@ -201,15 +202,10 @@ function scanLine(rawLine) {
 // 3/4 는 2000년대(내국인). 5/6·7/8 은 외국인 표시로 같은 세기를 가리킨다.
 const CENTURY_BASE = { 1: 1900, 2: 1900, 3: 2000, 4: 2000, 5: 1900, 6: 1900, 7: 2000, 8: 2000 };
 
-function isLeapYear(year) {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
+// month의 다음 달 0일 = month의 마지막 날. UTC 로 계산해 로컬 표준시 보정에
+// 흔들리지 않는다. 윤년 규칙을 손으로 다시 적을 필요가 없어진다.
 function daysInMonth(year, month) {
-  if (month === 2) return isLeapYear(year) ? 29 : 28;
-  return DAYS_IN_MONTH[month - 1];
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 /**

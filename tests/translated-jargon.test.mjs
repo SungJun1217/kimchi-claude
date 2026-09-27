@@ -12,12 +12,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { lint, applyFixes } from "../hooks/lib/lint.mjs";
 import { loadRules, CHECK_REGEX } from "../hooks/lib/rules.mjs";
+import { ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { rules } = loadRules(join(ROOT, "rules"));
 
 const REAL_SENTENCES = [

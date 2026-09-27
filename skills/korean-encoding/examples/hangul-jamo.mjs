@@ -12,7 +12,9 @@ const SYLLABLE_LAST = 0xd7a3;
 const MEDIAL_COUNT = 21;
 const FINAL_COUNT = 28;
 
-const INITIALS = [
+// chosung-search.mjs 도 이 배열을 쓴다(같은 스킬 안이라 가져다 쓰는 편이 낫다 —
+// 유니코드 배열 순서를 두 파일이 각자 베껴 적으면 하나만 고쳤을 때 어긋난다).
+export const INITIALS = [
   "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ",
   "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
 ];
@@ -72,6 +74,14 @@ export function decompose(char) {
   };
 }
 
+const PAIRS = {
+  "을/를": ["을", "를"],
+  "이/가": ["이", "가"],
+  "은/는": ["은", "는"],
+  "과/와": ["과", "와"],
+  "으로/로": ["으로", "로"],
+};
+
 /**
  * 앞말의 받침에 맞는 조사를 고른다.
  *
@@ -89,13 +99,6 @@ export function decompose(char) {
  * @returns {string|null} 판정할 수 없으면 null
  */
 export function particleFor(word, pair) {
-  const PAIRS = {
-    "을/를": ["을", "를"],
-    "이/가": ["이", "가"],
-    "은/는": ["은", "는"],
-    "과/와": ["과", "와"],
-    "으로/로": ["으로", "로"],
-  };
   const chosen = PAIRS[pair];
   if (!chosen) return null;
 

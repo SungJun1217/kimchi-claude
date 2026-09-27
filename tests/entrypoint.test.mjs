@@ -8,20 +8,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import {
-  mkdtempSync,
-  rmSync,
-  cpSync,
-  symlinkSync,
-  writeFileSync,
-  appendFileSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { isEntrypoint } from "../hooks/lib/entrypoint.mjs";
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+import { ROOT, copyPlugin, runNodeJson, PII_PAYLOAD, makeRepo, ENGLISH_DOC } from "./helpers.mjs";
 
 // ── isEntrypoint 단위 시험 ──────────────────────────────────
 //
@@ -115,28 +107,10 @@ test("심볼릭 링크를 거쳐 실행돼도 참이다", (t) => {
 
 // ── 실제 훅을 이상한 경로에서 돌려 본다 ─────────────────────
 
-/** hooks/ 와 rules/ 를 이상한 이름의 디렉터리로 복사한다. 정리는 부른 쪽이 한다. */
-function copyPlugin(name) {
-  const base = mkdtempSync(join(tmpdir(), "kimchi-plugin-"));
-  const dir = join(base, name);
-  cpSync(join(ROOT, "hooks"), join(dir, "hooks"), { recursive: true });
-  cpSync(join(ROOT, "rules"), join(dir, "rules"), { recursive: true });
-  return dir;
-}
-
-const PII_PAYLOAD = JSON.stringify({
-  hook_event_name: "PreToolUse",
-  tool_name: "Write",
-  tool_input: { file_path: "/tmp/a.txt", content: "주민번호 900101-1234568" },
-});
-
 function runGuard(pluginDir, payload) {
-  const stdout = execFileSync("node", [join(pluginDir, "hooks", "guard.mjs")], {
-    input: payload,
-    encoding: "utf8",
-    env: { ...process.env, KIMCHI_DISABLE: "", KIMCHI_PII: "" },
+  return runNodeJson(join(pluginDir, "hooks", "guard.mjs"), payload, {
+    clear: ["KIMCHI_DISABLE", "KIMCHI_PII"],
   });
-  return stdout.trim() === "" ? null : JSON.parse(stdout);
 }
 
 test("공백과 한글이 섞인 경로에 놓여도 주민등록번호를 막는다", () => {
@@ -166,29 +140,8 @@ test("심볼릭 링크로 실행돼도 주민등록번호를 막는다", (t) => 
 
 // ── session-language.mjs 도 같은 결함을 안고 있었다 ─────────
 
-const ENGLISH_DOC = [
-  "# Project",
-  "",
-  "This project does a thing. The documentation is written in English for contributors",
-  "who may not read Korean. Everything here follows that convention consistently.",
-  "",
-  "Another paragraph explains how to build and test the project on a local machine",
-  "without any additional setup beyond a recent version of the runtime.",
-  "",
-].join("\n");
-
 function makeEnglishRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "kimchi-lang-"));
-  execFileSync("git", ["init", "-q", "."], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@t"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
-  for (const subject of ["Add cache", "Fix bug", "Bump deps"]) {
-    appendFileSync(join(dir, "f.txt"), "x\n");
-    execFileSync("git", ["add", "-A"], { cwd: dir });
-    execFileSync("git", ["commit", "-q", "-m", subject], { cwd: dir });
-  }
-  writeFileSync(join(dir, "README.md"), ENGLISH_DOC, "utf8");
-  return dir;
+  return makeRepo(["Add cache", "Fix bug", "Bump deps"], ENGLISH_DOC);
 }
 
 function runSessionLanguage(scriptPath, cwd) {

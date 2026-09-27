@@ -6,12 +6,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { renderAll, EXCERPTS, readFixture } from "../scripts/build-readme-art.mjs";
 import { findResidentNumbers } from "../hooks/lib/pii.mjs";
+import { ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ASSETS = join(ROOT, "assets");
 const files = renderAll();
 

@@ -14,6 +14,10 @@ const AREA_CODES = [
   "061", "062", "063", "064", // 전남, 광주, 전북, 제주
 ];
 
+// 지역번호는 긴 것부터 맞춰야 한다. "02" 가 "021" 을 먹어 버리면 안 된다.
+// 목록이 안 바뀌므로 parsePhone 이 불릴 때마다 다시 정렬할 필요는 없다.
+const AREA_CODES_BY_LENGTH = [...AREA_CODES].sort((a, b) => b.length - a.length);
+
 // 휴대전화. 011·016·017·018·019 는 2G 종료로 신규 발급이 없지만 아직 쓰는 번호가 있다.
 const MOBILE_PREFIXES = ["010", "011", "016", "017", "018", "019"];
 
@@ -67,6 +71,13 @@ export function isSafeNumber(value) {
   return [...SAFE_NUMBER_PREFIXES].some((prefix) => digits.startsWith(prefix));
 }
 
+// 국번+뒷자리(rest)를 [접두, 국번, 뒷자리 4개]로 쪼갠다. 010 등은 8자리, 그 밖의
+// 구 번호·특수번호는 7자리도 있어 둘 다 받는다. 자리수가 안 맞으면 null.
+function split3(prefix, rest) {
+  if (rest.length !== 7 && rest.length !== 8) return null;
+  return [prefix, rest.slice(0, rest.length - 4), rest.slice(-4)];
+}
+
 /**
  * 전화번호를 뜯어본다.
  *
@@ -78,10 +89,8 @@ export function parsePhone(value) {
 
   const mobile = MOBILE_PREFIXES.find((prefix) => digits.startsWith(prefix));
   if (mobile) {
-    const rest = digits.slice(3);
-    // 010 은 8자리, 그 밖의 구 번호는 7자리도 있다.
-    if (rest.length !== 7 && rest.length !== 8) return null;
-    return { kind: "휴대전화", parts: [mobile, rest.slice(0, rest.length - 4), rest.slice(-4)] };
+    const parts = split3(mobile, digits.slice(3));
+    return parts && { kind: "휴대전화", parts };
   }
 
   // 대표번호. 15XX·16XX·18XX 로 시작하고 8자리다. 지역번호가 없다.
@@ -91,19 +100,14 @@ export function parsePhone(value) {
 
   const special = SPECIAL_PREFIXES.find((prefix) => digits.startsWith(prefix));
   if (special) {
-    const rest = digits.slice(special.length);
-    if (rest.length < 7 || rest.length > 8) return null;
-    const kind = isSafeNumber(digits) ? "안심번호" : "특수번호";
-    return { kind, parts: [special, rest.slice(0, rest.length - 4), rest.slice(-4)] };
+    const parts = split3(special, digits.slice(special.length));
+    return parts && { kind: isSafeNumber(digits) ? "안심번호" : "특수번호", parts };
   }
 
-  // 지역번호는 긴 것부터 맞춰야 한다. "02" 가 "021" 을 먹어 버리면 안 된다.
-  const area = [...AREA_CODES].sort((a, b) => b.length - a.length).find((code) => digits.startsWith(code));
+  const area = AREA_CODES_BY_LENGTH.find((code) => digits.startsWith(code));
   if (area) {
-    const rest = digits.slice(area.length);
-    // 국번은 3자리나 4자리다.
-    if (rest.length !== 7 && rest.length !== 8) return null;
-    return { kind: "유선전화", parts: [area, rest.slice(0, rest.length - 4), rest.slice(-4)] };
+    const parts = split3(area, digits.slice(area.length));
+    return parts && { kind: "유선전화", parts };
   }
 
   return null;

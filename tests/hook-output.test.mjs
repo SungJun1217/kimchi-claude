@@ -6,24 +6,17 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, cpSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { spawn, spawnSync } from "node:child_process";
+import { rmSync, writeFileSync, unlinkSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { ROOT, copyPlugin, runNodeJson, PII_PAYLOAD } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD = join(ROOT, "hooks", "guard.mjs");
 const SESSION_LANGUAGE = join(ROOT, "hooks", "session-language.mjs");
+const CLEAR = ["KIMCHI_DISABLE", "KIMCHI_PII", "KIMCHI_AUTOFIX", "KIMCHI_BLOCK"];
 
 function runHook(hook, payload, env = {}) {
-  const stdout = execFileSync("node", [hook], {
-    input: JSON.stringify(payload),
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    env: { ...process.env, KIMCHI_DISABLE: "", KIMCHI_PII: "", KIMCHI_AUTOFIX: "", KIMCHI_BLOCK: "", ...env },
-  });
-  return stdout.trim() === "" ? null : JSON.parse(stdout);
+  return runNodeJson(hook, payload, { env, clear: CLEAR, maxBuffer: 16 * 1024 * 1024 });
 }
 
 // ── (a) 유출 메시지의 나열 한도 ──────────────────────────────
@@ -129,26 +122,12 @@ test("느린 리더에게도 64KiB 를 넘는 출력이 완전하게 도착한�
 
 // ── (d) lib/ 이 깨진 설치 ────────────────────────────────────
 
-/** hooks/ 와 rules/ 를 임시 위치로 복사한다. */
-function copyPlugin() {
-  const dir = mkdtempSync(join(tmpdir(), "kimchi-broken-"));
-  cpSync(join(ROOT, "hooks"), join(dir, "hooks"), { recursive: true });
-  cpSync(join(ROOT, "rules"), join(dir, "rules"), { recursive: true });
-  return dir;
-}
-
 /** hooks/lib/<relPath> 를 없애거나 문법 오류를 심는다. */
 function breakLib(dir, relPath, how) {
   const target = join(dir, "hooks", "lib", relPath);
   if (how === "missing") unlinkSync(target);
   else writeFileSync(target, "export function broken( {\n", "utf8");
 }
-
-const PII_PAYLOAD = {
-  hook_event_name: "PreToolUse",
-  tool_name: "Write",
-  tool_input: { file_path: "a.txt", content: "주민번호 900101-1234568" },
-};
 
 // 이 저장소 자체가 한국어로 쓰는 저장소라 session-language.mjs 는 평소에도 아무 말을
 // 하지 않는다. particle.mjs 는 애초에 session-language.mjs 의 의존성도 아니므로, 이
@@ -182,7 +161,7 @@ for (const relPath of ["particle.mjs", "artifact.mjs", "lint.mjs"]) {
           "말투 체인 고장이 개인정보 차단까지 끌고 내려가면 안 된다"
         );
       } finally {
-        rmSync(dir, { recursive: true, force: true });
+        rmSync(dirname(dir), { recursive: true, force: true });
       }
     });
   }
@@ -200,7 +179,7 @@ for (const relPath of ["particle.mjs", "artifact.mjs", "lint.mjs"]) {
       assert.equal(result.stdout, "");
       assert.equal(result.stderr, "");
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dirname(dir), { recursive: true, force: true });
     }
   });
 }
@@ -221,7 +200,7 @@ for (const [name, how] of HOW) {
       assert.equal(result.stdout, "");
       assert.equal(result.stderr, "");
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dirname(dir), { recursive: true, force: true });
     }
   });
 }

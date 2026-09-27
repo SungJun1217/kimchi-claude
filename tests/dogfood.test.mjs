@@ -6,14 +6,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, join, relative } from "node:path";
 import { loadRules } from "../hooks/lib/rules.mjs";
 import { lint } from "../hooks/lib/lint.mjs";
 import { findParticleErrors } from "../hooks/lib/particle.mjs";
 import { looksKorean } from "../hooks/lib/detect.mjs";
+import { ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // output-styles 를 빼지 않는다. 생성된 스타일 본문이 스스로 붙인 예외 표시로
 // 걸러지는지 여기서 함께 확인된다.
 const SKIP_DIRS = new Set(["node_modules", ".git", ".remember", "results"]);

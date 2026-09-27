@@ -3,9 +3,9 @@
 // 이 파일이 다루는 결함은 모두 **예외를 던지지 않는다.** 조용히 잘못된 값을 만들어
 // 끝까지 흘러간다. 그래서 입력 경계에서 정제하고, 어긋나면 멈추는 쪽이 낫다.
 
-// 전각 영숫자와 기호는 U+FF01~U+FF5E 이고 반각과 0xFEE0 만큼 떨어져 있다.
-const FULLWIDTH_START = 0xff01;
-const FULLWIDTH_END = 0xff5e;
+// 전각 영숫자와 기호는 U+FF01~U+FF5E 이고 반각과 0xFEE0 만큼 떨어져 있다. 이 범위는
+// 서로게이트 쌍 없이 코드 유닛 하나로 끝나서 정규식 하나로 바꿀 수 있다.
+const FULLWIDTH = /[！-～]/g;
 const FULLWIDTH_OFFSET = 0xfee0;
 
 // 공백으로 보이지만 공백이 아닌 글자들. 관공서 자료와 웹에서 복사한 값에 섞인다.
@@ -27,15 +27,10 @@ const ZERO_WIDTH = /[\u200b-\u200d\ufeff\u2060]/g;
 export function normalizeWidth(text) {
   if (typeof text !== "string") return "";
 
-  let out = "";
-  for (const char of text) {
-    const code = char.codePointAt(0);
-    out +=
-      code >= FULLWIDTH_START && code <= FULLWIDTH_END
-        ? String.fromCodePoint(code - FULLWIDTH_OFFSET)
-        : char;
-  }
-  return out.replace(INVISIBLE_SPACES, " ").replace(ZERO_WIDTH, "");
+  return text
+    .replace(FULLWIDTH, (ch) => String.fromCharCode(ch.charCodeAt(0) - FULLWIDTH_OFFSET))
+    .replace(INVISIBLE_SPACES, " ")
+    .replace(ZERO_WIDTH, "");
 }
 
 /**

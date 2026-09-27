@@ -6,14 +6,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { lint, applyFixes } from "../hooks/lib/lint.mjs";
 import { findLatinVerbHada, LATIN_HADA_RULE } from "../hooks/lib/latin-hada.mjs";
 import { loadRules, CHECK_REGEX } from "../hooks/lib/rules.mjs";
-import { fastestMs } from "./helpers.mjs";
+import { fastestMs, ROOT } from "./helpers.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { rules: tableRules } = loadRules(join(ROOT, "rules"));
 // lint()는 더 이상 이 검사를 하드코딩하지 않는다 — rules 배열에 이 규칙 객체가 실려
 // 있어야 검사된다(rules.mjs의 loadRules()가 훅에는 builtins로 얹어 준다). 이 시험은
