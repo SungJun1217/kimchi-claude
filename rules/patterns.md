@@ -32,11 +32,12 @@
 | It's worth noting that this function is idempotent. | 주목할 점은 이 함수가 멱등이라는 것입니다. | 이 함수는 멱등입니다. | 영어 강조 구문을 옮기면 빈 절이 하나 늘어납니다. | 치환 | 핵심 |
 | This means the request is sent twice. | 이것은 요청이 두 번 전송된다는 것을 의미합니다. | 그래서 요청이 두 번 전송됩니다. | This means 직역. 접속사 하나로 끝납니다. | 정규식 | 핵심 |
 | If the test fails, then check the log. | 만약 테스트가 실패한다면, 그러면 로그를 확인하세요. | 테스트가 실패하면 로그를 보세요. | if~then의 then은 한국어 어미에 이미 들어 있습니다. | 정규식 | 핵심 |
-| I fixed the function that was causing slow responses because it rebuilt the cache on every call. | 호출마다 캐시를 새로 만들어서 응답을 느리게 만들고 있던 이 함수를 수정했습니다. | 이 함수가 호출마다 캐시를 새로 만들고 있었습니다. 그래서 응답이 느렸고, 지금은 고쳤습니다. | 영어 관계절을 명사 앞에 쌓지 말고 문장을 끊습니다. | 프롬프트 | 핵심 |
-| This change removes the cache rebuild, which reduces latency, while all tests still pass and backward compatibility is preserved. | 이 변경은 캐시 재생성을 없애 latency를 줄이면서, 동시에 모든 테스트를 통과하고 하위 호환도 유지합니다. | 캐시 재생성을 없애 latency를 줄였습니다. 테스트는 전부 통과하고 하위 호환도 그대로입니다. | 영어 한 문장을 한국어 한 문장으로 옮기면 늘어집니다. 끊어 씁니다. latency는 실무에서 원어를 그대로 씁니다. | 프롬프트 | 핵심 |
+| cause, result, response | 캐시를 매 요청마다 다시 만드는 코드 때문에 응답이 느려지고 있어서 해당 코드를 수정했고 테스트도 모두 통과했습니다. | 매 요청마다 캐시를 다시 만들고 있었습니다. 그래서 응답이 느렸습니다. 해당 코드를 수정했고, 테스트도 모두 통과했습니다. | 원인·결과·대응을 따로 쓰면 긴 수식절이 사라진다. Google Technical Writing의 문장별 생각 분리 원칙을 참고한 자체 예시다. | 프롬프트 | 핵심 |
+| stacked nouns | DB 연결 대기 시간 증가 원인 확인을 위한 로그 분석을 진행했습니다. | DB 연결 대기 시간이 늘어난 원인을 찾으려고 로그를 분석했습니다. | 겹친 명사는 동사로 풀되 기술 용어는 유지한다. 국립국어원 보도 자료 쓰기 길잡이 p.48의 과도한 명사화 교정을 참고한 자체 예시다. | 프롬프트 | 핵심 |
+| benefit, risk, response | 권한 캐시를 도입하면 DB 부하를 줄일 수 있지만 권한 회수 직후에도 오래된 권한으로 접근할 수 있어 무효화 방법을 먼저 정해야 합니다. | 권한 캐시를 도입하면 DB 부하를 줄일 수 있습니다. 다만 권한을 회수해도 캐시에 남은 권한으로 접근할 수 있습니다. 도입 전에 캐시를 무효화할 방법부터 정해야 합니다. | 이점·위험·대응을 나누면서 조건과 가능성을 유지한다. 토스의 결제 SDK 카나리 배포 글에서 문제와 대응을 나누는 흐름을 참고한 자체 예시다. | 프롬프트 | 핵심 |
 | This class has three dependencies. | 이 클래스는 세 개의 의존성을 가지고 있습니다. | 이 클래스는 의존성이 세 개입니다. | have 직역. 한국어는 '있다'로 씁니다. 대체 표현은 문맥마다 달라('없다', '맺다' 등) 정규식으로만 안내합니다. MS 한국어 스타일 가이드 4.1.11, 새국어생활 2012 | 정규식 | 핵심 |
 | This flag allows you to skip the cache. | 이 플래그는 당신이 캐시를 건너뛸 수 있도록 허용합니다. | 이 플래그를 주면 캐시를 건너뜁니다. | allow you to 직역은 주어와 목적어를 둘 다 늘립니다. | 정규식 | 핵심 |
-| — | 한 문장에 절을 셋 이상 이어 붙이기 | 절 두 개까지. 50자를 넘으면 문장을 나눕니다 | 영어 한 문장을 한국어 한 문장으로 고집하면 늘어집니다 | 프롬프트 | 핵심 |
+| — | 한 문장에 절을 셋 이상 이어 붙이기 | 원인·결과·대응이 겹치면 나눕니다. 조건·부정·추정은 그대로 유지합니다 | 절 수나 글자 수보다 서로 다른 판단이 겹치는지를 본다. 짧게 만들려고 조건이나 불확실성을 빼면 뜻이 바뀐다. | 프롬프트 | 핵심 |
 | — | 파일들을 | 파일을 | 복수 접미사 남용이지만, 수량 표현이 없으면 '들'이 종류의 다양성을 뜻할 수 있어 문맥을 봐야 한다("파일들을 뒤졌다"는 여러 종류를 뒤졌다는 뜻도 된다). 위 핵심 행들은 수량 표현이 있는 문장 전체를 고정해 둔 것이라 안전한 치환이고, 이 낱말 자체를 일반화한 규칙은 아니다. 새국어생활 2012 p.76 | 정규식 | 보통 |
 | — | ~잊혀지다 | ~잊히다 | 이중 피동. 피동 접사 '히'에 '-어지다'를 다시 붙였다. 국립국어원 온라인가나다 310695 | 치환 | 보통 |
 | — | ~잊혀졌다 | ~잊혔다 | 이중 피동의 과거형 | 치환 | 보통 |
@@ -123,3 +124,6 @@
 치른다. 링크는 여기 한 번만 적는다.
 
 - 온라인가나다 310695: https://korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=216&qna_seq=310695
+- Google Technical Writing, Short sentences: https://developers.google.com/tech-writing/one/short-sentences
+- 국립국어원, 보도 자료 쓰기 길잡이 p.48: https://m.korean.go.kr/common/download.do?c_file_name=034360d4-77f0-496b-a870-72f42632cac0.pdf&file_path=etcData&o_file_name=%EB%B3%B4%EB%8F%84_%EC%9E%90%EB%A3%8C_%EC%93%B0%EA%B8%B0_%EA%B8%B8%EC%9E%A1%EC%9D%B4.pdf
+- 토스, 프론트엔드 배포 시스템의 진화 (1): https://toss.tech/article/engineering-note-9

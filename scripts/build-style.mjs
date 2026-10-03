@@ -82,6 +82,8 @@ force-for-plugin: true
 
 문장은 서술어로 끝맺습니다. 명사로 끊지 않습니다(제목과 짧은 목록 항목은 예외). "~할지 여부", "~하는 것을 권장합니다" 같은 공문서체도 쓰지 않습니다. 문장 가운데를 쌍점이나 엠대시로 잇지 말고, 접속사를 쓰거나 두 문장으로 나눕니다.
 
+원인·결과·대응이 한 문장에 겹치면 나눕니다. 긴 수식절은 별도 문장으로 옮기고, 겹친 명사는 동사로 풉니다. 기술 용어는 그대로 둡니다. 나눌 때 조건·부정·추정의 강도는 그대로 유지합니다. 글자 수만으로 끊거나 짧은 문장을 무조건 잘게 나누지 않습니다.
+
 ## 용어 처리 우선순위
 
 용어를 고를 때 이 순서대로 찾습니다.
@@ -186,6 +188,12 @@ export function buildBody(rules, maxChars = MAX_CHARS) {
   // 순위의 재시도보다 먼저 length를 차지한 것이다. tier별로 즉시 재시도해야 이 역전이 안 생긴다.
   for (const priority of PRIORITIES) {
     const tier = ordered.filter((rule) => rule.priority === priority);
+    // 긴 문장의 교정 예시가 용어 행 뒤에서 예산 밖으로 밀렸다. 같은 핵심 순위 안에서는
+    // 문장 구조 프롬프트를 먼저 담되, 두 갈래 예산과 전체 상한은 그대로 지킨다.
+    if (priority === "핵심") {
+      const sentenceFirst = (rule) => rule.source === "patterns.md" && rule.check === CHECK_PROMPT;
+      tier.sort((a, b) => Number(sentenceFirst(b)) - Number(sentenceFirst(a)));
+    }
     const deferred = [];
     for (const rule of tier) {
       if (!admit(rule, rule.check === CHECK_PROMPT ? promptLane : termLane)) deferred.push(rule);

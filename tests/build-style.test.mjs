@@ -30,6 +30,28 @@ test("용어 처리 다섯 순위가 모두 들어간다", () => {
   assert.match(body, /은유는 번역 대상이 아닙니다/);
 });
 
+test("문장을 나눌 때 조건·부정·추정과 기술 용어를 보존하도록 안내한다", () => {
+  const { body } = buildBody([]);
+  assert.match(body, /원인·결과·대응이 한 문장에 겹치면 나눕니다/);
+  assert.match(body, /조건·부정·추정의 강도는 그대로 유지/);
+  assert.match(body, /기술 용어는 그대로/);
+  assert.doesNotMatch(body, /50자를 넘으면/);
+});
+
+test("실제 규칙표: 긴 문장을 다듬는 세 예시가 전체 규칙과 함께 들어간다", () => {
+  const { rules } = loadRules(new URL("../rules", import.meta.url).pathname);
+  const { body } = buildBody(rules);
+  const examples = ["cause, result, response", "stacked nouns", "benefit, risk, response"];
+  for (const en of examples) {
+    const example = rules.find((r) => r.source === "patterns.md" && r.en === en);
+    assert.ok(example, `문장 예시가 규칙표에 없다: ${en}`);
+    assert.equal(example.check, "프롬프트", "문맥에 따라 달라지는 교정을 자동 치환하면 안 된다");
+    assert.ok(body.includes(example.bad), `교정 전 예시가 예산에서 빠졌다: ${en}`);
+    assert.ok(body.includes(example.good), `교정 후 예시가 예산에서 빠졌다: ${en}`);
+  }
+  assert.ok(body.length <= MAX_CHARS);
+});
+
 test("규칙이 표 행으로 들어간다", () => {
   const { body, included } = buildBody([rule()]);
   assert.equal(included, 1);
